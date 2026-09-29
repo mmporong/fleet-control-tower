@@ -127,6 +127,36 @@ def lone_agf(seed: int = 3) -> Simulation:
     return sim
 
 
+class StubApproachTests(unittest.TestCase):
+    def test_second_forklift_waits_outside_the_turning_circle_of_an_occupied_stub(self):
+        sc = get("standard", agf=2, amr=0, pickers=0, packers=0, dock_workers=0, walkers=0, dock_forklifts_in=0,
+                 dock_forklifts_out=0, rack_forklift=0, external=0, trucks_h=0.0, out_pallets_h=0.0,
+                 tote_orders_h=0.0, fault_mtbf_h=0.0, comms_mtbf_h=0.0)
+        sim = Simulation(sc, seed=3)
+        sim.run(2)
+        m = sim.manager
+        first, second = m.robots["AGF-01"], m.robots["AGF-02"]
+        self.assertTrue(m.assign_route(first, "SO3", "test"))
+        while sim.now < 400 and first.last_node != "SO3":
+            sim.run(1)
+        self.assertEqual(first.last_node, "SO3")
+        self.assertTrue(m.assign_route(second, "SO3", "test"))
+        junction = sim.layout.nodes["E21"]
+        closest = 99.0
+        while sim.now < 800 and not (second.wait and second.wait.resource == "N:SO3"):
+            sim.run(1)
+        for _ in range(20):                               # it holds position while the stub is taken
+            sim.run(1)
+            node = sim.layout.nodes[second.last_node]
+            closest = min(closest, abs(node.y - junction.y) if abs(node.x - junction.x) < 0.1 else 99.0)
+        self.assertGreater(closest, 3.0)                  # not inside the leaving forklift's turning circle
+        self.assertTrue(m.assign_route(first, "PA14_3", "test"))   # the first one leaves the stub
+        while sim.now < 1400 and second.last_node != "SO3":
+            sim.run(1)
+        self.assertEqual(second.last_node, "SO3")
+        self.assertEqual(m.counters["deadlocks"], 0)
+
+
 class DoorTests(unittest.TestCase):
     def drive_to(self, sim: Simulation, goal: str, limit: float = 240.0) -> list[str]:
         rec = sim.manager.robots["AGF-01"]

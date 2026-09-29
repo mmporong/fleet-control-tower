@@ -81,23 +81,25 @@ def tote_amr_spec() -> VehicleSpec:
     """Tote / cart AMR: 0.80 m x 0.60 m, differential drive, turns on the spot (MiR250 / OTTO 100 class).
 
     1.5 m/s operating speed (2.0 m/s design), 1.0 rad/s turning; acceleration values are assumptions
-    because vendors rarely publish them (docs/SITE.md).
+    because vendors rarely publish them (docs/SITE.md). Battery: about 4.6 h of continuous driving, so a
+    shift with waiting and picking stops runs 6-13 h like the MiR250 / OTTO 100 datasheets.
     """
     return VehicleSpec(vclass="CARRIER", series="토트 AMR (MiR250·OTTO 100급)", kinematic="DIFF", max_load_kg=250.0,
                        length=0.80, width=0.60, radius=0.5, max_speed=1.5, accel=0.5, decel=0.8, stop_decel=1.5,
-                       turn_rate=1.0, drain_per_m=0.015, drain_idle_s=0.002, charge_rate_s=0.05)
+                       turn_rate=1.0, drain_per_m=0.004, drain_idle_s=0.0004, charge_rate_s=0.05)
 
 
 def agf_spec() -> VehicleSpec:
     """Autonomous counterbalance forklift: 2.7 m x 1.3 m incl. forks (VisionNav VNP15 / OTTO Lifter class).
 
     1.5 m/s empty, 1.3 m/s loaded; three-wheel steering cannot turn on the spot: the ~2 m radius arc is
-    approximated by an in-place turn of the same duration (0.3 rad/s). Li battery 10->90 % in about 1 h.
+    approximated by an in-place turn of the same duration (0.3 rad/s). Li battery 10->90 % in about 1 h;
+    about 5.7 h of continuous driving, roughly an 8 h shift with handling and waiting.
     """
     return VehicleSpec(vclass="FORKLIFT", series="자율 카운터밸런스 지게차 (1.5 t급)", kinematic="THREEWHEEL",
                        max_load_kg=1500.0, lift_height=4.5, length=2.7, width=1.3, radius=1.5, max_speed=1.5,
-                       loaded_speed=1.3, accel=0.3, decel=0.5, stop_decel=1.2, turn_rate=0.3, drain_per_m=0.01,
-                       drain_idle_s=0.002, charge_rate_s=0.022, field_base=0.5, field_gain=1.3)
+                       loaded_speed=1.3, accel=0.3, decel=0.5, stop_decel=1.2, turn_rate=0.3, drain_per_m=0.0035,
+                       drain_idle_s=0.0005, charge_rate_s=0.022, field_base=0.5, field_gain=1.3)
 
 
 def agf_pick_time(height_m: float) -> float:

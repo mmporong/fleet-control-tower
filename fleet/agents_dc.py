@@ -119,8 +119,12 @@ class DcHuman(Human):
         if crossing:
             robot_near = any(abs(rx - col) < 0.9 and abs(ry - self.y) < 3.0 for _i, rx, ry, _r, _v in robots)
             if robot_near and abs(abs(self.x - col) - AISLE_SIDE) < 0.12:
+                # wait at the shelf face until the aisle is clear, then cross; stand right against the shelf,
+                # a step into the aisle is inside the passing robot's narrow field and both would wait
+                face = col + (AISLE_SIDE if self.x >= col else -AISLE_SIDE)
+                self.x += max(-dt, min(dt, face - self.x))
                 self.v = 0.0
-                return True    # wait at the shelf face until the aisle is clear, then cross
+                return True
             return False       # already crossing: keep going
         near = [(rx, ry) for _rid, rx, ry, _rr, rv in robots if abs(rx - col) < 0.9 and abs(ry - self.y) < 3.0]
         if not near or abs(abs(self.x - col) - AISLE_SIDE) < 0.05:

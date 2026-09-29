@@ -22,7 +22,7 @@ from .facility import DoorSupervisor
 from .geometry import box_gap, dist, point_in_polygon, seg_point_dist
 from .layout import Layout
 from .perception import Detection, Tracker
-from .planner import Planner
+from .planner import STUB_KINDS, Planner
 from .traffic import LockTable, WaitInfo, find_cycles, lane_res, node_res, res_node
 from .vda5050 import (HeaderIds, RouteEdge, RouteNode, action, build_instant_actions, build_order, header,
                       parse_iso_time, topic)
@@ -837,6 +837,10 @@ class FleetManager:
             while (self.layout.must_pass(rec.route[chain[-1]]) and chain[-1] < len(rec.route) - 1
                    and len(chain) < 4):
                 chain.append(chain[-1] + 1)
+            gate = self._stub_gate(rec, chain[-1])
+            if gate is not None:
+                blocked = self._wait(rec, "robot", node_res(rec.route[-1]), gate)
+                break
             resources: list[str] = []
             for k in chain:
                 resources.append(lane_res(self.layout.edge_between(rec.route[k - 1], rec.route[k]).lane))
@@ -868,6 +872,25 @@ class FleetManager:
             rec.pending_block = None
         stationary = rec.at_base_end() and rec.base_end < len(rec.route) - 1
         rec.wait = rec.pending_block if stationary else None
+
+    def _stub_gate(self, rec: RobotRecord, stop_idx: int) -> str | None:
+        """Holder of the robot's goal stub when stopping at route[stop_idx] would block that holder's way out.
+
+        A vehicle leaving a dead-end stub turns at the junction; a vehicle waiting for the same stub inside
+        that turning circle blocks it and the two wait for each other. It waits one node earlier instead.
+        """
+        goal_idx = len(rec.route) - 1
+        if stop_idx >= goal_idx or goal_idx - stop_idx > 3 or goal_idx < 1:
+            return None
+        goal = rec.route[goal_idx]
+        holder = self.locks.holder_of(node_res(goal))
+        if holder in (None, rec.serial) or self.layout.nodes[goal].kind not in STUB_KINDS:
+            return None
+        junction = self.layout.nodes[rec.route[goal_idx - 1]]
+        other = self.robots.get(holder)
+        reach = math.hypot(other.length, other.width) / 2 + rec.length / 2 + 0.2 if other else 3.0
+        stop = self.layout.nodes[rec.route[stop_idx]]
+        return holder if math.hypot(stop.x - junction.x, stop.y - junction.y) < reach else None
 
     def _heading(self, a: str, b: str) -> float:
         na, nb = self.layout.nodes[a], self.layout.nodes[b]
