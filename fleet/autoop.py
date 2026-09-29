@@ -86,5 +86,14 @@ class AutoOperator:
                 victim = min(unloaded, key=lambda r: m.dispatcher.task_priority(r.task_id))
                 self._do("cancel_task", task=victim.task_id)
             plan["act_at"] = now + 90.0
+        elif t == "FACILITY_FAULT":
+            # SOP: take the door out of use, call the facility technician, retry after the fix
+            if stage == 0:
+                self._do("door_disable", door=src)
+                plan.update(stage=1, act_at=now + self.rng.uniform(*self.field_delay))
+            else:
+                self._do("door_field_fix", door=src)
+                self._do("door_retry", door=src)
+                plan.update(stage=0, act_at=now + 120.0)
         else:
             plan["act_at"] = now + 3600.0

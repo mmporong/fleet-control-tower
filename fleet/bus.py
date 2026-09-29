@@ -67,6 +67,7 @@ class Bus:
         self.log: dict[str, deque] = {}
         self._log_depth = log_depth
         self.stats = {"published": 0, "delivered": 0, "dropped": 0, "bytes": 0}
+        self.now = 0.0          # delivery clock: receivers read it as their receive timestamp
 
     def subscribe(self, pattern: str, handler: Handler) -> None:
         self._subs.append((pattern, handler))
@@ -95,6 +96,7 @@ class Bus:
         return True
 
     def deliver_due(self, now: float) -> int:
+        self.now = now
         delivered = 0
         while self._queue and self._queue[0].due <= now:
             item = heapq.heappop(self._queue)

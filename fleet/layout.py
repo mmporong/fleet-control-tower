@@ -75,6 +75,9 @@ class Layout:
     node_zones: dict[str, list[str]] = field(default_factory=dict)
     two_way: bool = False
     site: str = "grid"
+    doors: dict = field(default_factory=dict)         # id -> facility.DoorSpec
+    walls: list = field(default_factory=list)         # drawn only: [(x1, y1), (x2, y2)]
+    no_stop: set = field(default_factory=set)         # nodes a vehicle must not stop on (door thresholds)
 
     def __post_init__(self) -> None:
         self.reindex()
@@ -105,6 +108,10 @@ class Layout:
 
     def is_intersection(self, node_id: str) -> bool:
         return len(self.neighbors[node_id]) >= 3
+
+    def must_pass(self, node_id: str) -> bool:
+        """A vehicle may drive over this node but not wait on it."""
+        return self.is_intersection(node_id) or node_id in self.no_stop
 
     def zones_at(self, p: Point) -> list[Zone]:
         return [z for z in self.zones.values() if point_in_polygon(p, z.polygon)]
@@ -207,6 +214,8 @@ class Layout:
                        "static_speed": z.static_speed, "human_speed": z.human_speed}
                       for z in self.zones.values()],
             "coverage": [{"id": k, "polygon": v} for k, v in self.coverage.items()],
+            "doors": [d.to_json() for d in self.doors.values()],
+            "walls": self.walls,
         }
 
 

@@ -21,7 +21,8 @@ from __future__ import annotations
 
 import math
 
-from .geometry import Point, rect
+from .facility import DoorSpec, doors_crossing
+from .geometry import Point, rect, seg_point_dist
 from .layout import Edge, Layout, Node, Zone
 
 AGF = "FORKLIFT"      # VDA 5050 agvClass of the autonomous forklift
@@ -48,6 +49,10 @@ PACK_YS = (12.0, 17.0, 22.0, 27.0, 32.0, 37.0)
 IN_STAGE_X, OUT_STAGE_X, PACK_X = 7.0, 82.0, 73.0
 DOCK_X_IN, DOCK_X_OUT = 0.0, WIDTH
 CROSSING_X = 47.0
+# fire wall between the pallet hall and the pick/pack hall, pierced by two rapid-roll doors
+# that only autonomous forklifts use (tote AMRs stay in the pick hall)
+FIRE_WALL_X = 46.0
+DOORS = (("D-S", "남측 고속문", 2.6, 7.4), ("D-N", "북측 고속문", 42.6, 47.2))
 STAGE_LANE_CAPACITY = 4        # pallets a floor staging lane holds in front of each door
 
 SPEED_MAIN, SPEED_AISLE, SPEED_SPINE, SPEED_STUB = 1.5, 1.0, 1.0, 0.5
@@ -81,7 +86,8 @@ def dc_layout() -> Layout:
             if seg_classes is not None:
                 classes = seg_classes(na.x, nb.x)
             mx = (na.x + nb.x) / 2
-            on_crossing = abs(mx - CROSSING_X) < 1.4 and abs(na.y - nb.y) < 0.1
+            # no waiting on a pedestrian crossing or where a parked vehicle would reach into a door opening
+            on_crossing = abs(na.y - nb.y) < 0.1 and (abs(mx - CROSSING_X) < 1.4 or abs(mx - FIRE_WALL_X) < 2.5)
             if hold and not on_crossing and math.hypot(na.x - nb.x, na.y - nb.y) >= HOLD_MIN_GAP:
                 q = node(f"q{a}{b}" if a < b else f"q{b}{a}", (na.x + nb.x) / 2, (na.y + nb.y) / 2, "queue")
                 edge(a, q, speed, classes)
@@ -136,10 +142,10 @@ def dc_layout() -> Layout:
 
     # ---- spines with their stubs ------------------------------------------------
     def spine(x: float, name: str, ys_stub: tuple, stub_x: float, stub_kind: str, stub_prefix: str,
-              cls: str, northbound: bool) -> None:
+              cls: str, northbound: bool, bay: bool = True) -> None:
         stub_nodes = [node(f"{name}{int(y)}", x, y, "spine") for y in ys_stub]
         lower = [f"SE{xid(x)}", f"SW{xid(x)}"]
-        upper = [f"NE{xid(x)}", f"NW{xid(x)}", node(f"BL{xid(x)}", x, BAY_LANE, "baylane")]
+        upper = [f"NE{xid(x)}", f"NW{xid(x)}"] + ([node(f"BL{xid(x)}", x, BAY_LANE, "baylane")] if bay else [])
         seq = lower + stub_nodes + upper
         seq = seq if northbound else seq[::-1]
         chain(seq, SPEED_SPINE, {cls}, hold=True)
@@ -148,20 +154,28 @@ def dc_layout() -> Layout:
             edge(sn, st, SPEED_STUB, {cls}, oneway=False)
 
     spine(WEST_SPINE, "W", DOCK_YS, IN_STAGE_X, "in_stage", "SI", AGF, northbound=False)
-    spine(AGF_SPINE, "E", DOCK_YS, OUT_STAGE_X, "out_stage", "SO", AGF, northbound=True)
+    spine(AGF_SPINE, "E", DOCK_YS, OUT_STAGE_X, "out_stage", "SO", AGF, northbound=True, bay=False)
     spine(TOTE_SPINE, "T", PACK_YS, PACK_X, "pack", "PK", AMR, northbound=True)
 
-    # ---- bay lane: parking and charging, westbound --------------------------------
-    agf_bays = [12.5 + 3.0 * i for i in range(11)]            # 12.5 .. 42.5 (1.3 m wide AGFs)
-    amr_bays = [48.5 + 2.5 * i for i in range(8)]                # 48.5 .. 66.0
-    bay_points = sorted({AGF_SPINE, TOTE_SPINE, CROSSING_X, WEST_SPINE, *agf_bays, *amr_bays}, reverse=True)
-    for x in bay_points:
-        node(f"BL{xid(x)}", x, BAY_LANE, "baylane")
-    for a, b in zip(bay_points, bay_points[1:]):
-        cls = {AGF} if b < CROSSING_X or a > TOTE_SPINE else BOTH
-        edge(f"BL{xid(a)}", f"BL{xid(b)}", SPEED_SPINE, cls)
-    charger_agf = {12.5, 18.5, 24.5, 30.5}
-    charger_amr = {48.5, 51.0, 53.5, 56.0, 58.5}
+    # ---- bay lanes: parking and charging, westbound, one on each side of the fire wall ------
+    # AGF side: entered from the north main aisle at the last rack aisle, leaves down the west spine.
+    # AMR side: entered from the top of the tote spine, leaves at the crossing.
+    # 11.5 .. 39.5 at 2.8 m pitch (1.3 m wide AGFs, 1.5 m between parked trucks). The last bay stays
+    # 3.1 m beside the entry, so a forklift driving in does not see a parked truck in its protective
+    # field, and every bay is over 3.05 m from a turning node (the swept circle of a 2.7 m truck)
+    agf_bays = [round(11.5 + 2.8 * i, 1) for i in range(11)]
+    # 48.5 .. 68.5 at 2.0 m pitch (0.6 m wide tote AMRs): 11 bays plus 6 pack stations hold a 16-robot
+    # shift when orders run dry, so idle robots are never left standing on a one-way lane
+    amr_bays = [round(48.5 + 2.0 * i, 1) for i in range(11)]
+    for points, cls in ((sorted({WEST_SPINE, *agf_bays, RACK_AISLES[-1]}, reverse=True), {AGF}),
+                        (sorted({TOTE_SPINE, CROSSING_X, *amr_bays}, reverse=True), {AMR})):
+        for x in points:
+            node(f"BL{xid(x)}", x, BAY_LANE, "baylane")
+        for a, b in zip(points, points[1:]):
+            edge(f"BL{xid(a)}", f"BL{xid(b)}", SPEED_SPINE, cls)
+    edge(f"NW{xid(RACK_AISLES[-1])}", f"BL{xid(RACK_AISLES[-1])}", SPEED_SPINE, {AGF})
+    charger_agf = set(agf_bays[0:8:2])
+    charger_amr = set(amr_bays[0:10:2])
     for x in agf_bays:
         kind = "charger" if x in charger_agf else "park"
         bid = node(f"{'CA' if kind == 'charger' else 'PA'}{xid(x)}", x, BAY_Y, kind)
@@ -171,8 +185,8 @@ def dc_layout() -> Layout:
         bid = node(f"{'CT' if kind == 'charger' else 'PT'}{xid(x)}", x, BAY_Y, kind)
         edge(f"BL{xid(x)}", bid, SPEED_STUB, {AMR}, oneway=False)
     # tote AMRs leave the bay lane at the crossing: down across the westbound lane to the eastbound one
-    edge(f"BL{xid(CROSSING_X)}", f"NW{xid(CROSSING_X)}", SPEED_SPINE, BOTH)
-    edge(f"NW{xid(CROSSING_X)}", f"NE{xid(CROSSING_X)}", SPEED_SPINE, BOTH)
+    edge(f"BL{xid(CROSSING_X)}", f"NW{xid(CROSSING_X)}", SPEED_SPINE, {AMR})
+    edge(f"NW{xid(CROSSING_X)}", f"NE{xid(CROSSING_X)}", SPEED_SPINE, {AMR})
 
     racks = []
     # pick shelving stops short of the aisle ends so pickers can change aisles inside the zone
@@ -211,7 +225,14 @@ def dc_layout() -> Layout:
         "CAM-N": rect(0, 41.6, WIDTH, HEIGHT),
         "CAM-X": rect(45.8, 0, 48.2, HEIGHT),
     }
-    layout = Layout(nodes, edges, racks, zones, coverage, width=WIDTH, height=HEIGHT)
+    doors = doors_crossing([DoorSpec(did, name, (FIRE_WALL_X, y0), (FIRE_WALL_X, y1)) for did, name, y0, y1 in DOORS],
+                           edges, nodes)
+    walls = [[(FIRE_WALL_X, DOORS[0][3]), (FIRE_WALL_X, DOORS[1][2])], [(FIRE_WALL_X, DOORS[1][3]), (FIRE_WALL_X, HEIGHT)]]
+    # a vehicle parked this close to a threshold would hold the door open or stand in the curtain
+    no_stop = {n.id for n in nodes.values() for d in doors.values()
+               if seg_point_dist(n.pos, d.a, d.b) < 1.9}
+    layout = Layout(nodes, edges, racks, zones, coverage, width=WIDTH, height=HEIGHT, doors=doors, walls=walls,
+                    no_stop=no_stop)
     layout.site = "dc"
     return layout
 
@@ -219,7 +240,8 @@ def dc_layout() -> Layout:
 def dock_spots() -> dict[str, list[Point]]:
     """Where dock workers and packers stand."""
     return {
-        "in": [(1.2, y + 2.5) for y in DOCK_YS],
-        "out": [(WIDTH - 1.2, y + 2.5) for y in DOCK_YS],
+        # between two staging lanes, off the dock forklifts' travel corridor along the wall
+        "in": [(3.0, y + 2.5) for y in DOCK_YS],
+        "out": [(WIDTH - 3.0, y + 2.5) for y in DOCK_YS],
         "pack": [(74.6, y) for y in PACK_YS],
     }

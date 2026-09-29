@@ -44,3 +44,12 @@ test('formatting helpers', () => {
   assert.strictEqual(L.sparkPath([1], 100, 10), '');
   assert.ok(L.sparkPath([0, 1, 2], 100, 10).startsWith('M0.0,10.0'));
 });
+
+test('link quality tone follows measured share and delay', () => {
+  assert.strictEqual(L.linkInfo('ONLINE', 98, 100).tone, 'ok');
+  assert.strictEqual(L.linkInfo('ONLINE', 70, 100).tone, 'warn');
+  assert.strictEqual(L.linkInfo('ONLINE', 98, 700).tone, 'warn');
+  assert.strictEqual(L.linkInfo('ONLINE', 40, 100).tone, 'danger');
+  assert.deepStrictEqual(L.linkInfo('CONNECTIONBROKEN', 0, null), { tone: 'danger', text: '두절' });
+  assert.strictEqual(L.linkInfo('ONLINE', null, null).text, '정상');
+});

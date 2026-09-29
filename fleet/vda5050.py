@@ -66,6 +66,20 @@ def iso_time(sim_time_s: float) -> str:
     return f"2026-10-{day:02d}T{h % 24:02d}:{m:02d}:{s:02d}.{ms:03d}Z"
 
 
+def parse_iso_time(stamp: str) -> float:
+    """Inverse of :func:`iso_time`.
+
+    >>> parse_iso_time(iso_time(3723.456))
+    3723.456
+    >>> parse_iso_time(iso_time(90000.0))    # second day of the shift calendar
+    90000.0
+    """
+    date, clock = stamp.rstrip("Z").split("T")
+    h, m, s = clock.split(":")
+    day = int(date.split("-")[2])
+    return round((day - 1) * 86400 + int(h) * 3600 + int(m) * 60 + float(s), 3)
+
+
 def header(ids: HeaderIds, topic_name: str, manufacturer: str, serial: str, sim_time_s: float) -> dict:
     return {
         "headerId": ids.next(topic_name),

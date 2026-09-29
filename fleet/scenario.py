@@ -39,6 +39,7 @@ class Scenario:
     fault_mtbf_h: float = 0.0        # per robot; 0 disables random faults
     comms_mtbf_h: float = 0.0        # per robot; 0 disables random outages
     comms_loss: float = 0.0          # random message loss probability per message
+    door_mtbf_h: float = 0.0         # per door; 0 disables random door faults
 
     def to_json(self) -> dict:
         return asdict(self)
@@ -56,8 +57,8 @@ PRESETS: dict[str, Scenario] = {s.name: s for s in (
              fault_mtbf_h=8.0, comms_mtbf_h=6.0),
     Scenario("crowded", "사람 밀집", "피커 12 · 도크 작업자 6 · 보행자 6: 협업 피킹과 사람 구역 감속",
              pickers=12, dock_workers=6, walkers=6, packers=6),
-    Scenario("faults", "장애 훈련", "고장·통신 두절이 잦은 교대(로봇당 평균 1시간), 메시지 손실 2%",
-             fault_mtbf_h=1.0, comms_mtbf_h=1.0, comms_loss=0.02),
+    Scenario("faults", "장애 훈련", "고장·통신 두절이 잦은 교대(로봇당 평균 1시간), 메시지 손실 2%, 고속문 고장",
+             fault_mtbf_h=1.0, comms_mtbf_h=1.0, comms_loss=0.02, door_mtbf_h=1.0),
     Scenario("night", "야간 입출고", "피킹 없음 · 입고 트럭 6대/h와 출고만, 사람 최소",
              amr=0, tote_orders_h=0.0, pickers=0, packers=0, walkers=0, dock_workers=2, trucks_h=6.0,
              out_pallets_h=30.0, rack_forklift=0),

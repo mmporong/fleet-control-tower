@@ -135,6 +135,16 @@
   }
 
   /** SVG path for a sparkline of numbers in a w x h box. */
+  // Link quality as the control room measures it: share of expected state/visualization
+  // messages received in the last 5 s and median one-way delay.
+  function linkInfo(conn, share, delayMs) {
+    if (conn !== 'ONLINE') return { tone: 'danger', text: conn === 'CONNECTIONBROKEN' ? '두절' : conn || '미연결' };
+    if (share == null) return { tone: 'ok', text: '정상' };
+    const delay = delayMs == null ? '' : ` · ${delayMs} ms`;
+    const tone = share < 60 || delayMs > 1000 ? 'danger' : share < 85 || delayMs > 400 ? 'warn' : 'ok';
+    return { tone, text: `수신 ${share}%${delay}` };
+  }
+
   function sparkPath(values, w, h) {
     const vals = values.filter((v) => v != null && isFinite(v));
     if (vals.length < 2) return '';
@@ -144,6 +154,6 @@
     return vals.map((v, i) => `${i ? 'L' : 'M'}${((i / (vals.length - 1)) * w).toFixed(1)},${(h - ((v - min) / span) * h).toFixed(1)}`).join(' ');
   }
 
-  return { STATUS, statusInfo, exceptionSort, fitTransform, applyView, toScreen, toWorld, zoomAt, lerp, lerpAngle,
+  return { STATUS, linkInfo, statusInfo, exceptionSort, fitTransform, applyView, toScreen, toWorld, zoomAt, lerp, lerpAngle,
     pick, fmtDuration, fmtClock, fmtNum, alarmStateLabel, alarmLoad, sparkPath };
 });

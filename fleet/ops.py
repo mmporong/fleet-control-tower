@@ -48,6 +48,12 @@ class Operations:
             raise CommandError(f"알 수 없는 구역: {zid!r}")
         return zone
 
+    def _door(self, args: dict) -> str:
+        did = str(args.get("door", ""))
+        if self.sim.manager.doors is None or did not in self.sim.manager.doors.view:
+            raise CommandError(f"알 수 없는 문: {did!r}")
+        return did
+
     def _task(self, args: dict):
         tid = str(args.get("task", ""))
         if tid not in self.sim.dispatcher.tasks:
@@ -355,7 +361,29 @@ class Operations:
         self.sim.dispatcher.next_arrival = self.sim.now
         return f"투입률 {rate:.0f}건/시간"
 
+    # ------------------------------------------------------------ facility (rapid-roll doors)
+    def cmd_door_disable(self, a: dict) -> str:
+        did = self._door(a)
+        self.sim.manager.doors.view[did].disabled = True
+        return f"{self.sim.layout.doors[did].name} 사용 중지: 새 경로는 이 문을 피함"
+
+    def cmd_door_retry(self, a: dict) -> str:
+        did = self._door(a)
+        self.sim.manager.doors.retry(did, self.sim.now)
+        return f"{self.sim.layout.doors[did].name} 사용 재개: 다음 통과 차량이 열림을 다시 요청"
+
+    def cmd_door_field_fix(self, a: dict) -> str:
+        did = self._door(a)
+        self.sim.door_field_fix(did)
+        return f"[현장 모의] {self.sim.layout.doors[did].name} 수리 완료"
+
     # ------------------------------------------------------------ drills (simulation only)
+    def cmd_drill_door(self, a: dict) -> str:
+        did = self._door(a)
+        fault = str(a.get("fault", "JAM"))
+        self.sim.drill_door(did, fault)
+        return f"[훈련] {self.sim.layout.doors[did].name} {fault} 주입"
+
     def cmd_drill_fault(self, a: dict) -> str:
         rec = self._robot(a)
         self.sim.drill_fault(rec.serial, str(a.get("fault", "DRIVE_FAULT")), bool(a.get("recoverable", True)))

@@ -14,7 +14,8 @@ from .geometry import Point
 
 MAX_SPEED = {"human": 2.0, "forklift": 3.0}
 BODY_RADIUS = {"human": 0.3, "forklift": 0.6}        # forklift: half of a 1.17 m wide truck
-BODY_HALF_LENGTH = {"forklift": 1.8}                 # 3.6 m counterbalance truck including forks
+# a 3.6 m counterbalance truck (forks included) is four such circles along its heading
+BODY_OFFSETS = {"forklift": (-1.2, -0.4, 0.4, 1.2)}
 # below this estimated speed a track is treated as standing still: filter noise
 # on a stationary person must not turn into a 2-second prediction sweep
 STILL_SPEED = 0.3
@@ -41,6 +42,7 @@ class Track:
     first_seen: float = 0.0
     hits: int = 1
     sources: set[str] = field(default_factory=set)
+    heading: float | None = None      # last direction of travel; a stopped truck keeps its orientation
 
     def predict(self, t: float) -> Point:
         dt = max(0.0, t - self.last_seen)
@@ -143,6 +145,8 @@ class Tracker:
         if sp > vmax:
             tr.vx *= vmax / sp
             tr.vy *= vmax / sp
+        if math.hypot(tr.vx, tr.vy) >= STILL_SPEED:
+            tr.heading = math.atan2(tr.vy, tr.vx)
         tr.last_seen = now
         tr.hits += 1
         tr.sources = set(d.source.split(","))
@@ -159,18 +163,21 @@ class Tracker:
             moving = tr.speed >= STILL_SPEED
             h = horizon.get(tr.cls, 2.0) if moving else 0.0
             base = BODY_RADIUS.get(tr.cls, 0.3) + CLEARANCE.get(tr.cls, 0.35)
-            half = BODY_HALF_LENGTH.get(tr.cls, 0.0)
-            if half and not moving:
-                base += half                  # heading unknown: bound the whole truck
-                half = 0.0
-            ux, uy = (tr.vx / tr.speed, tr.vy / tr.speed) if moving else (0.0, 0.0)
+            offsets = BODY_OFFSETS.get(tr.cls, (0.0,))
+            # a moving truck is predicted along its travel; a stopped one may turn on the spot, so its
+            # whole swept circle is held (half length 1.8 m + clearance)
+            heading = math.atan2(tr.vy, tr.vx) if moving else None
+            if heading is None and offsets != (0.0,):
+                base += max(abs(o) for o in offsets)
+                offsets = (0.0,)
+            ux, uy = (math.cos(heading), math.sin(heading)) if heading is not None else (0.0, 0.0)
             k = 0
             while k * step <= h + 1e-9:
                 t = now + k * step
                 px, py = tr.predict(t)
                 r = base + tr.sigma(t) + 0.15 * k * step
                 # a long vehicle: circles along its heading cover the body without widening it
-                for off in ((-half, -half / 3, half / 3, half) if half else (0.0,)):
+                for off in offsets:
                     out.append((tr.id, tr.cls, px + ux * off, py + uy * off, r))
                 k += 1
         return out

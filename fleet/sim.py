@@ -20,11 +20,12 @@ from .site_dc import AGF, AMR, PICK_AISLES, dc_layout, dock_spots
 from .bus import Bus
 from .control import FleetManager, ManagerConfig, near_miss
 from .dispatcher import Dispatcher
-from .geometry import box_gap, point_in_polygon
+from .facility import DoorDevice
+from .geometry import box_gap
 from .layout import COLUMN_X, ROW_Y, warehouse_layout
 from .perception import Detection
 from .scenario import Scenario
-from .vehicle import FAULT_TYPES, Obstacle, Vehicle, VehicleSpec, agf_spec, tote_amr_spec
+from .vehicle import FAULT_TYPES, SPEC_GRID, Obstacle, Vehicle, VehicleSpec, agf_spec, tote_amr_spec
 from .vda5050 import topic
 
 FRAME_PERIOD = 0.5
@@ -79,7 +80,6 @@ class Evaluator:
         others += [(f.id, "forklift", f.circles()) for f in forklifts]
         others += [(e.id, "external", [(e.x, e.y, e.radius)]) for e in externals]
         for i, v in enumerate(vehicles):
-            r = v.spec.radius
             vc = v.spec.circles(v.x, v.y, v.theta)
             for w in vehicles[i + 1:]:
                 if abs(v.x - w.x) > 4 or abs(v.y - w.y) > 4:
@@ -134,8 +134,9 @@ class Evaluator:
 class Simulation:
     def __init__(self, scenario: Scenario, seed: int = 7, strategy: str = "locks+resolve",
                  dt: float = 0.1, config: ManagerConfig | None = None,
-                 vehicle_spec: VehicleSpec | None = None) -> None:
-        self.vehicle_spec = vehicle_spec
+                 vehicle_overrides: dict | None = None) -> None:
+        # benchmark knobs (e.g. field_gain) applied on top of each vehicle class's own specification
+        self.vehicle_overrides = dict(vehicle_overrides or {})
         self.scenario = scenario
         self.seed = seed
         self.dt = dt
@@ -144,10 +145,12 @@ class Simulation:
         self.layout = dc_layout() if scenario.site == "dc" else warehouse_layout(scenario.two_way)
         self.rng_faults = random.Random(seed * 7 + 3)
         self.rng_sense = random.Random(seed * 7 + 4)
+        self.rng_doors = random.Random(seed * 7 + 8)
         self.bus = Bus(random.Random(seed * 7 + 1))
         cfg = config or ManagerConfig(strategy=strategy)
         cfg.strategy = strategy
         self.manager = FleetManager(self.layout, self.bus, cfg)
+        self.doors = {d.id: DoorDevice(d, self.bus) for d in self.layout.doors.values()}
         self.dispatcher = Dispatcher(self.manager, random.Random(seed * 7 + 2))
         prng = random.Random(seed * 7 + 6)
         if scenario.site == "dc":
@@ -177,13 +180,20 @@ class Simulation:
         sc = self.scenario
         v = Vehicle(serial, self.layout, node, random.Random(self.seed * 1000 + idx), battery=rng.uniform(55, 98),
                     spec=spec)
-        v.theta = rng.choice((0.0, math.pi / 2, math.pi, -math.pi / 2))
+        # parked the way the site parks vehicles: facing the way out of the spot
+        L = self.layout
+        out = [e for e in L.out_edges[node] if L.allowed(e, v.spec.vclass)] or L.out_edges[node]
+        rng.choice((0, 1, 2, 3))          # same draw as the old random heading: later draws stay comparable
+        v.theta = math.atan2(L.nodes[out[0].end].y - L.nodes[node].y, L.nodes[out[0].end].x - L.nodes[node].x)
         self.vehicles.append(v)
         self.manager.register(serial)
         self.bus.subscribe(topic("sim", serial, "order"), lambda t, m, v=v: v.on_order(m))
         self.bus.subscribe(topic("sim", serial, "instantActions"), lambda t, m, v=v: v.on_instant_actions(m, self.now))
         self.bus.link(serial).loss = sc.comms_loss
         self.bus.publish(topic("sim", serial, "connection"), v.connection_msg(0.0), 0.0)
+
+    def _spec(self, base: VehicleSpec) -> VehicleSpec:
+        return replace(base, **self.vehicle_overrides) if self.vehicle_overrides else base
 
     def _class_spots(self, vclass: str, kinds: tuple[str, ...]) -> list[str]:
         L = self.layout
@@ -207,11 +217,9 @@ class Simulation:
                   if any(L.allowed(e, AMR) for e in L.out_edges[n]) and L.nodes[n].x > 46.0]
         amr_starts = self._class_spots(AMR, ("park", "charger")) + L.nodes_of_kind("pack") + lane_q
         for i in range(sc.agf):
-            self._add_vehicle(f"AGF-{i + 1:02d}", agf_starts[i], replace(self.vehicle_spec) if self.vehicle_spec
-                              else agf_spec(), rng, i)
+            self._add_vehicle(f"AGF-{i + 1:02d}", agf_starts[i], self._spec(agf_spec()), rng, i)
         for i in range(sc.amr):
-            self._add_vehicle(f"AMR-{i + 1:02d}", amr_starts[i], replace(self.vehicle_spec) if self.vehicle_spec
-                              else tote_amr_spec(), rng, 100 + i)
+            self._add_vehicle(f"AMR-{i + 1:02d}", amr_starts[i], self._spec(tote_amr_spec()), rng, 100 + i)
         spots = dock_spots()
         hid = 1
 
@@ -240,15 +248,19 @@ class Simulation:
         for k in range(sc.walkers):
             human("P", "walker", (rng.uniform(5, 79), 1.3), [], speed=1.31)   # mean free walking speed
         for k in range(sc.dock_forklifts_in):
-            self.forklifts.append(DockForklift(f"FL-IN{k + 1}", "in", random.Random(self.seed * 60 + k), self.process))
+            self.forklifts.append(DockForklift(f"FL-IN{k + 1}", "in", random.Random(self.seed * 60 + k), self.process,
+                                               home=k))
         for k in range(sc.dock_forklifts_out):
             self.forklifts.append(DockForklift(f"FL-OUT{k + 1}", "out", random.Random(self.seed * 61 + k),
-                                               self.process))
+                                               self.process, home=k))
         lane_kinds = {"cross", "queue", "spine", "rack"}
         if sc.rack_forklift:
-            loop = expand_loop(L, ["SE10", "SE16_2", "SW16_2", "R1-01", "R1-09", "NE16_2", "NW16_2", "NW10",
-                                   "W36", "W11", "SW10"], lane_kinds)
-            self.forklifts.append(Forklift("FL-R1", loop, L, random.Random(self.seed * 62), dwell_nodes=("R1-05",)))
+            # manual reach truck working rack aisles R1 and R2 with the one-way flow (R1 north, north main
+            # aisle east, R2 south, south main aisle west); it stays off the AGF spine and the bay lane
+            loop = expand_loop(L, ["SW16_2", "R1-01", "R1-09", "NE16_2", "NE22_8", "R2-09", "R2-01", "SW22_8"],
+                               lane_kinds)
+            self.forklifts.append(Forklift("FL-R1", loop, L, random.Random(self.seed * 62),
+                                           dwell_nodes=("R1-05", "R2-05")))
         for k in range(sc.external):
             # floor scrubber of another vendor: south main aisle along the rack block (AGF-only segments)
             loop = expand_loop(L, ["SE10", "SE42_6", "SW42_6", "SW10"], {"cross", "queue"})
@@ -264,7 +276,7 @@ class Simulation:
             serial = f"AMR-{i + 1:02d}"
             v = Vehicle(serial, self.layout, starts[i], random.Random(self.seed * 1000 + i),
                         battery=rng.uniform(55, 98),
-                        spec=replace(self.vehicle_spec) if self.vehicle_spec else None)
+                        spec=self._spec(SPEC_GRID))
             v.theta = rng.choice((0.0, math.pi / 2, math.pi, -math.pi / 2))
             self.vehicles.append(v)
             self.manager.register(serial)
@@ -344,6 +356,7 @@ class Simulation:
             "f": [[f.id, round(f.x, 2), round(f.y, 2), round(f.heading, 2)] for f in self.forklifts],
             "e": [[e.id, round(e.x, 2), round(e.y, 2)] for e in self.externals],
             "k": [[tr.id, tr.cls, round(tr.x, 2), round(tr.y, 2)] for tr in self.manager.tracker.tracks.values()],
+            "d": [[d.spec.id, round(d.progress, 2)] for d in self.doors.values()],
         }
 
     # ------------------------------------------------------------ step
@@ -373,6 +386,13 @@ class Simulation:
         obstacles += [Obstacle(h.id, "human", h.x, h.y, h.radius) for h in self.humans]
         obstacles += [Obstacle(f.id, "forklift", cx, cy, cr) for f in self.forklifts for cx, cy, cr in f.circles()]
         obstacles += [Obstacle(e.id, "external", e.x, e.y, e.radius) for e in self.externals]
+        if self.doors:
+            near = [(cx, cy, cr) for v in self.vehicles for cx, cy, cr in bodies[v.serial]] + \
+                   [(h.x, h.y, h.radius) for h in self.humans] + \
+                   [c for f in self.forklifts for c in f.circles()]
+            for d in self.doors.values():
+                d.step(dt, now, near)
+                obstacles += [Obstacle(d.spec.id, "door", x, y, r) for x, y, r in d.obstacles()]
         for v in self.vehicles:
             v.step(dt, now, obstacles)
         for c in self.evaluator.check(now, self.vehicles, self.humans, self.forklifts, self.externals):
@@ -392,6 +412,8 @@ class Simulation:
         for v in self.vehicles:
             for t, msg in v.publish_due(now):
                 self.bus.publish(t, msg, now)
+        for d in self.doors.values():
+            d.publish_due(now)
         self.bus.deliver_due(now)
         if now >= self._next_tick - 1e-9:
             self._next_tick = now + 0.2
@@ -444,6 +466,14 @@ class Simulation:
                         v.set_fault("LOCALIZATION_LOST")
                     else:
                         v.set_fault("SENSOR_FAULT")
+        if sc.door_mtbf_h > 0:
+            p = dt / (sc.door_mtbf_h * 3600.0)
+            for d in self.doors.values():
+                if d.fault is None and d.pending_fault is None and self.rng_doors.random() < p:
+                    d.inject(self.rng_doors.choice(("JAM", "MOTOR", "NO_RESPONSE")),
+                             now + self.rng_doors.uniform(180.0, 600.0))
+        for d in self.doors.values():
+            d.maintain(now)
         if sc.comms_mtbf_h > 0:
             p = dt / (sc.comms_mtbf_h * 3600.0)
             for v in self.vehicles:
@@ -462,6 +492,19 @@ class Simulation:
         if fault not in FAULT_TYPES:
             raise ValueError(f"fault must be one of {', '.join(FAULT_TYPES)}")
         self.vehicle(serial).set_fault(fault, recoverable)
+
+    def drill_door(self, door_id: str, fault: str) -> None:
+        """Door failure for training; it stays until the field fix (door_field_fix)."""
+        if door_id not in self.doors:
+            raise ValueError(f"door must be one of {', '.join(self.doors) or '(none on this site)'}")
+        if fault not in ("JAM", "MOTOR", "NO_RESPONSE"):
+            raise ValueError("fault must be JAM, MOTOR or NO_RESPONSE")
+        self.doors[door_id].inject(fault)
+
+    def door_field_fix(self, door_id: str) -> None:
+        if door_id not in self.doors:
+            raise ValueError(f"unknown door {door_id}")
+        self.doors[door_id].repair()
 
     def drill_comms(self, serial: str, seconds: float) -> None:
         self.vehicle(serial)
@@ -555,6 +598,9 @@ class Simulation:
                          for k, v in m.external.items()],
             "locks": locks_n, "lanes": locks_l,
             "blocks": {k: list(v) for k, v in m.blocks.items()},
+            # the control room's view of each door, plus the curtain position (ground truth, for the map)
+            "doors": [dict(v, open=round(self.doors[v["id"]].progress, 2)) for v in m.doors.views(self.now)]
+            if m.doors is not None else [],
             "zones": [{"id": z.id, "locked": z.locked, "limit": m.active_zone_limits().get(z.id),
                        "override": m.zone_speed_override.get(z.id)} for z in self.layout.zones.values()],
             "alarms": m.alarms.active_list(), "alarm_counts": m.alarms.counts(),

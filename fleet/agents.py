@@ -178,8 +178,10 @@ class Human:
         for side, margin in options:
             clear = obstacle_r + self.radius + margin
             nx, ny = -fy * side, fx * side
-            shift = clear - side * lat if side * lat < clear else 0.0
-            ax, ay = self.x + nx * max(shift, 0.0), self.y + ny * max(shift, 0.0)
+            # the robot's offset after moving `shift` toward `side` is lat - side * shift; it must end
+            # at least `clear` away: away from the robot that is clear - |lat|, past it clear + |lat|
+            shift = max(0.0, clear + side * lat)
+            ax, ay = self.x + nx * shift, self.y + ny * shift
             along = (obstacle[0] - self.x) * fx + (obstacle[1] - self.y) * fy + obstacle_r + 0.8
             bx, by = ax + fx * along, ay + fy * along
             pts = [(ax, ay), ((ax + bx) / 2, (ay + by) / 2), (bx, by)]
@@ -210,8 +212,14 @@ class Human:
             self.plan_next(layout)
             self.v = 0.0
             return
+        # a waypoint already reached has no direction: skip it before judging what is ahead
+        while self.walker.target() is not None and dist(self.walker.target(), self.pos) < 0.02:
+            self.walker.idx += 1
         tgt = self.walker.target()
-        heading = math.atan2(tgt[1] - self.y, tgt[0] - self.x) if tgt else self.heading
+        if tgt is None:
+            self.v = 0.0
+            return
+        heading = math.atan2(tgt[1] - self.y, tgt[0] - self.x)
         yield_dist = 0.0 if self.distracted else 1.2
         blocked = False
         for rid, rx, ry, rr, rv in robots:
@@ -271,8 +279,9 @@ class Human:
                 self.plan_next(layout)
             return
         self.yield_since = None if not blocked else self.yield_since
-        bodies = [(rx, ry, rr) for _rid, rx, ry, rr, _rv in robots] + [c for f in forklifts for c in f.circles()]
-        overlap = [(bx, by, br) for bx, by, br in bodies
+        bodies = [(rx, ry, rr, rv) for _rid, rx, ry, rr, rv in robots] + \
+            [(cx, cy, cr, f.v) for f in forklifts for cx, cy, cr in f.circles()]
+        overlap = [(bx, by, br) for bx, by, br, _bv in bodies
                    if math.hypot(bx - self.x, by - self.y) < br + self.radius]
         if overlap:
             # already touching a vehicle body: step straight away from it first
@@ -285,11 +294,17 @@ class Human:
             return
         trial = Walker(self.walker.points, self.walker.idx)
         new_pos, heading2 = trial.advance(self.pos, self.speed * dt)
-        for bx, by, br in bodies:
+        for bx, by, br, bv in bodies:
             d_new = math.hypot(bx - new_pos[0], by - new_pos[1]) - br - self.radius
             d_old = math.hypot(bx - self.x, by - self.y) - br - self.radius
             if d_new < 0.06 and d_new < d_old:
-                blocked = True      # never walk into a vehicle body (margin above the contact threshold)
+                # never walk into a vehicle body (margin above the contact threshold); a vehicle that
+                # stands across the walking line at an angle is walked round, as people do
+                if abs(bv) <= 0.05 and self.walker.idx >= self.detour_until_idx and \
+                        self._sidestep(layout, (bx, by), br, heading):
+                    self.v = 0.0
+                    return
+                blocked = True
                 break
         if blocked:
             self.v = 0.0
@@ -320,6 +335,9 @@ def expand_loop(layout: Layout, loop: list[str], allowed: set[str] | None = None
     return out
 
 
+TURN_RATE = 0.8        # rad/s: a counterbalance truck turning on the spot (rear end at walking pace)
+
+
 @dataclass
 class Forklift:
     """Counterbalance forklift, 2.4 m x 1.2 m, modelled as three overlapping 0.6 m circles."""
@@ -344,6 +362,9 @@ class Forklift:
     passes: int = 0
     lat: float = 0.0            # lateral offset from the lane centre while passing
     lat_target: float = 0.0
+    keep_offset_until: float = 0.0   # gave up returning to the lane centre: drive on at the offset
+    turn_wait_since: float | None = None
+    stall_since: float | None = None
     bx: float = 0.0             # position on the lane centre line
     by: float = 0.0
 
@@ -400,18 +421,27 @@ class Forklift:
         tn = self.layout.nodes[nxt]
         heading = math.atan2(tn.y - self.by, tn.x - self.bx)
         # lateral manoeuvre toward the passing offset (or back to the lane centre)
-        if not any(until > now for until in self.passing.values()):
+        if not any(until > now for until in self.passing.values()) and now >= self.keep_offset_until:
             self.lat_target = 0.0
         if abs(self.lat - self.lat_target) > 1e-3:
             mine = self.circles()
             if any(math.hypot(rx - cx, ry - cy) < rr + cr + 0.5 for _i, rx, ry, rr, _v in robots
                    for cx, cy, cr in mine):
                 self.v = 0.0          # something beside the truck: hold the sideways move
+                if self.blocked_since is None:
+                    self.blocked_since = now
+                elif now - self.blocked_since > 8.0:
+                    # the driver stops trying to straighten up and carries on where the truck is
+                    self.lat_target = self.lat
+                    self.keep_offset_until = now + 10.0
+                    self.blocked_since = None
+                self._stalled(now)
                 return
             step_lat = min(abs(self.lat_target - self.lat), 0.8 * dt)
             self.lat += step_lat if self.lat_target > self.lat else -step_lat
             self._place(heading)
             self.v = 0.4
+            self.stall_since = None
             return
         for h in humans:
             if circle_hits_forward_box(h.pos, h.radius, self.pos, heading, 3.0, 0.7, start=1.8):
@@ -441,7 +471,24 @@ class Forklift:
                         self.reversed_at = now
                         self._reverse()
                 return
+        turn = math.remainder(heading - self.heading, 2 * math.pi)
+        if abs(turn) > 0.05 and self.lat == 0.0:
+            swept = [1 for _i, rx, ry, rr, _v in robots if math.hypot(rx - self.bx, ry - self.by) < 1.9 + rr + 0.2]
+            if swept and (self.turn_wait_since is None or now - self.turn_wait_since < 10.0):
+                # something inside the circle the truck sweeps: the driver waits before turning
+                self.turn_wait_since = self.turn_wait_since if self.turn_wait_since is not None else now
+                self.v = 0.0
+                return
+            self.turn_wait_since = None
+            # the truck turns at walking pace on the spot: its 3.6 m body sweeps the next lane gradually,
+            # so the vehicles there see it coming instead of it appearing across their lane
+            self.heading += max(-TURN_RATE * dt, min(TURN_RATE * dt, turn))
+            self._place(self.heading)
+            self.v = 0.0
+            self.stall_since = None
+            return
         self.blocked_since = None
+        self.stall_since = None
         speed = self.speed
         zone_limit = [z for z in self.layout.zones_at(self.pos) if z.kind in ("human_work", "walkway")]
         if zone_limit:
@@ -461,6 +508,16 @@ class Forklift:
             self.bx += (tn.x - self.bx) / d * step
             self.by += (tn.y - self.by) / d * step
         self._place(heading)
+
+    def _stalled(self, now: float) -> None:
+        """A sideways move that stays blocked even at the offset: after 30 s the driver backs out
+        the way they came (the other blocked cases already turn back on their own timers)."""
+        if self.stall_since is None:
+            self.stall_since = now
+        elif now - self.stall_since > 30.0 and now - self.reversed_at > 30.0:
+            self.reversed_at = now
+            self.stall_since = None
+            self._reverse()
 
     def _place(self, heading: float) -> None:
         self.x = self.bx - math.sin(heading) * self.lat

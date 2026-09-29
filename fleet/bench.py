@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import argparse
 from concurrent.futures import ProcessPoolExecutor
-from dataclasses import asdict, replace
 import json
 import os
 from pathlib import Path
@@ -26,7 +25,6 @@ from .control import ManagerConfig
 from .ops import Operations
 from .scenario import PRESETS, get
 from .sim import Simulation
-from .vehicle import VehicleSpec
 
 KEY_METRICS = ("done", "throughput_h", "cycle_avg", "cycle_p90", "wait_avg", "traffic_wait_ratio", "utilization",
                "deadlocks", "deadlocks_resolved", "reroutes", "evasions", "protective_stops", "protective_human",
@@ -39,9 +37,10 @@ KEY_METRICS = ("done", "throughput_h", "cycle_avg", "cycle_p90", "wait_avg", "tr
 def run_one(job: dict) -> dict:
     sc = get(job["scenario"], **job.get("scenario_overrides", {}))
     cfg = ManagerConfig(**job.get("manager", {}))
-    spec = VehicleSpec(**job.get("vehicle", {}))
     t0 = time.time()
-    sim = Simulation(sc, seed=job["seed"], strategy=job["strategy"], config=cfg, vehicle_spec=spec)
+    # vehicle overrides change only the named fields of each class's own spec (AGF, tote AMR, grid AMR)
+    sim = Simulation(sc, seed=job["seed"], strategy=job["strategy"], config=cfg,
+                     vehicle_overrides=job.get("vehicle") or None)
     ops = Operations(sim)
     auto = AutoOperator(ops, random.Random(job["seed"] + 99))
     if job.get("operator", True):

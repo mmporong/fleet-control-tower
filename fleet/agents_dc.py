@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 import math
 import random
 
-from .agents import Human, Walker, undirected_path
+from .agents import Human, Walker
 from .geometry import Point, circle_hits_forward_box
 from .layout import Layout
 from .site_dc import (CROSSING_X, DOCK_X_IN, DOCK_X_OUT, DOCK_YS, IN_STAGE_X, OUT_STAGE_X, PICK_AISLES, WIDTH)
@@ -72,8 +72,10 @@ class DcHuman(Human):
                 # off the walkway (on the crossing): walk back down the crossing first, never across the floor
                 pts.append((CROSSING_X + self.rng.uniform(-0.4, 0.4), 1.3))
             if self.rng.random() < 0.35:
+                # across the south main aisle to the strip between the halls and back; turning round short
+                # of the north main aisle keeps people off the tote AMRs' bay exit at the top of the crossing
                 x = CROSSING_X + self.rng.uniform(-0.4, 0.4)
-                pts += [(x, 1.3), (x, 47.0), (x, 1.3)]
+                pts += [(x, 1.3), (x, 41.5), (x, 1.3)]
             else:
                 pts.append((self.rng.uniform(3.0, WIDTH - 3.0), self.rng.uniform(0.8, 1.9)))
             self.walker = Walker(pts)
@@ -95,6 +97,7 @@ class DcHuman(Human):
             pts.append((goal[0], end_y))
         pts.append(goal)
         self.walker = Walker(pts)
+        self.detour_until_idx = -1          # a new walk: no sidestep of the previous one applies
 
     def _at_shelf_face(self) -> bool:
         col = aisle_of(self.x)
@@ -149,6 +152,7 @@ class DcHuman(Human):
         target = self.site.claim_picker_target(self.id, self.pos, self.zone_aisles)
         if target is not None:
             self.serving = target
+            self.dwell_until = min(self.dwell_until, now)     # a robot calls: stop idling and go
             r = robots[target]
             node = layout.nearest_node((r["x"], r["y"]), ("pickface",))
             side = 0.75 if self.x >= layout.nodes[node].x else -0.75
@@ -175,10 +179,11 @@ class DockForklift:
     wait_until: float = 0.0
     blocked_since: float | None = None
     moves: int = 0
+    home: int = 0                  # dock the truck starts beside; two trucks never start on one spot
 
     def __post_init__(self) -> None:
         self.x = 1.3 if self.side == "in" else WIDTH - 1.4
-        self.y = DOCK_YS[0] + 2.5
+        self.y = DOCK_YS[(3 * self.home) % len(DOCK_YS)] + 2.5
 
     @property
     def pos(self) -> Point:

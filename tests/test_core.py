@@ -8,13 +8,15 @@ import unittest
 
 from fleet import bus as bus_mod
 from fleet import vehicle as vehicle_mod
-from fleet import control, geometry, traffic
+from fleet import geometry, traffic
+from fleet.agents import Human, Walker
 from fleet.alarms import AlarmManager
 from fleet.bus import Bus
 from fleet.control import RobotRecord, near_miss
 from fleet.layout import warehouse_layout
 from fleet.perception import Detection, Tracker
 from fleet.traffic import LockTable, find_cycles
+from fleet import vda5050 as vda_mod
 from fleet.vda5050 import (HeaderIds, RouteEdge, RouteNode, build_order, header, validate_order)
 from fleet.vehicle import Obstacle, Vehicle
 
@@ -22,7 +24,7 @@ from tests.helpers import MiniWorld
 
 
 def load_tests(loader, tests, ignore):
-    for mod in (geometry, traffic, bus_mod, vehicle_mod):
+    for mod in (geometry, traffic, bus_mod, vehicle_mod, vda_mod):
         tests.addTests(doctest.DocTestSuite(mod))
     return tests
 
@@ -292,6 +294,18 @@ class TrafficTests(unittest.TestCase):
         self.assertTrue(w.run_until(lambda: w.at("AMR-01", "B9"), 60))
         self.assertEqual(rec.connection, "ONLINE")
 
+    def test_link_quality_reflects_loss_and_delay(self):
+        w = MiniWorld({"AMR-01": "B1", "AMR-02": "C1"})
+        w.bus.link("AMR-02").loss = 0.5
+        w.bus.link("AMR-02").latency_s = 0.3
+        w.run(20)
+        good = w.manager.link_quality(w.manager.robots["AMR-01"])
+        weak = w.manager.link_quality(w.manager.robots["AMR-02"])
+        self.assertGreaterEqual(good[0], 95)
+        self.assertLessEqual(good[1], 100)        # 50 ms link, delivered on the 0.1 s simulation step
+        self.assertLess(weak[0], 75)
+        self.assertGreaterEqual(weak[1], 300)
+
     def test_external_itinerary_is_respected(self):
         w = MiniWorld({"AMR-01": "B2"})
         w.external = ("EXT-1", 9.0, 17.0, 0.0, ["B5", "qB5C5", "C5", "qC5D5"])   # stationary on B5
@@ -371,6 +385,43 @@ class PerceptionTests(unittest.TestCase):
             tr.update([Detection("human", 5.0 + rng.gauss(0, 0.12), 3.0 + rng.gauss(0, 0.12), "infra")], k * 0.5)
         discs = tr.predicted_discs(10.0, {"human": 2.0})
         self.assertEqual(len(discs), 1)                               # no forward prediction when still
+
+    def test_forklift_prediction_follows_travel_and_holds_the_turn_circle_when_stopped(self):
+        tr = Tracker()
+        for k in range(8):                                            # drives east along y = 3
+            tr.update([Detection("forklift", 5.0 + 0.6 * k, 3.0, "infra")], k * 0.5)
+        moving = tr.predicted_discs(3.5, {"forklift": 0.0})
+        self.assertEqual({round(y, 1) for *_, y, _r in moving}, {3.0})   # circles along the heading
+        self.assertLess(max(r for *_, r in moving), 1.5)                 # 0.6 body + 0.55 clearance + sigma
+        for k in range(8, 20):                                        # stops: it may turn on the spot next
+            tr.update([Detection("forklift", 9.2, 3.0, "infra")], k * 0.5)
+        (_, _, x, y, r), = tr.predicted_discs(10.0, {"forklift": 3.0})
+        self.assertGreater(r, 2.3)                                    # 1.2 + 0.6 half length + 0.55 clearance
+
+
+class PedestrianTests(unittest.TestCase):
+    def test_sidestep_clears_a_robot_on_either_side(self):
+        layout = warehouse_layout()
+        # open floor along the south cross aisle (no racks below y 4.4); at y = 1.0 the wall is close on the
+        # right, which is where a wrong shift toward the robot's side used to walk into it
+        for y, lat in ((2.2, 0.4), (2.2, -0.4), (2.2, 0.0), (1.0, 0.4)):
+            h = Human("P1", "walker", 20.0, y, random.Random(1))
+            h.walker = Walker([(26.0, y)])
+            robot, r = (21.0, y + lat), 0.45
+            self.assertTrue(h._sidestep(layout, robot, r, 0.0))
+            ay, (bx, by) = h.walker.points[0][1], h.walker.points[1]
+            # the detour line runs past the robot with the person's body clear of it
+            self.assertGreaterEqual(abs(ay - robot[1]), r + h.radius + 0.1 - 1e-9, lat)
+            self.assertAlmostEqual(ay, by)
+            self.assertGreater(bx, robot[0] + r)
+
+    def test_reached_waypoint_does_not_point_at_a_robot(self):
+        """A person standing on their last waypoint next to a robot is done, not blocked by it."""
+        layout = warehouse_layout()
+        h = Human("P1", "walker", 20.0, 6.5, random.Random(1))
+        h.walker = Walker([(20.0, 6.5)])
+        h.step(0.1, 10.0, layout, [("AMR-01", 20.7, 6.5, 0.45, 0.0)], [])
+        self.assertIsNone(h.blocked_since)
 
 
 class SafetyRuleTests(unittest.TestCase):

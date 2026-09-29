@@ -117,6 +117,89 @@ class DcTests(unittest.TestCase):
         self.assertGreater(site["putaway"] + site["shipped"], 0)
 
 
+def lone_agf(seed: int = 3) -> Simulation:
+    """Distribution centre with one autonomous forklift and nothing else moving."""
+    sc = get("standard", agf=1, amr=0, pickers=0, packers=0, dock_workers=0, walkers=0, dock_forklifts_in=0,
+             dock_forklifts_out=0, rack_forklift=0, external=0, trucks_h=0.0, out_pallets_h=0.0,
+             tote_orders_h=0.0, fault_mtbf_h=0.0, comms_mtbf_h=0.0)
+    sim = Simulation(sc, seed=seed)
+    sim.run(2)
+    return sim
+
+
+class DoorTests(unittest.TestCase):
+    def drive_to(self, sim: Simulation, goal: str, limit: float = 240.0) -> list[str]:
+        rec = sim.manager.robots["AGF-01"]
+        self.assertTrue(sim.manager.assign_route(rec, goal, "test"))
+        lanes = []
+        while sim.now < limit + 2 and rec.last_node != goal:
+            sim.run(0.5)
+            if rec.cur_idx > 0:
+                lanes.append(sim.layout.edge_between(rec.route[rec.cur_idx - 1], rec.route[rec.cur_idx]).lane)
+        self.assertEqual(rec.last_node, goal)
+        return lanes
+
+    def test_door_opens_ahead_of_the_forklift(self):
+        sim = lone_agf()
+        v = sim.vehicle("AGF-01")
+        door_stops = 0
+        rec = sim.manager.robots["AGF-01"]
+        self.assertTrue(sim.manager.assign_route(rec, "SE66", "test"))
+        waited = 0.0
+        while sim.now < 240 and rec.last_node != "SE66":
+            sim.run(0.5)
+            door_stops += v.field == "PROTECTIVE" and v.field_cause.startswith("door")
+            waited += 0.5 if rec.wait is not None and rec.wait.kind == "door" else 0.0
+        self.assertEqual(rec.last_node, "SE66")
+        self.assertEqual(door_stops, 0)                   # the curtain never stood in front of the truck
+        self.assertLessEqual(waited, 2.0)                 # requested early enough not to stop for it
+        self.assertGreaterEqual(sim.manager.doors.view["D-S"].opens, 1)
+
+    def test_jammed_door_raises_alarm_and_traffic_detours(self):
+        sim = lone_agf()
+        ops = Operations(sim)
+        self.assertTrue(ops.execute({"cmd": "drill_door", "door": "D-N", "fault": "JAM"})["ok"])
+        lanes = self.drive_to(sim, "NE66", limit=420.0)
+        alarm = sim.manager.alarms.alarms.get("FACILITY_FAULT:D-N")
+        self.assertIsNotNone(alarm)
+        self.assertEqual(sim.manager.doors.view["D-N"].fail_cause, "timeout")
+        self.assertFalse(set(lanes) & sim.layout.doors["D-N"].lanes)     # went round through the south door
+        self.assertTrue(set(lanes) & sim.layout.doors["D-S"].lanes)
+        # after the field fix a retry clears the alarm and the door is planned through again
+        ops.execute({"cmd": "door_field_fix", "door": "D-N"})
+        ops.execute({"cmd": "door_retry", "door": "D-N"})
+        sim.run(1)
+        self.assertTrue(sim.manager.doors.available("D-N", sim.now))
+        self.assertFalse(sim.manager.alarms.alarms["FACILITY_FAULT:D-N"].active)
+
+    def test_silent_door_controller_is_detected_and_recovers(self):
+        sim = lone_agf()
+        sim.drill_door("D-S", "NO_RESPONSE")
+        sim.run(5)
+        self.assertEqual(sim.manager.doors.view["D-S"].fail_cause, "stale")
+        self.assertIn("SE42_6|SE50", sim.manager.doors.unavailable_lanes(sim.now))
+        sim.door_field_fix("D-S")
+        sim.run(3)
+        self.assertEqual(sim.manager.doors.view["D-S"].fail_cause, "")   # the door reports again: clears itself
+
+    def test_operator_takes_a_door_out_of_use(self):
+        sim = lone_agf()
+        ops = Operations(sim)
+        ops.execute({"cmd": "door_disable", "door": "D-N"})
+        lanes = self.drive_to(sim, "NE66", limit=420.0)
+        self.assertFalse(set(lanes) & sim.layout.doors["D-N"].lanes)
+        self.assertFalse(ops.execute({"cmd": "door_disable", "door": "D-X"})["ok"])
+        ops.execute({"cmd": "door_retry", "door": "D-N"})
+        self.assertTrue(sim.manager.doors.available("D-N", sim.now))
+
+    def test_south_door_is_a_single_point_of_failure_for_outbound(self):
+        """Finding from the door drill: with the south door out, outbound staging is unreachable."""
+        sim = lone_agf()
+        closed = sim.layout.doors["D-S"].lanes
+        self.assertIsNone(sim.manager.planner.plan("CA11_5", "SO1", avoid_lanes=set(closed), vclass="FORKLIFT"))
+        self.assertIsNotNone(sim.manager.planner.plan("CA11_5", "SO1", vclass="FORKLIFT"))
+
+
 class DispatcherTests(unittest.TestCase):
     def test_task_lifecycle_and_low_battery_charging(self):
         sim = Simulation(get("grid-night", robots=3, external=0, rate_per_h=0.0), seed=2)

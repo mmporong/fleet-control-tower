@@ -18,14 +18,17 @@ import math
 
 from .alarms import AlarmManager
 from .bus import Bus
+from .facility import DoorSupervisor
 from .geometry import box_gap, dist, point_in_polygon, seg_point_dist
 from .layout import Layout
 from .perception import Detection, Tracker
 from .planner import Planner
 from .traffic import LockTable, WaitInfo, find_cycles, lane_res, node_res, res_node
-from .vda5050 import HeaderIds, RouteEdge, RouteNode, action, build_instant_actions, build_order, header, topic
+from .vda5050 import (HeaderIds, RouteEdge, RouteNode, action, build_instant_actions, build_order, header,
+                      parse_iso_time, topic)
 
 STRATEGIES = ("none", "locks", "locks+resolve")
+LINK_WINDOW_S = 5.0          # window for the measured link quality shown per vehicle
 
 
 def near_miss(speed: float, gap: float, margin: float = 0.0) -> bool:
@@ -54,6 +57,8 @@ class ManagerConfig:
     deadlock_alarm_s: float = 30.0
     reroute_after_s: float = 8.0
     blocked_alarm_s: float = 60.0
+    # in a collaborative picking zone robots wait for people by design: alarm only when it lasts
+    collab_blocked_alarm_s: float = 180.0
     comms_timeout_s: float = 3.0
     order_resend_s: float = 2.5
     human_horizon_s: float = 2.0
@@ -95,6 +100,7 @@ class RobotRecord:
     detections: list = field(default_factory=list)
     last_seen: float = -1e9
     connection: str = "OFFLINE"
+    rx: deque = field(default_factory=lambda: deque(maxlen=120))   # (received at, latency s) of state/vis
     has_state: bool = False
     # ---- plan
     route: list = field(default_factory=list)
@@ -175,6 +181,7 @@ class FleetManager:
         self._zone_broadcast: dict[str, float | None] = {}
         self._last_zone_rebroadcast = 0.0
         self.deadlocks: dict[frozenset, dict] = {}
+        self._congested_since: float | None = None
         self.dispatcher = None           # set by the simulation
         self.congestion: dict[str, float] = {}          # cumulative waiting seconds per node
         self.congestion_recent: dict[str, float] = {}   # exponentially decayed waiting seconds
@@ -187,6 +194,7 @@ class FleetManager:
         bus.subscribe(f"uagv/v2/{manufacturer}/+/visualization", self._on_vis)
         bus.subscribe(f"uagv/v2/{manufacturer}/+/connection", self._on_connection)
         bus.subscribe(f"uagv/v2/{manufacturer}/+/factsheet", self._on_factsheet)
+        self.doors = DoorSupervisor(layout.doors, bus, self.alarms, self.event) if layout.doors else None
 
     # ================================================================ events
     def event(self, kind: str, source: str, msg: str, level: str = "info", **data) -> None:
@@ -223,9 +231,12 @@ class FleetManager:
         p = msg["agvPosition"]
         rec.x, rec.y, rec.theta = p["x"], p["y"], p["theta"]
         rec.v = msg["velocity"]["vx"]
-        self._seen(rec)
+        self._seen(rec, msg)
 
-    def _seen(self, rec: RobotRecord) -> None:
+    def _seen(self, rec: RobotRecord, msg: dict | None = None) -> None:
+        if msg is not None:
+            received = max(self.now, self.bus.now)
+            rec.rx.append((received, max(0.0, received - parse_iso_time(msg["timestamp"]))))
         if rec.connection == "CONNECTIONBROKEN":
             self.event("comms_restored", rec.serial, "통신 복구", "info")
             self.alarms.set("COMMS_LOST", rec.serial, False, self.now)
@@ -234,7 +245,7 @@ class FleetManager:
 
     def _on_state(self, t: str, msg: dict) -> None:
         rec = self.register(self._serial(t))
-        self._seen(rec)
+        self._seen(rec, msg)
         rec.has_state = True
         p = msg["agvPosition"]
         rec.x, rec.y, rec.theta = p["x"], p["y"], p["theta"]
@@ -421,9 +432,18 @@ class FleetManager:
             return False
         prev = rec.route[rec.cur_idx - 1] if rec.route and rec.cur_idx > 0 and rec.cur_idx < len(rec.route) \
             and rec.route[rec.cur_idx] == start else None
-        path = self.planner.plan(start, goal, avoid_nodes=avoid_nodes or set(),
-                                 avoid_lanes=avoid_lanes or set(), node_penalty=self._penalties(rec, goal), prev=prev,
-                                 vclass=rec.vclass)
+        penalty = self._penalties(rec, goal)
+        path = None
+        closed = self.doors.unavailable_lanes(self.now) if self.doors is not None else set()
+        if closed:
+            # a failed or disabled door: go around it if the site allows, otherwise wait at it
+            path = self.planner.plan(start, goal, avoid_nodes=avoid_nodes or set(),
+                                     avoid_lanes=(avoid_lanes or set()) | closed, node_penalty=penalty, prev=prev,
+                                     vclass=rec.vclass)
+        if path is None:
+            path = self.planner.plan(start, goal, avoid_nodes=avoid_nodes or set(),
+                                     avoid_lanes=avoid_lanes or set(), node_penalty=penalty, prev=prev,
+                                     vclass=rec.vclass)
         if path is None:
             return False
         self._order_seq += 1
@@ -516,6 +536,9 @@ class FleetManager:
         self._check_infra()
         self._update_blocks()
         self._update_external_locks()
+        if self.doors is not None:
+            self.doors.tick(now, self._door_demand())
+            self._door_blocks()
         decay = 0.5 ** (dt / self.cfg.congestion_half_life_s)
         for n in list(self.congestion_recent):
             self.congestion_recent[n] *= decay
@@ -653,6 +676,33 @@ class FleetManager:
                         blocks[node_res(nid)] = ("zone", z.id)
         self.blocks = blocks
 
+    def _door_demand(self) -> dict[str, set[str]]:
+        """Vehicles that will pass a door soon (within PREREQUEST_M along the route) or are in its opening."""
+        want: dict[str, set[str]] = {}
+        reach = self.doors.PREREQUEST_M
+        for rec in self.robots.values():
+            if not rec.route or rec.cur_idx >= len(rec.route) - 1 or rec.fatal:
+                continue
+            travelled = -rec.dist_since
+            for k in range(max(1, rec.cur_idx), len(rec.route)):
+                e = self.layout.edge_between(rec.route[k - 1], rec.route[k])
+                door = self.doors.lane_door.get(e.lane)
+                if door is not None:
+                    want.setdefault(door, set()).add(rec.serial)
+                travelled += e.length
+                if travelled > reach:
+                    break
+        for res, owner in self.locks.holder.items():
+            if res.startswith("L:") and res[2:] in self.doors.lane_door:
+                want.setdefault(self.doors.lane_door[res[2:]], set()).add(owner)
+        return want
+
+    def _door_blocks(self) -> None:
+        """A door lane can be reserved only while its door reports OPEN (the physical curtain is up)."""
+        for lane, door in self.doors.lane_door.items():
+            if not self.doors.is_open(door, self.now):
+                self.blocks.setdefault(lane_res(lane), ("door", door))
+
     def _update_external_locks(self) -> None:
         for ext_id, info in self.external.items():
             if self.now - info["seen"] > 3.0:
@@ -784,7 +834,7 @@ class FleetManager:
             chain = [j]
             # do not stop inside an intersection: a robot waiting there blocks crossing
             # traffic and, next to a dock or parking stub, the stub's only exit
-            while (self.layout.is_intersection(rec.route[chain[-1]]) and chain[-1] < len(rec.route) - 1
+            while (self.layout.must_pass(rec.route[chain[-1]]) and chain[-1] < len(rec.route) - 1
                    and len(chain) < 4):
                 chain.append(chain[-1] + 1)
             resources: list[str] = []
@@ -920,6 +970,7 @@ class FleetManager:
     def _wait_text(self, w: WaitInfo) -> str:
         target = res_node(w.resource) or w.resource[2:].replace("|", "-")
         label = {"robot": "로봇", "human": "사람 예상 점유", "forklift": "지게차 예상 점유", "zone": "봉쇄 구역",
+                 "door": "문 열림 대기",
                  "external": "외부 로봇", "offline": "통신 두절 로봇", "fault": "고장 로봇",
                  "manual": "원격 조종 로봇"}[w.kind]
         who = f" {w.holder}" if w.holder else ""
@@ -1054,7 +1105,7 @@ class FleetManager:
                     if owners.get(n, rec.serial) == rec.serial and n not in forbidden_spots:
                         return n
                     continue
-                if not self.layout.is_intersection(n) and n != rec.goal and n not in forbidden_spots:
+                if not self.layout.must_pass(n) and n != rec.goal and n not in forbidden_spots:
                     best = n
                     return best
                 frontier.append((n, depth + 1))
@@ -1063,7 +1114,14 @@ class FleetManager:
     def _reroute_blocked(self) -> None:
         for rec in self.robots.values():
             w = rec.wait
-            if w is None or self.now - w.since < self.cfg.reroute_after_s or self.now < rec.reroute_next:
+            if w is None or self.now < rec.reroute_next:
+                continue
+            if w.kind == "door":
+                # a door is judged by its supervisor (open request timeout, silence, operator):
+                # wait while it may still open, go round as soon as it is declared unusable
+                if self.doors is None or self.doors.available(w.holder, self.now):
+                    continue
+            elif self.now - w.since < self.cfg.reroute_after_s:
                 continue
             if w.kind == "robot":
                 continue   # handled by deadlock logic or just normal queueing
@@ -1221,10 +1279,16 @@ class FleetManager:
             if w is not None:
                 waiting += 1
             behind = chains.get(rec.serial, [])
-            root_stopped = w is not None and w.kind != "robot" or (
+            # waiting behind a faulted, silent or hand-driven vehicle or a failed door is a consequence of
+            # that unit's own alarm (ROBOT_FAULT, COMMS_LOST, operator takeover, FACILITY_FAULT): suppressed
+            root_stopped = w is not None and w.kind not in ("robot", "fault", "offline", "manual", "door") or (
                 w is None and bool(behind) and rec.status in ("PROTECTIVE", "FAULT", "PAUSED", "OFFLINE", "MANUAL"))
             since = w.since if w is not None else (rec.protective_since or rec.fault_since or self.now)
-            long_block = root_stopped and self.now - since >= self.cfg.blocked_alarm_s
+            limit = self.cfg.blocked_alarm_s
+            if (w is not None and w.kind == "human" or rec.field_cause.startswith("human")) and \
+                    any(z.kind == "picking" for z in self.layout.zones_at((rec.x, rec.y))):
+                limit = self.cfg.collab_blocked_alarm_s
+            long_block = root_stopped and self.now - since >= limit
             self.alarms.set("BLOCKED_LONG", rec.serial, long_block, self.now,
                             f"{rec.serial} {rec.reason} · 뒤 {len(behind)}대 대기" if long_block else "",
                             {"behind": behind})
@@ -1243,8 +1307,17 @@ class FleetManager:
             self.alarms.set("BATTERY_CRITICAL", rec.serial, crit, self.now,
                             f"{rec.serial} 배터리 {rec.battery:.0f}%" if crit else "")
         ratio = waiting / max(1, active)
-        self.alarms.set("CONGESTION", "fleet", ratio > 0.3 and active >= 5, self.now,
-                        f"대기 로봇 {waiting}/{active}대 ({ratio:.0%})")
+        # deadband and on-delay (ISA-18.2 against chattering): raise above 35 % held for 60 s,
+        # clear only below 25 %
+        high = ratio > 0.35 and active >= 5
+        if high:
+            self._congested_since = self._congested_since if self._congested_since is not None else self.now
+        elif ratio < 0.25:
+            self._congested_since = None
+        raised = self.alarms.alarms.get("CONGESTION:fleet")
+        on = self._congested_since is not None and (
+            self.now - self._congested_since >= 60.0 or raised is not None and raised.active)
+        self.alarms.set("CONGESTION", "fleet", on, self.now, f"대기 로봇 {waiting}/{active}대 ({ratio:.0%})")
 
     # ---------------------------------------------------------------- zones & fleet mode
     def _zone_speeds(self) -> None:
@@ -1294,16 +1367,34 @@ class FleetManager:
                 rec.pause_sent_at = self.now
 
     # ---------------------------------------------------------------- views
+    def link_quality(self, rec: RobotRecord) -> tuple[int | None, int | None]:
+        """What the control room can measure about a vehicle's link without its Wi-Fi driver.
+
+        Returns (received share of the expected state + visualization messages in the last
+        LINK_WINDOW_S, in %, and the median one-way delay in ms). The expected rate comes from
+        the factsheet's protocolLimits.timing, so a vehicle that publishes less often by design is
+        not reported as a weak link.
+        """
+        timing = ((rec.factsheet or {}).get("protocolLimits") or {}).get("timing") or {}
+        rate = 1.0 / timing.get("defaultStateInterval", 1.0) + 1.0 / timing.get("visualizationInterval", 0.2)
+        recent = [lat for t, lat in rec.rx if t > self.now - LINK_WINDOW_S]
+        if self.now < LINK_WINDOW_S:
+            return None, None
+        share = min(100, round(100 * len(recent) / (rate * LINK_WINDOW_S)))
+        delay = round(1000 * sorted(recent)[len(recent) // 2]) if recent else None
+        return share, delay
+
     def robot_view(self, rec: RobotRecord) -> dict:
         base = rec.route[rec.cur_idx:rec.base_end + 1] if rec.route else []
         horizon = rec.route[rec.base_end + 1:rec.base_end + 1 + self.cfg.horizon_nodes] if rec.route else []
+        link, lat_ms = self.link_quality(rec)
         return {
             "id": rec.serial, "cls": rec.vclass, "len": rec.length, "wid": rec.width,
             "x": round(rec.x, 2), "y": round(rec.y, 2), "th": round(rec.theta, 2),
             "v": round(rec.v, 2), "st": rec.status, "label": STATUS_LABEL.get(rec.status, rec.status),
             "reach": rec.reach,
             "why": rec.reason, "bat": round(rec.battery, 1), "chg": rec.charging, "mode": rec.mode,
-            "conn": rec.connection, "field": rec.safety_field, "fault": rec.fatal, "load": rec.loaded,
+            "conn": rec.connection, "link": link, "lat_ms": lat_ms, "field": rec.safety_field, "fault": rec.fatal, "load": rec.loaded,
             "task": rec.task_id, "purpose": rec.purpose, "goal": rec.goal, "node": rec.last_node,
             "base": base, "hz": horizon, "route": rec.route[rec.cur_idx:] if rec.route else [],
             "wait_s": round(self.now - rec.wait.since, 1) if rec.wait else 0.0,

@@ -16,7 +16,6 @@ from pathlib import Path
 import random
 import threading
 import time
-from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, unquote, urlparse
 

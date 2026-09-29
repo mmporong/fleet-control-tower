@@ -28,6 +28,7 @@
     cancel_task: '작업 취소', send_to_park: '주차 보내기', send_to_charge: '충전 보내기', reassign_task: '작업 재할당',
     init_position: '위치 재지정', fleet_estop_release: '비상정지 해제', fleet_resume: '전체 재개', fleet_hold: '전체 일시정지',
     zone_speed: '구역 속도(구역 탭)', set_task_rate: '투입률(작업 탭)', reprioritize_task: '우선순위(작업 탭)',
+    door_disable: '문 사용 중지', door_retry: '문 재시도', door_field_fix: '[현장 모의] 문 수리',
   };
   const CONFIRM = new Set(['fleet_estop', 'fleet_estop_release', 'fleet_hold', 'fleet_resume', 'zone_evacuate', 'zone_lock', 'set_mode_manual']);
 
@@ -323,6 +324,7 @@
     const src = a ? a.source : '';
     const robot = S.snap.robots.find((r) => r.id === src);
     if (cmd === 'zone_speed') { selectTab('zones'); return; }
+    if (cmd.startsWith('door_')) { command(cmd, { door: src }); return; }
     if (cmd === 'set_task_rate' || cmd === 'reprioritize_task') { selectTab('tasks'); return; }
     if (cmd === 'zone_lock') {
       const p = a && a.data && a.data.x != null ? [a.data.x, a.data.y] : robot ? [robot.x, robot.y] : null;
@@ -377,7 +379,7 @@
     const manual = r.mode === 'MANUAL';
     const kv = [
       ['배터리 · 주행 가능', `${L.fmtNum(r.bat, 0)}%${r.chg ? ' 충전 중' : ''} · ${r.reach == null ? '—' : `${(r.reach / 1000).toFixed(1)} km`}`], ['속도', `${L.fmtNum(r.v, 2)} m/s`], ['운전 모드', r.mode],
-      ['통신', r.conn === 'ONLINE' ? '정상' : r.conn], ['현재 노드', r.node || '—'], ['목적지', r.goal ? `${r.goal} · ${r.purpose}` : '—'],
+      ['통신(수신율 · 지연)', `${L.linkInfo(r.conn, r.link, r.lat_ms).text} · 마지막 수신 ${L.fmtNum(r.age, 1)}초 전`], ['현재 노드', r.node || '—'], ['목적지', r.goal ? `${r.goal} · ${r.purpose}` : '—'],
       ['작업', r.task || '—'], ['적재', r.load ? '있음' : '없음'], ['예약 자원', `${r.locks}개`],
       ['안전필드', { CLEAR: '정상', WARNING: '경고(감속)', PROTECTIVE: '보호정지' }[r.field] || r.field], ['대기', r.wait_s ? `${L.fmtDuration(r.wait_s)} · ${r.wait_kind}` : '—'], ['차량 보고 사유', r.stop || '—'],
     ];
@@ -591,6 +593,30 @@
     ctx.strokeStyle = '#cbd5e1';
     ctx.lineWidth = 1;
     for (const r of S.layout.racks) { poly(r); ctx.fill(); ctx.stroke(); }
+    // fire wall and rapid-roll doors: grey while normal, red only when failed or out of use (ISA-101)
+    ctx.strokeStyle = '#94a3b8';
+    ctx.lineWidth = Math.max(2, k * 0.25);
+    for (const w of S.layout.walls || []) {
+      const [ax, ay] = P(w[0][0], w[0][1]);
+      const [bx, by] = P(w[1][0], w[1][1]);
+      ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
+    }
+    const doorState = Object.fromEntries(((S.snap && S.snap.doors) || []).map((d) => [d.id, d]));
+    for (const d of S.layout.doors || []) {
+      const st = doorState[d.id] || {};
+      const bad = st.cause || st.disabled;
+      const [ax, ay] = P(d.a[0], d.a[1]);
+      const [bx, by] = P(d.b[0], d.b[1]);
+      const open = st.open == null ? 0 : st.open;
+      ctx.strokeStyle = bad ? '#b42332' : open >= 1 ? '#cbd5e1' : '#475569';
+      ctx.lineWidth = Math.max(2, k * (open >= 1 ? 0.12 : 0.3));
+      ctx.setLineDash(open >= 1 ? [4, 3] : []);
+      ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = bad ? '#b42332' : '#64748b';
+      ctx.font = `${Math.max(9, k * 0.55)}px system-ui, sans-serif`;
+      ctx.fillText(`${d.id}${bad ? (st.disabled ? ' 사용 중지' : ' 이상') : ''}`, ax + 4, (ay + by) / 2);
+    }
     // roadmap
     ctx.strokeStyle = '#d6dee8';
     ctx.lineWidth = Math.max(1, k * 0.12);
@@ -858,7 +884,7 @@
       }
       if (r.bat < 15) { ctx.fillStyle = '#b42332'; ctx.fillRect(px - 0.45 * k, py + 0.5 * k, 0.9 * k * (r.bat / 100), 2); }
     }
-    $('map-meta').textContent = `AMR ${s.robots.length} · 사람 추적 ${s.tracks.filter((x) => x[1] === 'human').length} · 예약 노드 ${Object.keys(s.locks).length} · 버스 손실 ${s.bus.dropped}${s.links_down.length ? ` · 통신 두절 ${s.links_down.join(',')}` : ''}`;
+    $('map-meta').textContent = `차량 ${s.robots.length} · 사람 추적 ${s.tracks.filter((x) => x[1] === 'human').length} · 예약 노드 ${Object.keys(s.locks).length} · 버스 손실 ${s.bus.dropped}${s.links_down.length ? ` · 통신 두절 ${s.links_down.join(',')}` : ''}`;
   }
 
   function entities() {
@@ -947,7 +973,7 @@
     $('fleet-rows').innerHTML = rows.map((r) => {
       const info = L.statusInfo(r.st);
       const cls = { FORKLIFT: '자율 지게차', CARRIER: '토트 AMR' }[r.cls] || 'AMR';
-      return `<tr data-robot="${esc(r.id)}" class="${S.sel && S.sel.id === r.id ? 'sel' : ''}"><td><b>${esc(r.id)}</b><br><span class="meta" style="text-align:left">${esc(cls)}</span></td><td><span class="tag ${info.tone}">${esc(r.label)}</span></td><td>${esc(r.why)}</td><td class="num">${L.fmtNum(r.bat, 0)}%${r.chg ? ' ⚡' : ''}</td><td>${esc(r.task || '—')}</td><td>${esc(r.goal || '—')}</td><td class="num">${r.wait_s ? L.fmtDuration(r.wait_s) : '—'}</td><td>${r.conn === 'ONLINE' ? `정상 · ${r.age}s` : `<span class="tag danger">${esc(r.conn)}</span>`}</td><td class="num">${L.fmtNum(r.v, 2)}</td></tr>`;
+      return `<tr data-robot="${esc(r.id)}" class="${S.sel && S.sel.id === r.id ? 'sel' : ''}"><td><b>${esc(r.id)}</b><br><span class="meta" style="text-align:left">${esc(cls)}</span></td><td><span class="tag ${info.tone}">${esc(r.label)}</span></td><td>${esc(r.why)}</td><td class="num">${L.fmtNum(r.bat, 0)}%${r.chg ? ' ⚡' : ''}</td><td>${esc(r.task || '—')}</td><td>${esc(r.goal || '—')}</td><td class="num">${r.wait_s ? L.fmtDuration(r.wait_s) : '—'}</td><td>${(() => { const li = L.linkInfo(r.conn, r.link, r.lat_ms); return li.tone === 'ok' ? esc(li.text) : `<span class="tag ${li.tone}">${esc(li.text)}</span>`; })()}</td><td class="num">${L.fmtNum(r.v, 2)}</td></tr>`;
     }).join('');
   }
   $('fleet-rows').addEventListener('click', (e) => { const tr = e.target.closest('[data-robot]'); if (tr) { S.sel = { kind: 'robot', id: tr.dataset.robot }; renderAll(); } });
@@ -996,11 +1022,26 @@
     if (!S.layout) return;
     const dyn = Object.fromEntries(s.zones.map((z) => [z.id, z]));
     const kindLabel = { human_work: '사람 작업', walkway: '보행', picking: '수동 피킹', forklift_lane: '지게차', charging: '충전', aisle: '랙 통로' };
+    renderDoors(s);
     $('zone-rows').innerHTML = S.layout.zones.map((z) => {
       const d = dyn[z.id] || {};
       return `<tr><td><b>${esc(z.name)}</b><br><span class="meta" style="text-align:left">${esc(z.id)}</span></td><td>${esc(kindLabel[z.kind] || z.kind)}</td><td>${d.limit != null ? `<span class="tag warn">${d.limit} m/s</span>` : '—'}${d.override != null ? ` · 수동 ${d.override}` : ''}${z.static_speed ? ` · 기본 ${z.static_speed}` : ''}</td><td>${d.locked ? '<span class="tag danger">봉쇄</span>' : '—'}</td><td style="white-space:nowrap">${d.locked ? `<button class="btn sm" type="button" data-z="${esc(z.id)}" data-a="unlock">해제</button>` : `<button class="btn sm warn" type="button" data-z="${esc(z.id)}" data-a="lock">봉쇄</button>`} <button class="btn sm danger" type="button" data-z="${esc(z.id)}" data-a="evac">대피</button> <select class="ctl" data-zs="${esc(z.id)}" style="height:26px"><option value="">속도 제한</option><option value="0.3">0.3</option><option value="0.5">0.5</option><option value="0.8">0.8</option><option value="off">해제</option></select></td></tr>`;
     }).join('');
   }
+  function renderDoors(s) {
+    const doors = s.doors || [];
+    $('door-wrap').hidden = !doors.length;
+    const mode = { OPEN: '열림', CLOSED: '닫힘', MOVING: '동작 중', UNKNOWN: '미수신' };
+    const cause = { stale: '제어기 무응답', fault: '고장 신호', timeout: '열림 요청 후 미개방' };
+    $('door-rows').innerHTML = doors.map((d) => {
+      const state = d.disabled ? '<span class="tag danger">사용 중지</span>' : d.cause ? `<span class="tag danger">${esc(cause[d.cause] || d.cause)}</span>` : esc(mode[d.mode] || d.mode);
+      return `<tr><td><b>${esc(d.name)}</b><br><span class="meta" style="text-align:left">${esc(d.id)}</span></td><td>${state}</td><td>${d.requesters.length ? esc(d.requesters.join(', ')) : '—'}${d.waiting_s ? ` · ${L.fmtDuration(d.waiting_s)}` : ''}</td><td class="num">${d.age == null ? '—' : `${d.age}초 전`}</td><td class="num">${d.opens}</td><td style="white-space:nowrap">${d.disabled || d.cause ? `<button class="btn sm" type="button" data-door="${esc(d.id)}" data-a="door_retry">재시도</button>` : `<button class="btn sm warn" type="button" data-door="${esc(d.id)}" data-a="door_disable">사용 중지</button>`} <button class="btn sm" type="button" data-door="${esc(d.id)}" data-a="door_field_fix">[현장 모의] 수리</button></td></tr>`;
+    }).join('');
+  }
+  $('door-rows').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-door]');
+    if (b) command(b.dataset.a, { door: b.dataset.door });
+  });
   $('zone-rows').addEventListener('click', (e) => {
     const b = e.target.closest('[data-z]');
     if (!b) return;
@@ -1163,11 +1204,15 @@
   function renderDrill(s) {
     const opts = s.robots.map((r) => `<option>${esc(r.id)}</option>`).join('');
     for (const id of ['dr-robot', 'dr-robot2']) { const el = $(id); if (el.options.length !== s.robots.length) el.innerHTML = opts; }
+    const doors = s.doors || [];
+    $('dr-door-form').hidden = !doors.length;
+    if ($('dr-door').options.length !== doors.length) $('dr-door').innerHTML = doors.map((d) => `<option value="${esc(d.id)}">${esc(d.name)}</option>`).join('');
     $('auto-op').checked = s.run.auto_operator;
   }
   $('dr-fault-go').onclick = () => command('drill_fault', { robot: $('dr-robot').value, fault: $('dr-fault').value, recoverable: $('dr-rec').value === '1' });
   $('dr-comms-go').onclick = () => command('drill_comms', { robot: $('dr-robot2').value, seconds: Number($('dr-sec').value) });
   $('dr-intr-go').onclick = () => command('drill_intruder', { zone: $('dr-zone').value, seconds: Number($('dr-isec').value) });
+  $('dr-door-go').onclick = () => command('drill_door', { door: $('dr-door').value, fault: $('dr-dfault').value });
   $('rs-go').onclick = () => ask('시나리오 재시작', '같은 시나리오를 입력한 시드로 다시 시작합니다.', false, () => control('reset', null, { scenario: $('scenario').value, strategy: $('strategy').value, seed: Number($('rs-seed').value) || 7 }));
   $('auto-op').onchange = () => control('auto_operator', $('auto-op').checked);
 
