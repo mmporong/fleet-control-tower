@@ -326,22 +326,32 @@ class Dispatcher:
             self.park_owner[here] = rec.serial
             rec.purpose = "parked"
             return
-        self.send_away(rec, exclude=set())
+        # no bay yet: go to a free one; without one, wait on a holding node (a robot that needs it nudges
+        # this one away) and step aside only from places others must pass or work at. Moving from one free
+        # node to the next instead keeps idle robots circling the lanes and walking into other routes.
+        if self._free_parks(rec) or kind != "queue" or self.layout.must_pass(here):
+            self.send_away(rec, exclude=set())
+
+    def _free_parks(self, rec: RobotRecord, exclude: set[str] = frozenset()) -> list[str]:
+        return [p for p in self.spots_for("park", rec.vclass) if p not in self.park_owner and p not in exclude
+                and self.m.locks.holder_of(f"N:{p}") in (None, rec.serial)]
 
     def send_away(self, rec: RobotRecord, exclude: set[str], leave_charger: bool = False) -> bool:
         """Move an idle robot to a free parking bay (or aside) so it stops blocking traffic."""
         here = rec.last_node
         if here is None:
             return False
-        free = [p for p in self.spots_for("park", rec.vclass) if p not in self.park_owner and p not in exclude
-                and self.m.locks.holder_of(f"N:{p}") in (None, rec.serial)]
+        free = self._free_parks(rec, exclude)
         start = [action("stopCharging", self.aid(f"{rec.serial}-stopchg"), "HARD")] if rec.charging else []
         for p in sorted(free, key=lambda p: self.planner.travel_time(here, p, rec.vclass))[:3]:
             if self.m.assign_route(rec, p, "park", start_actions=start):
                 self._release_spots(rec.serial)
                 self.park_owner[p] = rec.serial
                 return True
-        spot = self.m._evasion_spot(rec, exclude)
+        # aside: never onto the next stretch of another robot's route
+        busy = {n for r in self.m.robots.values() if r.serial != rec.serial and r.route
+                for n in r.route[r.cur_idx:r.cur_idx + 8]}
+        spot = self.m._evasion_spot(rec, set(exclude) | busy)
         if spot and self.m.assign_route(rec, spot, "reposition", start_actions=start):
             self._release_spots(rec.serial)
             return True
