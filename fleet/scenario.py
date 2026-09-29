@@ -18,8 +18,9 @@ class Scenario:
     # ---- dc fleet and process
     agf: int = 10
     amr: int = 16
-    # standard demand is about 75 % of the measured capacity of this site (docs/BENCHMARK.md):
-    # about 29 inbound pallets (10-16 per truck) + 15 outbound pallets per hour for 10 AGFs, 45 totes for 16 AMRs
+    # standard demand stays within the measured capacity of this site (docs/BENCHMARK.md): about 29 inbound
+    # (10-16 pallets per truck) + 15 outbound pallets per hour is ~70 % of what 10 AGFs move under overload;
+    # 45 totes per hour for 16 AMRs and 6 pickers is close to the tote ceiling, queues still stay flat
     trucks_h: float = 2.2
     out_pallets_h: float = 15.0
     tote_orders_h: float = 45.0
@@ -54,7 +55,7 @@ class Scenario:
 
 
 PRESETS: dict[str, Scenario] = {s.name: s for s in (
-    Scenario("standard", "표준 교대", "물류센터 · 자율 지게차 10 · 토트 AMR 16 · 피커 6 · 수동 지게차 4 · 용량의 약 75% 수요",
+    Scenario("standard", "표준 교대", "물류센터 · 자율 지게차 10 · 토트 AMR 16 · 피커 6 · 수동 지게차 4 · 측정 용량 안의 기본 수요",
              fault_mtbf_h=8.0, comms_mtbf_h=6.0),
     Scenario("peak", "피크 출고", "자율 지게차 12 · 토트 AMR 22 · 피커 9 · 출고 24팔레트/h · 토트 70건/h(용량 근처)",
              agf=12, amr=22, pickers=9, trucks_h=2.5, out_pallets_h=24.0, tote_orders_h=70.0,
