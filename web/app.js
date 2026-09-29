@@ -189,7 +189,8 @@
     const s = S.snap;
     if (!s) return;
     $('clock').textContent = L.fmtClock(s.t);
-    $('subtitle').textContent = `${s.scenario_title} · 전략 ${({ 'locks+resolve': '예약+교착해소', locks: '예약만', none: '제어 없음' })[s.strategy] || s.strategy} · 시드 ${s.seed} · 창고 A 60×34 m`;
+    const dims = S.layout ? `${S.layout.width}×${S.layout.height} m` : '';
+    $('subtitle').textContent = `${s.scenario_title} · ${s.site === 'dc' ? '팔레트 물류센터' : '격자 창고'} ${dims} · 전략 ${({ 'locks+resolve': '예약+교착해소', locks: '예약만', none: '제어 없음' })[s.strategy] || s.strategy} · 시드 ${s.seed}`;
     if ($('scenario').value !== s.scenario) $('scenario').value = s.scenario;
     if ($('strategy').value !== s.strategy) $('strategy').value = s.strategy;
     $('speed').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', Number(b.dataset.v) === s.run.speed));
@@ -375,7 +376,7 @@
     $('unit-meta').textContent = `주문 ${r.order || '—'} · 갱신 ${r.upd} · 수신 ${r.age}초 전`;
     const manual = r.mode === 'MANUAL';
     const kv = [
-      ['배터리', `${L.fmtNum(r.bat, 0)}%${r.chg ? ' · 충전 중' : ''}`], ['속도', `${L.fmtNum(r.v, 2)} m/s`], ['운전 모드', r.mode],
+      ['배터리 · 주행 가능', `${L.fmtNum(r.bat, 0)}%${r.chg ? ' 충전 중' : ''} · ${r.reach == null ? '—' : `${(r.reach / 1000).toFixed(1)} km`}`], ['속도', `${L.fmtNum(r.v, 2)} m/s`], ['운전 모드', r.mode],
       ['통신', r.conn === 'ONLINE' ? '정상' : r.conn], ['현재 노드', r.node || '—'], ['목적지', r.goal ? `${r.goal} · ${r.purpose}` : '—'],
       ['작업', r.task || '—'], ['적재', r.load ? '있음' : '없음'], ['예약 자원', `${r.locks}개`],
       ['안전필드', { CLEAR: '정상', WARNING: '경고(감속)', PROTECTIVE: '보호정지' }[r.field] || r.field], ['대기', r.wait_s ? `${L.fmtDuration(r.wait_s)} · ${r.wait_kind}` : '—'], ['차량 보고 사유', r.stop || '—'],
@@ -1099,6 +1100,29 @@
     $('audit-rows').innerHTML = s.audit.slice().reverse().map((a) => `<tr><td class="num">${L.fmtClock(a.t)}</td><td>${esc(a.operator)}</td><td>${esc(a.cmd)}</td><td>${esc(Object.values(a.args || {}).filter((v) => typeof v !== 'object').join(' · '))}</td><td>${a.ok ? '<span class="tag ok">수락</span>' : '<span class="tag danger">거부</span>'} ${esc(a.msg)}</td></tr>`).join('') || '<tr><td colspan="5" class="empty">기록 없음</td></tr>';
   }
   $('ev-filter').onchange = () => S.snap && renderLog(S.snap);
+
+  // shift handover: the note is audited; the summary is generated from live state
+  $('ho-save').onclick = async () => {
+    if (await command('handover', { note: $('ho-note').value, by: operator() })) $('ho-note').value = '';
+  };
+  $('ho-dl').onclick = async () => {
+    const r = await api('/api/handover');
+    if (!r.ok) return;
+    const h = r.body.summary;
+    const list = (title, items) => `\n## ${title} (${items.length})\n` + (items.length ? items.map((x) => `- ${x}`).join('\n') : '- 없음');
+    const text = `# 교대 인수인계 · ${h.scenario} · ${L.fmtClock(h.sim_t)} · 작성 ${operator()}\n운영 모드: ${h.mode}\n` +
+      list('활성 알람', h.alarms) + list('미종결 사고', h.incidents_open) + list('고장 로봇', h.faulted) +
+      list('통신 두절', h.offline) + list('원격 조종 중', h.manual) + list('일시정지 로봇', h.paused) +
+      list('봉쇄 구역', h.zones_locked) + list('교착', h.deadlocks) +
+      `\n## 작업\n- 대기 ${h.tasks_queued} · 진행 ${h.tasks_active}\n## 지표\n- 처리량/h ${h.kpi.throughput_h} · 교통 대기 ${Math.round(h.kpi.traffic_wait_ratio * 100)}% · 주행 중 접촉 ${h.kpi.contacts} · 근접사고 ${h.kpi.near_miss} · 알람/h ${h.kpi.alarms_per_h}\n` +
+      (r.body.history.length ? `\n## 이전 인수인계 메모\n${r.body.history.map((x) => `- ${L.fmtClock(x.t)} ${x.by}: ${x.note}`).join('\n')}\n` : '');
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `handover-${L.fmtClock(h.sim_t).replace(/:/g, '')}.txt`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  };
 
   // VDA 5050 inspector
   async function loadVda() {

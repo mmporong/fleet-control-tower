@@ -118,6 +118,38 @@ class Operations:
                 return f"{inc.id} 종결"
         raise CommandError("알 수 없는 사고 기록")
 
+    # ------------------------------------------------------------ shift handover
+    def handover_summary(self) -> dict:
+        """What the next shift must know, generated from live state (K11/K15-style handover)."""
+        sim, m = self.sim, self.sim.manager
+        k = sim.kpi()
+        robots = m.robots.values()
+        return {
+            "sim_t": round(sim.now, 1), "scenario": sim.scenario.title, "mode": m.mode,
+            "alarms": [f"[{a['priority_label']}] {a['title']} · {a['source']} · {a['message']} ({a['state']})"
+                       for a in m.alarms.active_list() if a["priority"] <= 3],
+            "incidents_open": [f"{i.id} {i.kind} {i.source}" for i in sim.incidents if i.closed_at is None],
+            "faulted": [f"{r.serial} {r.fatal}" for r in robots if r.fatal],
+            "offline": [r.serial for r in robots if r.connection != "ONLINE" and r.has_state],
+            "manual": [r.serial for r in robots if r.mode == "MANUAL"],
+            "paused": sorted(m.robot_paused | m.area_paused),
+            "zones_locked": [z.name for z in sim.layout.zones.values() if z.locked],
+            "zone_limits": {sim.layout.zones[z].name: v for z, v in m.zone_speed_override.items()},
+            "deadlocks": [" → ".join(d["members"]) for d in m.deadlocks.values()],
+            "tasks_queued": k["queued"], "tasks_active": k["active"],
+            "kpi": {"throughput_h": k["throughput_h"], "traffic_wait_ratio": k["traffic_wait_ratio"],
+                    "contacts": k["contacts"], "near_miss": k["near_miss_truth"], "alarms_per_h": k["alarms_per_h"]},
+        }
+
+    def cmd_handover(self, a: dict) -> str:
+        note = str(a.get("note", "")).strip()
+        if not note:
+            raise CommandError("인수인계 메모를 입력하세요(조치 중인 사항, 주의할 구역·로봇)")
+        summary = self.handover_summary()
+        self.sim.handovers.append({"t": round(self.sim.now, 1), "by": a.get("by", "operator"), "note": note[:1000],
+                                   "summary": summary})
+        return f"인수인계 기록: 알람 {len(summary['alarms'])}건, 미종결 사고 {len(summary['incidents_open'])}건"
+
     # ------------------------------------------------------------ fleet mode
     def cmd_fleet_hold(self, a: dict) -> str:
         if self.sim.manager.mode == "ESTOP":

@@ -16,8 +16,11 @@ from __future__ import annotations
 from collections import deque
 from dataclasses import dataclass, field
 
-PRIORITY_LABEL = {1: "긴급", 2: "높음", 3: "보통"}
-RESPONSE_TIME = {1: "즉시", 2: "5분 이내", 3: "30분 이내"}
+PRIORITY_LABEL = {1: "긴급", 2: "높음", 3: "보통", 4: "알림"}
+RESPONSE_TIME = {1: "즉시", 2: "5분 이내", 3: "30분 이내", 4: "사후 검토"}
+# ISA-18.2 keeps "alerts" apart from alarms: they need review, not a timely response,
+# so they never count toward alarm rates or flood detection and need no acknowledgement.
+ALERT = 4
 
 
 @dataclass(frozen=True)
@@ -117,7 +120,7 @@ ALARM_DEFS: dict[str, AlarmDef] = {
          "해소 후 보류 알람 재검토"),
         ("fleet_hold",)),
     "NEAR_MISS": AlarmDef(
-        3, "근접 사고", "없음(보호필드가 정지시킴)",
+        ALERT, "근접 사고", "사고 기록에 전후 40초 저장",
         ("사고 재생으로 경위 확인",
          "반복 지점이면 구역 속도 제한 검토",
          "근접 사고 보고 작성"),
@@ -183,6 +186,7 @@ class AlarmManager:
         self.history: deque = deque(maxlen=400)
         self.activations: deque = deque()
         self.total_activations = 0
+        self.alerts = 0
         self.listeners: list = []   # called with (event, alarm)
 
     def _emit(self, event: str, alarm: Alarm) -> None:
@@ -239,6 +243,11 @@ class AlarmManager:
         return alarm
 
     def _activated(self, alarm: Alarm, now: float, how: str) -> None:
+        if alarm.priority == ALERT:
+            alarm.state = "ACKED"          # alerts are informational: no acknowledgement required
+            self.alerts += 1
+            self._emit(how, alarm)
+            return
         self.activations.append(now)
         self.total_activations += 1
         self._emit(how, alarm)
@@ -293,7 +302,7 @@ class AlarmManager:
         return [a.to_json() for a in items]
 
     def counts(self) -> dict:
-        c = {"p1": 0, "p2": 0, "p3": 0, "unack": 0, "shelved": 0, "standing": 0}
+        c = {"p1": 0, "p2": 0, "p3": 0, "p4": 0, "unack": 0, "shelved": 0, "standing": 0}
         for a in self.alarms.values():
             if a.state == "SHELVED":
                 c["shelved"] += 1

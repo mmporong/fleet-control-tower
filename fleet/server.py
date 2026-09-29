@@ -237,6 +237,9 @@ def make_handler(runner: Runner, jdamr: JdamrReadOnly | None):
                     self._json(runner.local_view(path.rsplit("/", 1)[1]))
                 except KeyError:
                     self._json({"error": "unknown robot"}, 404)
+            elif path == "/api/handover":
+                with runner.lock:
+                    self._json({"summary": runner.ops.handover_summary(), "history": runner.sim.handovers[-20:]})
             elif path == "/api/jdamr":
                 self._json(jdamr.status() if jdamr else {"enabled": False})
             else:

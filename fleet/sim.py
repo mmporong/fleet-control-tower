@@ -168,6 +168,7 @@ class Simulation:
         self._next_sense = 0.0
         self._next_tick = 0.0
         self.tick_hooks: list = []       # called after each manager tick, e.g. the simulated operator
+        self.handovers: list[dict] = []
         self.manager.alarms.listeners.append(self._on_alarm)
         self._build(random.Random(seed * 7 + 5))
 

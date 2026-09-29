@@ -13,7 +13,8 @@ import math
 from .geometry import Point
 
 MAX_SPEED = {"human": 2.0, "forklift": 3.0}
-BODY_RADIUS = {"human": 0.3, "forklift": 1.0}
+BODY_RADIUS = {"human": 0.3, "forklift": 0.6}        # forklift: half of a 1.17 m wide truck
+BODY_HALF_LENGTH = {"forklift": 1.8}                 # 3.6 m counterbalance truck including forks
 # below this estimated speed a track is treated as standing still: filter noise
 # on a stationary person must not turn into a 2-second prediction sweep
 STILL_SPEED = 0.3
@@ -155,12 +156,21 @@ class Tracker:
         """
         out = []
         for tr in self.tracks.values():
-            h = horizon.get(tr.cls, 2.0) if tr.speed >= STILL_SPEED else 0.0
+            moving = tr.speed >= STILL_SPEED
+            h = horizon.get(tr.cls, 2.0) if moving else 0.0
             base = BODY_RADIUS.get(tr.cls, 0.3) + CLEARANCE.get(tr.cls, 0.35)
+            half = BODY_HALF_LENGTH.get(tr.cls, 0.0)
+            if half and not moving:
+                base += half                  # heading unknown: bound the whole truck
+                half = 0.0
+            ux, uy = (tr.vx / tr.speed, tr.vy / tr.speed) if moving else (0.0, 0.0)
             k = 0
             while k * step <= h + 1e-9:
                 t = now + k * step
                 px, py = tr.predict(t)
-                out.append((tr.id, tr.cls, px, py, base + tr.sigma(t) + 0.15 * k * step))
+                r = base + tr.sigma(t) + 0.15 * k * step
+                # a long vehicle: circles along its heading cover the body without widening it
+                for off in ((-half, -half / 3, half / 3, half) if half else (0.0,)):
+                    out.append((tr.id, tr.cls, px + ux * off, py + uy * off, r))
                 k += 1
         return out

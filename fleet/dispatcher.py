@@ -312,6 +312,16 @@ class Dispatcher:
                     self.charge_wait_since.pop(rec.serial, None)
                     return
             self.charge_wait_since.setdefault(rec.serial, now)
+            if rec.battery < 7.0:
+                # critically low: free a charger held by a robot that is already well charged
+                donors = [self.m.robots[o] for c, o in self.charger_owner.items() if o in self.m.robots
+                          and c in self.spots_for("charger", rec.vclass)]
+                donors = [d for d in donors if d.battery >= 60.0 and not d.task_id and self.m.can_take_route(d)]
+                if donors:
+                    donor = max(donors, key=lambda d: d.battery)
+                    if self.send_away(donor, exclude=set(), leave_charger=True):
+                        self.m.event("charger_preempt", donor.serial,
+                                     f"{rec.serial} 배터리 {rec.battery:.0f}%: 충전기 양보", "warn")
         if kind == "park":
             self.park_owner[here] = rec.serial
             rec.purpose = "parked"

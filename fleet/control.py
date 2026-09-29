@@ -125,6 +125,7 @@ class RobotRecord:
     length: float = 0.9
     width: float = 0.7
     factsheet: dict | None = None
+    reach: float | None = None           # batteryState.reach: metres the vehicle can still drive
     mode_sent_at: float = -1e9
     pause_sent_at: float = -1e9
     fault_since: float | None = None
@@ -240,6 +241,7 @@ class FleetManager:
         rec.positioned = p["positionInitialized"]
         rec.v = msg["velocity"]["vx"]
         rec.battery = msg["batteryState"]["batteryCharge"]
+        rec.reach = msg["batteryState"].get("reach")
         rec.charging = msg["batteryState"]["charging"]
         rec.mode = msg["operatingMode"]
         rec.paused = msg["paused"]
@@ -1299,6 +1301,7 @@ class FleetManager:
             "id": rec.serial, "cls": rec.vclass, "len": rec.length, "wid": rec.width,
             "x": round(rec.x, 2), "y": round(rec.y, 2), "th": round(rec.theta, 2),
             "v": round(rec.v, 2), "st": rec.status, "label": STATUS_LABEL.get(rec.status, rec.status),
+            "reach": rec.reach,
             "why": rec.reason, "bat": round(rec.battery, 1), "chg": rec.charging, "mode": rec.mode,
             "conn": rec.connection, "field": rec.safety_field, "fault": rec.fatal, "load": rec.loaded,
             "task": rec.task_id, "purpose": rec.purpose, "goal": rec.goal, "node": rec.last_node,

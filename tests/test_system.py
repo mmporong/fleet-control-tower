@@ -199,6 +199,14 @@ class OperationsTests(unittest.TestCase):
         self.sim.run(1)
         self.assertEqual(self.sim.manager.robots["AMR-01"].mode, "AUTOMATIC")
 
+    def test_shift_handover_is_audited_with_live_summary(self):
+        self.assertFalse(self.ops.execute({"cmd": "handover", "note": " "})["ok"])
+        self.ops.execute({"cmd": "pause_robot", "robot": "AMR-02"})
+        self.assertTrue(self.ops.execute({"cmd": "handover", "note": "AMR-02 점검 대기", "by": "A조"})["ok"])
+        rec = self.sim.handovers[-1]
+        self.assertEqual(rec["by"], "A조")
+        self.assertIn("AMR-02", rec["summary"]["paused"])
+
     def test_zone_evacuation_moves_robots_out(self):
         res = self.ops.execute({"cmd": "zone_evacuate", "zone": "Z-OUT", "confirm": True})
         self.assertTrue(res["ok"], res)
