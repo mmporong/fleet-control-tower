@@ -385,6 +385,7 @@ class OperationsTests(unittest.TestCase):
 
     def test_fleet_commands_need_confirmation(self):
         self.assertFalse(self.ops.execute({"cmd": "fleet_estop"})["ok"])
+        self.assertFalse(self.ops.execute({"cmd": "fleet_estop", "confirm": True, "reason": " "})["ok"])   # reason
         self.assertTrue(self.ops.execute({"cmd": "fleet_estop", "confirm": True, "reason": "훈련"})["ok"])
         self.assertEqual(self.sim.manager.mode, "ESTOP")
         self.assertFalse(self.ops.execute({"cmd": "fleet_resume", "confirm": True})["ok"])

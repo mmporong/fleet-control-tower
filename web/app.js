@@ -135,7 +135,11 @@
     (withInput ? $('cf-input') : $('cf-ok')).focus();
   }
   $('cf-cancel').onclick = () => { $('confirm').hidden = true; confirmCb = null; };
-  $('cf-ok').onclick = () => { const cb = confirmCb; $('confirm').hidden = true; confirmCb = null; if (cb) cb($('cf-input').value.trim()); };
+  $('cf-ok').onclick = () => {
+    const value = $('cf-input').value.trim();
+    if (!$('cf-input').hidden && !value) { toast('사유를 입력하세요', true); $('cf-input').focus(); return; }   // e.g. fleet e-stop
+    const cb = confirmCb; $('confirm').hidden = true; confirmCb = null; if (cb) cb(value);
+  };
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('confirm').hidden) $('cf-cancel').click(); });
 
   // ------------------------------------------------------------------ header controls

@@ -172,7 +172,9 @@ class Operations:
         return "전체 재개"
 
     def cmd_fleet_estop(self, a: dict) -> str:
-        reason = str(a.get("reason", "")).strip() or "사유 미기재"
+        reason = str(a.get("reason", "")).strip()
+        if not reason:
+            raise CommandError("비상정지 사유를 입력하세요(감사 로그와 사고 기록에 남음)")
         self.sim.manager.mode = "ESTOP"
         self.sim.manager.alarms.set("FLEET_ESTOP", "fleet", True, self.sim.now, f"비상정지: {reason}")
         self.sim.manager.event("fleet_estop", "fleet", f"관제 비상정지: {reason}", "crit")

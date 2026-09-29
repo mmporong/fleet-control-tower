@@ -178,6 +178,11 @@ class Layout:
                 break
         return problems
 
+    def check(self) -> list[str]:
+        """Everything a site must satisfy before vehicles run on it: the graph and each vehicle class."""
+        classes = sorted({c for e in self.edges.values() for c in e.classes})
+        return self.validate() + [p for c in classes for p in self.validate_class(c)]
+
     def validate(self) -> list[str]:
         """Return problems; an empty list means every node reaches every node."""
         problems: list[str] = []

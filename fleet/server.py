@@ -345,6 +345,10 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
 
     runner = Runner(args.scenario, args.seed, args.strategy, args.speed, args.auto_operator, args.read_only)
+    problems = runner.sim.layout.check()          # refuse to run on a broken site (unreachable nodes, classes)
+    if problems:
+        print("레이아웃 검증 실패:\n  " + "\n  ".join(problems[:10]), flush=True)
+        return 2
     jdamr = None if args.no_jdamr else JdamrReadOnly(args.jdamr_url)
     runner.start()
     if jdamr:

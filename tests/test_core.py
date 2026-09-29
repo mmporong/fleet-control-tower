@@ -50,6 +50,14 @@ class LayoutTests(unittest.TestCase):
         self.assertIn(q, {e.end for e in L.out_edges["B9"]})
         self.assertNotIn(q, {e.end for e in L.out_edges["A9"]})
 
+    def test_site_check_used_at_server_start(self):
+        from fleet.site_dc import dc_layout
+        self.assertEqual(dc_layout().check(), [])
+        broken = dc_layout()
+        del broken.edges["NW42_6>BL42_6"]                  # the only way into the forklift bay lane
+        broken.reindex()
+        self.assertTrue(any("FORKLIFT" in p for p in broken.check()))
+
     def test_dc_classes_are_strongly_connected(self):
         from fleet.site_dc import AGF, AMR, dc_layout
         L = dc_layout()
