@@ -927,15 +927,40 @@ class FleetManager:
         return d > 0.5
 
     def _turn_zone(self, rec: RobotRecord, idx: int) -> list[str]:
-        """Nodes another vehicle could stand on inside the circle this robot sweeps when turning."""
+        """Nodes another vehicle could stand on inside the circle this robot sweeps when turning.
+
+        A node on a lane is judged by its centre (a vehicle there may face any way). A vehicle standing in a
+        dead-end stub lies along the stub, so a stub node counts only if that body reaches into the circle:
+        two forklifts leaving neighbouring bays do not block each other.
+        """
         node = self.layout.nodes[rec.route[idx]]
         radius = self._turn_reach(rec)
+        sweep = math.hypot(rec.length, rec.width) / 2 + 0.2
+        big = max(self.robots.values(), key=lambda r: r.length, default=rec)
         out = []
         for kind, ident in self._query(node.x, node.y, radius):
-            if kind == "N" and ident != node.id and \
-                    math.hypot(self.layout.nodes[ident].x - node.x, self.layout.nodes[ident].y - node.y) <= radius:
-                out.append(node_res(ident))
+            if kind != "N" or ident == node.id:
+                continue
+            other = self.layout.nodes[ident]
+            if math.hypot(other.x - node.x, other.y - node.y) > radius:
+                continue
+            if other.kind in STUB_KINDS and len(self.layout.neighbors[ident]) == 1:
+                if self._stub_body_gap(ident, (node.x, node.y), big.length, big.width) >= sweep:
+                    continue
+            out.append(node_res(ident))
         return out
+
+    def _stub_body_gap(self, stub: str, point: tuple[float, float], length: float, width: float) -> float:
+        """Distance from ``point`` to a length x width vehicle parked on ``stub``, aligned with the stub.
+
+        """
+        n = self.layout.nodes[stub]
+        j = self.layout.nodes[next(iter(self.layout.neighbors[stub]))]
+        d = math.hypot(n.x - j.x, n.y - j.y) or 1.0
+        ux, uy = (n.x - j.x) / d, (n.y - j.y) / d
+        px, py = point[0] - n.x, point[1] - n.y
+        along, across = px * ux + py * uy, -px * uy + py * ux
+        return math.hypot(max(0.0, abs(along) - length / 2), max(0.0, abs(across) - width / 2))
 
     def _wait(self, rec: RobotRecord, kind: str, resource: str, holder: str | None) -> WaitInfo:
         pb = rec.pending_block

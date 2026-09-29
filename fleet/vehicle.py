@@ -727,11 +727,21 @@ class Vehicle:
         return moved
 
     def _within_deviation(self) -> bool:
-        """Stopped short of the base end, but within the node's allowed deviation."""
-        if not self.edges or self.base_end_index() != 1:
+        """Stopped short of a node it must stop at, but close enough to count as there.
+
+        The base end uses the node's allowedDeviationXY. A node where the vehicle turns on the spot next is
+        reached within 0.1 m: otherwise a protective field that sees something straight ahead, where the
+        vehicle is not going, would hold it a few centimetres short of the turn for good.
+        """
+        if not self.edges:
             return False
-        dev = float(self.nodes[1].get("nodePosition", {}).get("allowedDeviationXY", 0.3))
-        return self._edge_len(self.edges[0]) - self.progress <= dev
+        remaining = self._edge_len(self.edges[0]) - self.progress
+        if self.base_end_index() == 1:
+            dev = float(self.nodes[1].get("nodePosition", {}).get("allowedDeviationXY", 0.3))
+            return remaining <= dev
+        if len(self.edges) > 1 and remaining <= 0.1:
+            return abs(wrap_angle(self._edge_heading(self.edges[1]) - self._edge_heading(self.edges[0]))) > 0.05
+        return False
 
     def _arrive(self, snap: bool = True) -> None:
         self.nodes.pop(0)

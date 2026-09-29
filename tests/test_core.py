@@ -147,6 +147,21 @@ class VehicleTests(unittest.TestCase):
         self.drive(20)
         self.assertEqual(self.v.last_node_id, "B3")
 
+    def test_turns_when_stopped_a_hair_short_of_a_turning_node(self):
+        """Something straight ahead (where it is not going) must not hold the vehicle short of its turn."""
+        self.v = Vehicle("AMR-01", self.L, "B3", random.Random(1))
+        self.v.perf = 1.0
+        self.v.on_order(order_for(self.L, ["B3", "B4", "B5", "qB5C5", "C5"]))
+        while self.v.last_node_id != "B4":
+            self.drive(0.1)
+        length = self.v._edge_len(self.v.edges[0])
+        self.v.progress, self.v.v = length - 0.04, 0.0
+        self.v.x, self.v.y = 9.0, 17.0 - 0.04
+        self.v.field, self.v.field_cause, self.v.clear_since = "PROTECTIVE", "amr:R2", self.t
+        ahead = Obstacle("R2", "amr", 9.0, 18.1, 0.3)          # in the forward field, outside the turn circle
+        self.drive(10.0, [ahead])
+        self.assertIn(self.v.last_node_id, ("qB5C5", "C5"))    # counted B5 as reached, turned east, drove on
+
     def test_pause_and_fault_latch(self):
         self.v.on_order(order_for(self.L, ["B1", "B2", "B3"]))
         self.v.on_instant_actions({"actions": [{"actionType": "startPause", "actionId": "p"}]}, 0.0)

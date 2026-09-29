@@ -157,6 +157,19 @@ class StubApproachTests(unittest.TestCase):
         self.assertEqual(m.counters["deadlocks"], 0)
 
 
+class BayTurnTests(unittest.TestCase):
+    def test_leaving_a_bay_does_not_reserve_the_neighbouring_bay(self):
+        """A forklift parked in the next bay lies along its stub, clear of the turn out of this bay."""
+        sim = lone_agf()
+        m = sim.manager
+        rec = m.robots["AGF-01"]
+        rec.route = ["PA39_5", "BL39_5", "BL36_7", "BL33_9"]
+        zone = m._turn_zone(rec, 1)
+        self.assertNotIn("N:PA36_7", zone)                  # body 2.7 m away, swept circle 1.7 m
+        self.assertIn("N:BL36_7", zone)                     # a lane node: could hold a vehicle facing any way
+        self.assertAlmostEqual(m._stub_body_gap("PA39_5", (39.5, 48.4), 2.7, 1.3), 1.65, places=2)
+
+
 class DoorTests(unittest.TestCase):
     def drive_to(self, sim: Simulation, goal: str, limit: float = 240.0) -> list[str]:
         rec = sim.manager.robots["AGF-01"]
