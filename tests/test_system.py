@@ -222,6 +222,15 @@ class DoorTests(unittest.TestCase):
         ops.execute({"cmd": "door_retry", "door": "D-N"})
         self.assertTrue(sim.manager.doors.available("D-N", sim.now))
 
+    def test_closed_door_names_the_wait_even_with_a_person_on_the_crossing(self):
+        from fleet.perception import Detection
+        sim = lone_agf()
+        m = sim.manager
+        lane = "L:SE42_6|SE50"
+        m.ingest_detections([Detection("human", 46.6, 4.0, "infra")])   # on the south crossing, beside the door
+        m.tick(sim.now, 0.2)
+        self.assertEqual(m.blocks[lane][0], "door")         # the door is shut: it is the lasting cause
+
     def test_south_door_is_a_single_point_of_failure_for_outbound(self):
         """Finding from the door drill: with the south door out, outbound staging is unreachable."""
         sim = lone_agf()

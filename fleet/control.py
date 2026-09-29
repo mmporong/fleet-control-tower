@@ -701,7 +701,9 @@ class FleetManager:
         """A door lane can be reserved only while its door reports OPEN (the physical curtain is up)."""
         for lane, door in self.doors.lane_door.items():
             if not self.doors.is_open(door, self.now):
-                self.blocks.setdefault(lane_res(lane), ("door", door))
+                # the curtain is the lasting cause: it overrides a person predicted on the crossing next to it,
+                # so the wait (and the operator's view) names the door, whose own alarm covers it
+                self.blocks[lane_res(lane)] = ("door", door)
 
     def _update_external_locks(self) -> None:
         for ext_id, info in self.external.items():
