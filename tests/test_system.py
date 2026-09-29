@@ -292,6 +292,26 @@ class DoorTests(unittest.TestCase):
         self.assertIsNotNone(sim.manager.planner.plan("CA11_5", "SO1", vclass="FORKLIFT"))
 
 
+class LocalizationRecoveryTests(unittest.TestCase):
+    def test_lost_between_nodes_needs_the_field_and_then_resumes(self):
+        sim = lone_agf()
+        ops = Operations(sim)
+        rec = sim.manager.robots["AGF-01"]
+        self.assertTrue(sim.manager.assign_route(rec, "SE66", "test"))
+        v = sim.vehicle("AGF-01")
+        while sim.now < 300 and not (v.edges and 1.2 < v.progress < v._edge_len(v.edges[0]) - 1.2):
+            sim.run(0.1)
+        v.set_fault("LOCALIZATION_LOST")
+        sim.run(2)
+        res = ops.execute({"cmd": "init_position", "robot": "AGF-01"})
+        self.assertFalse(res["ok"])                                  # over 1 m from any node: remote fix fails
+        self.assertTrue(ops.execute({"cmd": "field_service_done", "robot": "AGF-01"})["ok"])
+        while sim.now < 700 and rec.last_node != "SE66":
+            sim.run(0.5)
+        self.assertIsNone(rec.fatal)
+        self.assertEqual(rec.last_node, "SE66")
+
+
 class DispatcherTests(unittest.TestCase):
     def test_task_lifecycle_and_low_battery_charging(self):
         sim = Simulation(get("grid-night", robots=3, external=0, rate_per_h=0.0), seed=2)

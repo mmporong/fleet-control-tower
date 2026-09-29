@@ -347,6 +347,16 @@ class Vehicle:
             elif kind == "x_fieldServiceDone":
                 if self.fault in ("DRIVE_FAULT", "SENSOR_FAULT", "BUMPER"):
                     self._clear_fault()
+                elif self.fault == "LOCALIZATION_LOST":
+                    # the technician drives it onto the nearer node of its current edge and re-localizes there
+                    if self.edges and self.progress > 0.0 and \
+                            self.progress >= self._edge_len(self.edges[0]) / 2:
+                        self._arrive()
+                    elif self.edges:
+                        start = self.layout.nodes[self.edges[0]["startNodeId"]]
+                        self.progress, self.x, self.y = 0.0, start.x, start.y
+                    self.position_initialized = True
+                    self._clear_fault()
                 elif self.fault == "BATTERY_DEPLETED":
                     self.battery = max(self.battery, 30.0)
                     self._clear_fault()

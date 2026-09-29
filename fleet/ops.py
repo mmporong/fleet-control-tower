@@ -14,7 +14,7 @@ import math
 from .sim import Simulation
 from .traffic import node_res
 
-FAULTS_FIELD = ("DRIVE_FAULT", "SENSOR_FAULT", "BUMPER", "BATTERY_DEPLETED")
+FAULTS_FIELD = ("DRIVE_FAULT", "SENSOR_FAULT", "BUMPER", "BATTERY_DEPLETED", "LOCALIZATION_LOST")
 
 
 class CommandError(ValueError):

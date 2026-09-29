@@ -78,9 +78,10 @@ ALARM_DEFS: dict[str, AlarmDef] = {
     "LOCALIZATION_LOST": AlarmDef(
         2, "위치 추정 실패", "로봇 정지, 주문 거부 상태",
         ("마지막 확인 노드와 지도 위치 대조",
-         "위치 재지정(initPosition) 실행",
-         "실패 시 수동 모드로 가까운 노드 0.6 m 이내 이동 후 자동 전환"),
-        ("init_position", "set_mode_manual", "set_mode_auto")),
+         "위치 재지정(initPosition) 실행: 노드 1 m 안이어야 성공",
+         "실패 시 원격 조종으로 가까운 노드 0.6 m 안으로 옮긴 뒤 자동 전환, 또는 현장 인원이 옮기고 재위치 추정",
+         "현장 조치를 마치면 '현장 조치 완료'로 복귀, 막고 있던 작업은 재할당"),
+        ("init_position", "set_mode_manual", "field_service_done", "reassign_task")),
     "COMMS_LOST": AlarmDef(
         2, "통신 두절", "예약 유지(로봇은 해제 구간 끝에서 자체 정지)",
         ("마지막 수신 위치와 해제 구간 확인",

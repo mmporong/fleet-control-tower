@@ -75,8 +75,17 @@ class AutoOperator:
                     self._do("field_service_done", robot=src)
                     plan["act_at"] = now + 120.0
         elif t == "LOCALIZATION_LOST" and rec is not None:
-            self._do("init_position", robot=src)
-            plan["act_at"] = now + 60.0
+            # SOP: re-localize remotely at the nearest node; when it is too far from one, the field team
+            # drives it onto a node and re-localizes there
+            if stage == 0 and self._do("init_position", robot=src)["ok"]:
+                plan["act_at"] = now + 60.0
+            elif stage == 0:
+                if rec.task_id:
+                    self._do("reassign_task", robot=src)
+                plan.update(stage=1, act_at=now + self.rng.uniform(*self.field_delay))
+            else:
+                self._do("field_service_done", robot=src)
+                plan.update(stage=0, act_at=now + 120.0)
         elif t in ("HUMAN_CONTACT", "ROBOT_COLLISION") and rec is not None:
             if stage == 0:
                 plan.update(stage=1, act_at=now + self.rng.uniform(120.0, 300.0))
