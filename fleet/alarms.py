@@ -267,6 +267,10 @@ class AlarmManager:
         self.history.append(rec)
         self._emit("closed", alarm)
 
+    def is_active(self, key: str) -> bool:
+        alarm = self.alarms.get(key)
+        return alarm is not None and alarm.active
+
     def ack(self, key: str, operator: str, now: float) -> Alarm:
         alarm = self.alarms[key]
         alarm.acked_by = operator

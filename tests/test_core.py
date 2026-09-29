@@ -9,7 +9,7 @@ import unittest
 from fleet import bus as bus_mod
 from fleet import vehicle as vehicle_mod
 from fleet import geometry, traffic
-from fleet.agents import Human, Walker
+from fleet.agents import Forklift, Human, Walker, expand_loop, forklift_loops
 from fleet.alarms import AlarmManager
 from fleet.bus import Bus
 from fleet.control import RobotRecord, near_miss
@@ -399,6 +399,36 @@ class PerceptionTests(unittest.TestCase):
         self.assertGreater(r, 2.3)                                    # 1.2 + 0.6 half length + 0.55 clearance
 
 
+class CongestionAlarmTests(unittest.TestCase):
+    def test_on_delay_counts_only_above_the_raise_level(self):
+        """35 % for one tick then 30 % for 70 s must not raise: the 25 % deadband applies only once raised."""
+        from fleet.traffic import WaitInfo
+        w = MiniWorld({f"AMR-{i:02d}": n for i, n in enumerate(["A1", "A3", "A5", "A7", "A9", "C1", "C3", "C5",
+                                                                 "C7", "C9"], start=1)})
+        w.run(2)
+        m = w.manager
+        robots = list(m.robots.values())
+
+        def waiting(n: int) -> None:
+            for i, rec in enumerate(robots):
+                rec.wait = WaitInfo(m.now, "robot", "N:X", None) if i < n else None
+                rec.pending_block = None
+
+        def hold(n: int, seconds: float) -> None:
+            for _ in range(int(seconds / 0.2)):
+                m.now += 0.2
+                waiting(n)
+                m._robot_alarms()
+
+        hold(4, 0.2)                      # 40 % once
+        hold(3, 70.0)                     # then 30 %: below the raise level
+        self.assertFalse(m.alarms.is_active("CONGESTION:fleet"))
+        hold(4, 61.0)                     # above 35 % for a minute: raised
+        self.assertTrue(m.alarms.is_active("CONGESTION:fleet"))
+        hold(3, 5.0)                      # 30 % is inside the deadband: stays up
+        self.assertTrue(m.alarms.is_active("CONGESTION:fleet"))
+
+
 class PedestrianTests(unittest.TestCase):
     def test_sidestep_clears_a_robot_on_either_side(self):
         layout = warehouse_layout()
@@ -422,6 +452,27 @@ class PedestrianTests(unittest.TestCase):
         h.walker = Walker([(20.0, 6.5)])
         h.step(0.1, 10.0, layout, [("AMR-01", 20.7, 6.5, 0.45, 0.0)], [])
         self.assertIsNone(h.blocked_since)
+
+
+class ForkliftTests(unittest.TestCase):
+    def test_turn_waits_for_a_robot_in_the_swept_circle_then_completes(self):
+        layout = warehouse_layout()
+        loop = expand_loop(layout, forklift_loops()[0][0])      # A9 south to A5, across to B5, north
+        f = Forklift("FL-1", loop, layout, random.Random(1))
+        f.heading = 0.0                                       # facing east at A9; the loop leaves heading south
+        robot = [("AMR-01", layout.nodes["A9"].x + 1.6, layout.nodes["A9"].y, 0.45, 0.0)]
+        t, turned_at = 0.0, None
+        target = math.atan2(layout.nodes[loop[1]].y - f.by, layout.nodes[loop[1]].x - f.bx)
+        start = f.heading
+        for _ in range(400):                                  # 40 s
+            f.step(0.1, t, robot, [])
+            t += 0.1
+            if turned_at is None and abs(math.remainder(f.heading - target, 2 * math.pi)) < 0.06:
+                turned_at = t
+        self.assertIsNotNone(turned_at)
+        # it waited about 10 s for the robot, then turned in one go (not 10 s per step of rotation)
+        need = abs(math.remainder(target - start, 2 * math.pi)) / 0.8
+        self.assertLess(turned_at, 10.0 + need + 1.0)
 
 
 class SafetyRuleTests(unittest.TestCase):

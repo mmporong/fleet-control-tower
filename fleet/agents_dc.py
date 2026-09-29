@@ -187,7 +187,7 @@ class DockForklift:
 
     def __post_init__(self) -> None:
         self.x = 1.3 if self.side == "in" else WIDTH - 1.4
-        self.y = DOCK_YS[(3 * self.home) % len(DOCK_YS)] + 2.5
+        self.y = DOCK_YS[(5 * self.home) % len(DOCK_YS)] + 2.5     # 5 and 6 coprime: six distinct doors
 
     @property
     def pos(self) -> Point:

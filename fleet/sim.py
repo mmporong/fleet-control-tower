@@ -193,7 +193,7 @@ class Simulation:
         self.bus.publish(topic("sim", serial, "connection"), v.connection_msg(0.0), 0.0)
 
     def _spec(self, base: VehicleSpec) -> VehicleSpec:
-        return replace(base, **self.vehicle_overrides) if self.vehicle_overrides else base
+        return replace(base, **self.vehicle_overrides)      # always a copy: vehicles never share a spec
 
     def _class_spots(self, vclass: str, kinds: tuple[str, ...]) -> list[str]:
         L = self.layout

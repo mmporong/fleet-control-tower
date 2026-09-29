@@ -200,12 +200,19 @@ class DoorSupervisor:
     def unavailable_lanes(self, now: float) -> set[str]:
         return {lane for lane, d in self.lane_door.items() if not self.available(d, now)}
 
-    def tick(self, now: float, wanted: dict[str, set[str]]) -> None:
+    def tick(self, now: float, wanted: dict[str, set[str]], holders: dict[str, set[str]] | None = None) -> None:
+        """``wanted``: vehicles approaching each door; ``holders``: vehicles already holding a lane through it.
+
+        A disabled or failed door gets no new traffic, but a vehicle that reserved its lane while it was open
+        is still let through: taking the door out of use must not shut it in front of that vehicle.
+        """
+        holders = holders or {}
         for door_id, v in self.view.items():
             who = wanted.get(door_id, set())
+            held = holders.get(door_id, set())
             fresh = self._fresh(v, now)
             name = self.specs[door_id].name
-            if who and not v.disabled and not v.fail_cause:
+            if held or who and not v.disabled and not v.fail_cause:
                 if now >= self._next_request[door_id]:
                     self._next_request[door_id] = now + self.REQUEST_PERIOD_S
                     self.bus.publish(f"{DOOR_TOPIC}/{door_id}/request",

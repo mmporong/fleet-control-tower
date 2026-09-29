@@ -426,7 +426,10 @@ class FleetManager:
 
     def assign_route(self, rec: RobotRecord, goal: str, purpose: str, goal_actions: list[dict] | None = None,
                      task_id: str | None = None, start_actions: list[dict] | None = None,
-                     avoid_nodes: set[str] | None = None, avoid_lanes: set[str] | None = None) -> bool:
+                     avoid_nodes: set[str] | None = None, avoid_lanes: set[str] | None = None,
+                     strict_doors: bool = False) -> bool:
+        """``strict_doors``: only accept a route that avoids every unusable door (used for detours, so a
+        vehicle waiting at one closed door is not sent to wait at another)."""
         start = rec.last_node
         if start is None:
             return False
@@ -440,7 +443,7 @@ class FleetManager:
             path = self.planner.plan(start, goal, avoid_nodes=avoid_nodes or set(),
                                      avoid_lanes=(avoid_lanes or set()) | closed, node_penalty=penalty, prev=prev,
                                      vclass=rec.vclass)
-        if path is None:
+        if path is None and not (strict_doors and closed):
             path = self.planner.plan(start, goal, avoid_nodes=avoid_nodes or set(),
                                      avoid_lanes=avoid_lanes or set(), node_penalty=penalty, prev=prev,
                                      vclass=rec.vclass)
@@ -537,7 +540,7 @@ class FleetManager:
         self._update_blocks()
         self._update_external_locks()
         if self.doors is not None:
-            self.doors.tick(now, self._door_demand())
+            self.doors.tick(now, *self._door_demand())
             self._door_blocks()
         decay = 0.5 ** (dt / self.cfg.congestion_half_life_s)
         for n in list(self.congestion_recent):
@@ -676,15 +679,23 @@ class FleetManager:
                         blocks[node_res(nid)] = ("zone", z.id)
         self.blocks = blocks
 
-    def _door_demand(self) -> dict[str, set[str]]:
-        """Vehicles that will pass a door soon (within PREREQUEST_M along the route) or are in its opening."""
+    def _door_demand(self) -> tuple[dict[str, set[str]], dict[str, set[str]]]:
+        """(vehicles that will pass each door soon, vehicles already holding a lane through it).
+
+        Soon means within PREREQUEST_M along the route from the vehicle's position, or waiting for the door.
+        """
         want: dict[str, set[str]] = {}
+        held: dict[str, set[str]] = {}
         reach = self.doors.PREREQUEST_M
         for rec in self.robots.values():
             if not rec.route or rec.cur_idx >= len(rec.route) - 1 or rec.fatal:
                 continue
+            for w in (rec.wait, rec.pending_block):
+                if w is not None and w.kind == "door":
+                    want.setdefault(w.holder, set()).add(rec.serial)
+            # distance still to drive: the edge in progress counts from the vehicle, earlier edges not at all
             travelled = -rec.dist_since
-            for k in range(max(1, rec.cur_idx), len(rec.route)):
+            for k in range(rec.cur_idx + 1, len(rec.route)):
                 e = self.layout.edge_between(rec.route[k - 1], rec.route[k])
                 door = self.doors.lane_door.get(e.lane)
                 if door is not None:
@@ -694,8 +705,8 @@ class FleetManager:
                     break
         for res, owner in self.locks.holder.items():
             if res.startswith("L:") and res[2:] in self.doors.lane_door:
-                want.setdefault(self.doors.lane_door[res[2:]], set()).add(owner)
-        return want
+                held.setdefault(self.doors.lane_door[res[2:]], set()).add(owner)
+        return want, held
 
     def _door_blocks(self) -> None:
         """A door lane can be reserved only while its door reports OPEN (the physical curtain is up)."""
@@ -837,11 +848,11 @@ class FleetManager:
             # do not stop inside an intersection: a robot waiting there blocks crossing
             # traffic and, next to a dock or parking stub, the stub's only exit
             while (self.layout.must_pass(rec.route[chain[-1]]) and chain[-1] < len(rec.route) - 1
-                   and len(chain) < 4):
+                   and (len(chain) < 4 or rec.route[chain[-1]] in self.layout.no_stop and len(chain) < 8)):
                 chain.append(chain[-1] + 1)
             gate = self._stub_gate(rec, chain[-1])
             if gate is not None:
-                blocked = self._wait(rec, "robot", node_res(rec.route[-1]), gate)
+                blocked = self._wait(rec, self._holder_kind(gate), node_res(rec.route[-1]), gate)
                 break
             resources: list[str] = []
             for k in chain:
@@ -890,9 +901,14 @@ class FleetManager:
             return None
         junction = self.layout.nodes[rec.route[goal_idx - 1]]
         other = self.robots.get(holder)
-        reach = math.hypot(other.length, other.width) / 2 + rec.length / 2 + 0.2 if other else 3.0
+        reach = self._turn_reach(other) if other else 3.0
         stop = self.layout.nodes[rec.route[stop_idx]]
         return holder if math.hypot(stop.x - junction.x, stop.y - junction.y) < reach else None
+
+    def _turn_reach(self, rec: RobotRecord) -> float:
+        """Radius around a turning point inside which another vehicle's node counts as swept."""
+        others = max((r.length for r in self.robots.values() if r.serial != rec.serial), default=rec.length)
+        return math.hypot(rec.length, rec.width) / 2 + others / 2 + 0.2
 
     def _heading(self, a: str, b: str) -> float:
         na, nb = self.layout.nodes[a], self.layout.nodes[b]
@@ -913,8 +929,7 @@ class FleetManager:
     def _turn_zone(self, rec: RobotRecord, idx: int) -> list[str]:
         """Nodes another vehicle could stand on inside the circle this robot sweeps when turning."""
         node = self.layout.nodes[rec.route[idx]]
-        others = max((r.length for r in self.robots.values() if r.serial != rec.serial), default=rec.length)
-        radius = math.hypot(rec.length, rec.width) / 2 + others / 2 + 0.2
+        radius = self._turn_reach(rec)
         out = []
         for kind, ident in self._query(node.x, node.y, radius):
             if kind == "N" and ident != node.id and \
@@ -1076,7 +1091,8 @@ class FleetManager:
                     return "비켜서기"
         return None
 
-    def _replan(self, rec: RobotRecord, avoid: set[str], avoid_lanes: set[str] | None = None) -> bool:
+    def _replan(self, rec: RobotRecord, avoid: set[str], avoid_lanes: set[str] | None = None,
+                strict_doors: bool = False) -> bool:
         goal = rec.goal
         actions = rec.goal_actions.get(len(rec.route) - 1, [])
         purpose, task, resume = rec.purpose, rec.task_id, rec.resume
@@ -1085,7 +1101,7 @@ class FleetManager:
         old = (rec.order_id, rec.update_id, rec.base_end, rec.cur_idx, rec.sent_base_end, rec.last_order,
                dict(rec.goal_actions), rec.order_pending, rec.pending_block, rec.wait)
         if not self.assign_route(rec, goal, purpose, actions, task, avoid_nodes=avoid,
-                                 avoid_lanes=avoid_lanes):
+                                 avoid_lanes=avoid_lanes, strict_doors=strict_doors):
             return False
         if rec.route == old_route[old_cur:] or len(rec.route) < 2:
             rec.route = old_route
@@ -1164,7 +1180,7 @@ class FleetManager:
             avoid = {a for a in avoid if a}
             if rec.goal in avoid:
                 continue
-            if self._replan(rec, avoid, avoid_lanes):
+            if self._replan(rec, avoid, avoid_lanes, strict_doors=w.kind == "door"):
                 self.counters["reroutes"] += 1
                 self.event("reroute", rec.serial, f"우회: {self._wait_text(w)}", "info")
 
@@ -1306,7 +1322,8 @@ class FleetManager:
             behind = chains.get(rec.serial, [])
             # waiting behind a faulted, silent or hand-driven vehicle or a failed door is a consequence of
             # that unit's own alarm (ROBOT_FAULT, COMMS_LOST, operator takeover, FACILITY_FAULT): suppressed
-            root_stopped = w is not None and w.kind not in ("robot", "fault", "offline", "manual", "door") or (
+            covered = w is not None and w.kind == "door" and self.alarms.is_active(f"FACILITY_FAULT:{w.holder}")
+            root_stopped = w is not None and w.kind not in ("robot", "fault", "offline", "manual") and not covered or (
                 w is None and bool(behind) and rec.status in ("PROTECTIVE", "FAULT", "PAUSED", "OFFLINE", "MANUAL"))
             since = w.since if w is not None else (rec.protective_since or rec.fault_since or self.now)
             limit = self.cfg.blocked_alarm_s
@@ -1314,8 +1331,12 @@ class FleetManager:
                     any(z.kind == "picking" for z in self.layout.zones_at((rec.x, rec.y))):
                 limit = self.cfg.collab_blocked_alarm_s
             long_block = root_stopped and self.now - since >= limit
+            note = ""
+            if long_block and w is not None and w.kind == "door" and self.doors is not None \
+                    and self.doors.view[w.holder].disabled:
+                note = " · 문 사용 중지 중(구역 제어 탭에서 재시도)"
             self.alarms.set("BLOCKED_LONG", rec.serial, long_block, self.now,
-                            f"{rec.serial} {rec.reason} · 뒤 {len(behind)}대 대기" if long_block else "",
+                            f"{rec.serial} {rec.reason} · 뒤 {len(behind)}대 대기{note}" if long_block else "",
                             {"behind": behind})
             self.alarms.set("ZONE_LOCK_WAITING", rec.serial, w is not None and w.kind == "zone"
                             and self.now - w.since > 10.0, self.now,
@@ -1335,13 +1356,12 @@ class FleetManager:
         # deadband and on-delay (ISA-18.2 against chattering): raise above 35 % held for 60 s,
         # clear only below 25 %
         high = ratio > 0.35 and active >= 5
+        raised = self.alarms.is_active("CONGESTION:fleet")
         if high:
             self._congested_since = self._congested_since if self._congested_since is not None else self.now
-        elif ratio < 0.25:
+        elif not raised or ratio < 0.25:
             self._congested_since = None
-        raised = self.alarms.alarms.get("CONGESTION:fleet")
-        on = self._congested_since is not None and (
-            self.now - self._congested_since >= 60.0 or raised is not None and raised.active)
+        on = self._congested_since is not None and (self.now - self._congested_since >= 60.0 or raised)
         self.alarms.set("CONGESTION", "fleet", on, self.now, f"대기 로봇 {waiting}/{active}대 ({ratio:.0%})")
 
     # ---------------------------------------------------------------- zones & fleet mode
@@ -1401,7 +1421,9 @@ class FleetManager:
         not reported as a weak link.
         """
         timing = ((rec.factsheet or {}).get("protocolLimits") or {}).get("timing") or {}
-        rate = 1.0 / timing.get("defaultStateInterval", 1.0) + 1.0 / timing.get("visualizationInterval", 0.2)
+        state_s = timing.get("defaultStateInterval") or 1.0
+        vis_s = timing.get("visualizationInterval") or 0.2
+        rate = 1.0 / max(0.05, float(state_s)) + 1.0 / max(0.05, float(vis_s))
         recent = [lat for t, lat in rec.rx if t > self.now - LINK_WINDOW_S]
         if self.now < LINK_WINDOW_S:
             return None, None

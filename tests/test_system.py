@@ -231,6 +231,46 @@ class DoorTests(unittest.TestCase):
         m.tick(sim.now, 0.2)
         self.assertEqual(m.blocks[lane][0], "door")         # the door is shut: it is the lasting cause
 
+    def test_virtual_operator_brings_a_door_back_when_the_fault_clears_by_itself(self):
+        sim = lone_agf()
+        sim.tick_hooks.append(AutoOperator(Operations(sim), random.Random(3)).tick)
+        sim.doors["D-S"].inject("NO_RESPONSE", sim.now + 200.0)   # controller back after 200 s
+        sim.run(120)
+        view = sim.manager.doors.view["D-S"]
+        self.assertTrue(view.disabled)                             # SOP: taken out of use
+        sim.run(900)                                               # alarm cleared long ago, field fix done
+        self.assertFalse(view.disabled)
+        self.assertTrue(sim.manager.doors.available("D-S", sim.now))
+
+    def test_disabling_a_door_does_not_shut_it_on_a_vehicle_that_reserved_it(self):
+        sim = lone_agf()
+        ops = Operations(sim)
+        rec = sim.manager.robots["AGF-01"]
+        self.assertTrue(sim.manager.assign_route(rec, "SE66", "test"))
+        lane = "L:SE42_6|SE50"
+        while sim.now < 300 and sim.manager.locks.holder_of(lane) != "AGF-01":
+            sim.run(0.5)
+        self.assertEqual(sim.manager.locks.holder_of(lane), "AGF-01")
+        ops.execute({"cmd": "door_disable", "door": "D-S"})
+        while sim.now < 500 and rec.last_node != "SE66":
+            sim.run(0.5)
+        self.assertEqual(rec.last_node, "SE66")                    # let through, not stopped at the curtain
+
+    def test_no_shuttling_between_two_unusable_doors(self):
+        sim = lone_agf()
+        ops = Operations(sim)
+        ops.execute({"cmd": "door_disable", "door": "D-S"})
+        ops.execute({"cmd": "door_disable", "door": "D-N"})
+        rec = sim.manager.robots["AGF-01"]
+        self.assertTrue(sim.manager.assign_route(rec, "NE66", "test"))
+        sim.run(400)
+        self.assertEqual(sim.manager.counters["reroutes"], 0)     # waits at the first door instead
+        self.assertIsNotNone(rec.wait)
+        self.assertEqual(rec.wait.kind, "door")
+        alarm = sim.manager.alarms.alarms.get("BLOCKED_LONG:AGF-01")
+        self.assertTrue(alarm is not None and alarm.active)        # no door alarm covers it: raised
+        self.assertIn("사용 중지", alarm.message)
+
     def test_south_door_is_a_single_point_of_failure_for_outbound(self):
         """Finding from the door drill: with the south door out, outbound staging is unreachable."""
         sim = lone_agf()

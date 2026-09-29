@@ -340,7 +340,7 @@ TURN_RATE = 0.8        # rad/s: a counterbalance truck turning on the spot (rear
 
 @dataclass
 class Forklift:
-    """Counterbalance forklift, 2.4 m x 1.2 m, modelled as three overlapping 0.6 m circles."""
+    """Counterbalance truck, 3.6 m x 1.17 m including forks, modelled as four 0.6 m circles along its heading."""
     id: str
     loop: list[str]
     layout: Layout
@@ -364,6 +364,7 @@ class Forklift:
     lat_target: float = 0.0
     keep_offset_until: float = 0.0   # gave up returning to the lane centre: drive on at the offset
     turn_wait_since: float | None = None
+    turn_committed: bool = False
     stall_since: float | None = None
     bx: float = 0.0             # position on the lane centre line
     by: float = 0.0
@@ -473,12 +474,14 @@ class Forklift:
                 return
         turn = math.remainder(heading - self.heading, 2 * math.pi)
         if abs(turn) > 0.05 and self.lat == 0.0:
-            swept = [1 for _i, rx, ry, rr, _v in robots if math.hypot(rx - self.bx, ry - self.by) < 1.9 + rr + 0.2]
-            if swept and (self.turn_wait_since is None or now - self.turn_wait_since < 10.0):
-                # something inside the circle the truck sweeps: the driver waits before turning
-                self.turn_wait_since = self.turn_wait_since if self.turn_wait_since is not None else now
-                self.v = 0.0
-                return
+            swept = any(math.hypot(rx - self.bx, ry - self.by) < 1.9 + rr + 0.2 for _i, rx, ry, rr, _v in robots)
+            if not self.turn_committed:
+                if swept and (self.turn_wait_since is None or now - self.turn_wait_since < 10.0):
+                    # something inside the circle the truck sweeps: the driver waits before turning
+                    self.turn_wait_since = self.turn_wait_since if self.turn_wait_since is not None else now
+                    self.v = 0.0
+                    return
+                self.turn_committed = True       # once started, the turn is finished in one go
             self.turn_wait_since = None
             # the truck turns at walking pace on the spot: its 3.6 m body sweeps the next lane gradually,
             # so the vehicles there see it coming instead of it appearing across their lane
@@ -487,6 +490,7 @@ class Forklift:
             self.v = 0.0
             self.stall_since = None
             return
+        self.turn_committed = False
         self.blocked_since = None
         self.stall_since = None
         speed = self.speed

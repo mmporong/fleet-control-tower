@@ -25,6 +25,9 @@ class AutoOperator:
         self.reset_delay = reset_delay
         self.field_delay = field_delay
         self.plans: dict[str, dict] = {}
+        # doors this operator took out of use -> when the field fix is done; kept apart from the alarm, which
+        # may clear by itself (controller answers again) while the door is still out of use
+        self.door_plans: dict[str, float] = {}
         self.ack_times: list[float] = []
 
     def _do(self, cmd: str, **args) -> dict:
@@ -48,6 +51,13 @@ class AutoOperator:
                 self._respond(alarm, plan, now)
         for key in [k for k in self.plans if k not in alarms]:
             del self.plans[key]
+        doors = self.sim.manager.doors
+        for door_id, fix_at in list(self.door_plans.items()):
+            if now >= fix_at:
+                del self.door_plans[door_id]
+                if doors is not None and doors.view[door_id].disabled:
+                    self._do("door_field_fix", door=door_id)
+                    self._do("door_retry", door=door_id)
 
     def _respond(self, alarm, plan: dict, now: float) -> None:
         t, src, stage = alarm.type, alarm.source, plan["stage"]
@@ -88,12 +98,9 @@ class AutoOperator:
             plan["act_at"] = now + 90.0
         elif t == "FACILITY_FAULT":
             # SOP: take the door out of use, call the facility technician, retry after the fix
-            if stage == 0:
+            if src not in self.door_plans:
                 self._do("door_disable", door=src)
-                plan.update(stage=1, act_at=now + self.rng.uniform(*self.field_delay))
-            else:
-                self._do("door_field_fix", door=src)
-                self._do("door_retry", door=src)
-                plan.update(stage=0, act_at=now + 120.0)
+                self.door_plans[src] = now + self.rng.uniform(*self.field_delay)
+            plan["act_at"] = now + 3600.0
         else:
             plan["act_at"] = now + 3600.0
