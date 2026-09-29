@@ -474,9 +474,12 @@ class Forklift:
                 return
         turn = math.remainder(heading - self.heading, 2 * math.pi)
         if abs(turn) > 0.05 and self.lat == 0.0:
-            swept = any(math.hypot(rx - self.bx, ry - self.by) < 1.9 + rr + 0.2 for _i, rx, ry, rr, _v in robots)
+            inside = [rv for _i, rx, ry, rr, rv in robots if math.hypot(rx - self.bx, ry - self.by) < 1.9 + rr + 0.2]
             if not self.turn_committed:
-                if swept and (self.turn_wait_since is None or now - self.turn_wait_since < 10.0):
+                # a vehicle driving through the circle is always let past; one standing in it is waited for
+                # 10 s, then the driver turns anyway (its protective field stops it if the truck comes close)
+                if any(abs(v) > 0.05 for v in inside) or inside and (
+                        self.turn_wait_since is None or now - self.turn_wait_since < 10.0):
                     # something inside the circle the truck sweeps: the driver waits before turning
                     self.turn_wait_since = self.turn_wait_since if self.turn_wait_since is not None else now
                     self.v = 0.0

@@ -210,8 +210,10 @@ def dc_layout() -> Layout:
     zone("Z-RACK", "팔레트 랙(자율·수동 지게차)", "forklift_lane", rect(12.0, 8.4, 46.0, 41.6), static=1.0, human=0.5)
     # people in the aisle: 0.3 m/s, the ISO 3691-4 speed that allows passing closer than the normal clearance
     zone("Z-PICK", "협업 피킹 존", "picking", rect(48.0, 8.4, 68.0, 41.6), static=1.0, human=0.3)
-    zone("Z-CROSS-S", "횡단보도(남)", "walkway", rect(46.0, 2.6, 48.0, 7.4), human=0.3)
-    zone("Z-CROSS-N", "횡단보도(북)", "walkway", rect(46.0, 42.6, 48.0, 47.2), human=0.3)
+    # the crossings with a 2 m approach on each side: vehicles are at walking pace before they reach a
+    # person on the crossing, not only once inside it (the south crossing starts right behind the door)
+    zone("Z-CROSS-S", "횡단보도(남)·접근 구간", "walkway", rect(44.0, 2.6, 50.0, 7.4), human=0.3)
+    zone("Z-CROSS-N", "횡단보도(북)·접근 구간", "walkway", rect(44.0, 42.6, 50.0, 47.2), human=0.3)
     zone("Z-WALK", "보행로(로봇 진입 없음)", "walkway", rect(0, 0, WIDTH, 2.6))
     zone("Z-BAY", "충전·주차", "charging", rect(10.0, 47.4, 80.0, HEIGHT))
     for i, x in enumerate(RACK_AISLES):
