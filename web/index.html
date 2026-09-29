@@ -185,7 +185,9 @@ pre.json{margin:0;padding:10px 11px;font-size:11px;line-height:1.4;max-height:42
       <div class="map-wrap" id="map-wrap"><canvas id="map" aria-label="창고 지도: 로봇, 사람, 지게차, 예약 구간"></canvas><div class="tooltip" id="tip" hidden></div></div>
       <div class="layers" id="layers" role="group" aria-label="지도 레이어"></div>
       <div class="legend">
-        <span><i class="sw" style="background:#334155"></i>주행·작업(정상)</span>
+        <span><i class="sw" style="background:#334155;width:18px"></i>자율 지게차(포크)</span>
+        <span><i class="sw" style="background:#334155"></i>토트 AMR</span>
+        <span><i class="sw" style="background:#d6b37a"></i>팔레트</span>
         <span><i class="sw" style="background:#a16207"></i>교통 대기</span>
         <span><i class="sw" style="background:#b45309"></i>사람·지게차·구역 차단</span>
         <span><i class="sw" style="background:#c2410c"></i>보호정지</span>
@@ -215,9 +217,10 @@ pre.json{margin:0;padding:10px 11px;font-size:11px;line-height:1.4;max-height:42
   <section class="tabs">
     <div class="tablist" role="tablist" id="tablist"></div>
     <div class="tabpanel" role="tabpanel" id="tab-fleet"><div class="table-wrap"><table><thead><tr><th>로봇</th><th>상태</th><th>사유(왜 멈췄나)</th><th>배터리</th><th>작업</th><th>목적지</th><th>대기</th><th>통신</th><th>속도</th></tr></thead><tbody id="fleet-rows"></tbody></table></div></div>
+    <div class="tabpanel" role="tabpanel" id="tab-site" hidden><div id="site-body"></div><div class="note">입고: 트럭 도착 → 수동 지게차가 도어 앞 스테이징 레인(4칸)에 하역 → 자율 지게차가 랙 빈칸에 적치. 출고: 주문 → 자율 지게차가 출고 레인에 내려놓음 → 수동 지게차가 트럭에 상차. 토트: 패킹에서 빈 토트 투입 → 피킹면 2~3곳에서 담당 피커가 로봇에 와서 담음 → 패킹.</div></div>
     <div class="tabpanel" role="tabpanel" id="tab-tasks" hidden>
       <div class="form" id="task-form">
-        <label>종류<select id="tf-kind"><option value="PICK">PICK · 보관→출고</option><option value="PUTAWAY">PUTAWAY · 입고→보관</option></select></label>
+        <label>종류<select id="tf-kind"></select></label>
         <label>출발<select id="tf-src"></select></label>
         <label>도착<select id="tf-dst"></select></label>
         <label>우선순위<select id="tf-pri"><option value="0">0 보통</option><option value="1">1 높음</option><option value="2">2 긴급</option></select></label>

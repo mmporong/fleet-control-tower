@@ -1,4 +1,4 @@
-"""Whole-simulation checks: invariants, null models, dispatcher and operator commands."""
+"""Whole-simulation checks: invariants, null models, the DC process, dispatcher and operator commands."""
 from __future__ import annotations
 
 import random
@@ -8,6 +8,7 @@ from fleet.autoop import AutoOperator
 from fleet.ops import Operations
 from fleet.scenario import get
 from fleet.sim import Simulation
+from fleet.site_dc import AGF, AMR
 
 
 def sim_with_operator(name: str, seed: int = 5, **overrides) -> tuple[Simulation, Operations]:
@@ -17,21 +18,20 @@ def sim_with_operator(name: str, seed: int = 5, **overrides) -> tuple[Simulation
     return sim, ops
 
 
-class InvariantTests(unittest.TestCase):
-    def test_standard_shift_invariants(self):
-        sim, _ = sim_with_operator("standard")
+class GridInvariantTests(unittest.TestCase):
+    def test_grid_shift_invariants(self):
+        sim, _ = sim_with_operator("grid")
         for _ in range(300):
             sim.run(1.0)
             self.assertEqual(sim.manager.locks.check(), [])
         kpi = sim.kpi()
         self.assertGreater(kpi["done"], 0)
-        amr_contacts = [c for c in sim.evaluator.contacts if c["kind"] == "amr"]
-        self.assertEqual(amr_contacts, [])
+        self.assertEqual([c for c in sim.evaluator.contacts if c["kind"] == "amr"], [])
         self.assertEqual(kpi["mismatch"], 0)
 
     def test_null_model_without_people(self):
         """With no people the people-related detectors must stay silent."""
-        sim, _ = sim_with_operator("night")
+        sim, _ = sim_with_operator("grid-night")
         sim.run(600)
         kpi = sim.kpi()
         self.assertEqual(kpi["near_miss_truth"], 0)
@@ -41,22 +41,85 @@ class InvariantTests(unittest.TestCase):
         self.assertIsNone(kpi["tracking_ratio"])
 
     def test_single_robot_has_no_deadlock(self):
-        sim, _ = sim_with_operator("night", robots=1, external=0)
+        sim, _ = sim_with_operator("grid-night", robots=1, external=0)
         sim.run(600)
         self.assertEqual(sim.kpi()["deadlocks"], 0)
         self.assertGreater(sim.kpi()["done"], 0)
 
     def test_deterministic_for_a_seed(self):
-        a, _ = sim_with_operator("standard", seed=11)
-        b, _ = sim_with_operator("standard", seed=11)
-        a.run(120)
-        b.run(120)
-        self.assertEqual(a.kpi(), b.kpi())
+        for name in ("grid", "standard"):
+            a, _ = sim_with_operator(name, seed=11)
+            b, _ = sim_with_operator(name, seed=11)
+            a.run(120)
+            b.run(120)
+            self.assertEqual(a.kpi(), b.kpi(), name)
+
+
+class DcTests(unittest.TestCase):
+    def test_vehicle_classes_come_from_factsheets(self):
+        sim = Simulation(get("standard"), seed=2)
+        sim.run(2)
+        classes = {r.serial: r.vclass for r in sim.manager.robots.values()}
+        self.assertTrue(all(c == AGF for s, c in classes.items() if s.startswith("AGF")))
+        self.assertTrue(all(c == AMR for s, c in classes.items() if s.startswith("AMR")))
+        agf = sim.manager.robots["AGF-01"]
+        self.assertEqual(agf.length, 2.7)
+        self.assertFalse(sim.manager.supports(agf, "x_pickItems"))
+
+    def test_class_restricted_routes(self):
+        sim = Simulation(get("standard"), seed=2)
+        sim.run(2)
+        L = sim.layout
+        p = sim.manager.planner
+        agf_path = p.plan("SE10", "SO3", vclass=AGF)
+        self.assertTrue(agf_path and not any(L.nodes[n].kind == "pickface" for n in agf_path))
+        amr_path = p.plan("PK1", "K1-05", vclass=AMR)
+        self.assertTrue(amr_path and not any(L.nodes[n].kind == "rack" for n in amr_path))
+        self.assertIsNone(p.plan("PK1", "R1-03", vclass=AMR))
+
+    def test_pick_action_needs_a_picker(self):
+        sim = Simulation(get("standard", pickers=0, tote_orders_h=0.0, trucks_h=0.0, out_pallets_h=0.0), seed=4)
+        sim.run(2)
+        t = sim.dispatcher.add_task("TOTE_PICK", "K3-04", None, 2)
+        sim.run(400)
+        self.assertEqual(t.state, "ACTIVE")
+        rec = sim.manager.robots[t.robot]
+        self.assertEqual(rec.last_node, "K3-04")
+        self.assertIn("피커 대기", rec.reason)
+
+    def test_dc_shift_invariants_and_pallet_conservation(self):
+        sim, _ = sim_with_operator("standard", seed=5)
+        p = sim.process
+        for _ in range(60):
+            sim.run(10.0)
+            self.assertEqual(sim.manager.locks.check(), [])
+            # every pallet is in exactly one place and the rack table agrees with the pallet table
+            in_rack = {pid for pid in p.slots.values() if pid}
+            for pid, info in p.pallets.items():
+                where = info["loc"][0]
+                self.assertEqual(pid in in_rack, where == "rack", pid)
+            staged = [pid for lane in p.in_stage.values() for pid in lane]
+            self.assertEqual(len(staged), len(set(staged)))
+        kpi = sim.kpi()
+        site = kpi["site"]
+        self.assertGreater(site["putaway"], 0)
+        self.assertGreater(site["picks"], 0)
+        self.assertGreater(site["pallets_unloaded"], 0)
+        self.assertEqual([c for c in sim.evaluator.contacts if c["kind"] == "amr"], [])
+        self.assertEqual(kpi["mismatch"], 0)
+
+    def test_night_has_no_picking(self):
+        sim, _ = sim_with_operator("night", seed=3)
+        sim.run(600)
+        site = sim.kpi()["site"]
+        self.assertEqual(site["tote_done"], 0)
+        self.assertEqual(site["picker_wait_s"], 0.0)
+        self.assertGreater(site["putaway"] + site["shipped"], 0)
 
 
 class DispatcherTests(unittest.TestCase):
     def test_task_lifecycle_and_low_battery_charging(self):
-        sim = Simulation(get("night", robots=3, external=0, rate_per_h=0.0), seed=2)
+        sim = Simulation(get("grid-night", robots=3, external=0, rate_per_h=0.0), seed=2)
         sim.run(2)
         low = sim.manager.robots["AMR-02"]
         sim.vehicle("AMR-02").battery = 20.0
@@ -69,7 +132,7 @@ class DispatcherTests(unittest.TestCase):
         self.assertTrue(low.charging or low.purpose in ("charge", "charging"))
 
     def test_fault_requeues_unloaded_task(self):
-        sim = Simulation(get("night", robots=2, external=0, rate_per_h=0.0), seed=4)
+        sim = Simulation(get("grid-night", robots=2, external=0, rate_per_h=0.0), seed=4)
         sim.run(2)
         t = sim.dispatcher.add_task("PICK", "I7", None, 0)
         sim.run(3)
@@ -83,7 +146,7 @@ class DispatcherTests(unittest.TestCase):
 
 class OperationsTests(unittest.TestCase):
     def setUp(self):
-        self.sim = Simulation(get("night", robots=4, rate_per_h=0.0), seed=3)
+        self.sim = Simulation(get("grid-night", robots=4, rate_per_h=0.0), seed=3)
         self.sim.run(2)
         self.ops = Operations(self.sim)
 
@@ -119,6 +182,15 @@ class OperationsTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.ops.submit_wms_order({"order_id": "bad id!", "kind": "PICK", "source": "C3"}, seen)
 
+    def test_wms_orders_follow_site_task_kinds(self):
+        sim = Simulation(get("standard"), seed=3)
+        sim.run(2)
+        ops = Operations(sim)
+        res = ops.submit_wms_order({"order_id": "DC-1", "kind": "TOTE_PICK", "source": "K2-03"}, {})
+        self.assertTrue(res["ok"])
+        with self.assertRaises(ValueError):
+            ops.submit_wms_order({"order_id": "DC-2", "kind": "PICK", "source": "K2-03"}, {})
+
     def test_teleop_takeover_round_trip(self):
         self.assertTrue(self.ops.execute({"cmd": "set_mode_manual", "robot": "AMR-01", "confirm": True})["ok"])
         self.sim.run(1)
@@ -128,10 +200,9 @@ class OperationsTests(unittest.TestCase):
         self.assertEqual(self.sim.manager.robots["AMR-01"].mode, "AUTOMATIC")
 
     def test_zone_evacuation_moves_robots_out(self):
-        zone = "Z-OUT"
-        res = self.ops.execute({"cmd": "zone_evacuate", "zone": zone, "confirm": True})
+        res = self.ops.execute({"cmd": "zone_evacuate", "zone": "Z-OUT", "confirm": True})
         self.assertTrue(res["ok"], res)
-        self.assertTrue(self.sim.layout.zones[zone].locked)
+        self.assertTrue(self.sim.layout.zones["Z-OUT"].locked)
 
 
 if __name__ == "__main__":

@@ -14,6 +14,8 @@ from .layout import Layout
 
 TURN_RATE = 1.6
 TURN_OVERHEAD_S = 1.2
+# dead-end stubs (stations, bays): only ever entered as the goal of a route
+STUB_KINDS = {"inbound", "outbound", "charger", "park", "in_stage", "out_stage", "pack"}
 
 
 class Planner:
@@ -35,7 +37,7 @@ class Planner:
 
     def plan(self, start: str, goal: str, avoid_nodes: set[str] | frozenset = frozenset(),
              avoid_lanes: set[str] | frozenset = frozenset(), node_penalty: dict[str, float] | None = None,
-             prev: str | None = None) -> list[str] | None:
+             prev: str | None = None, vclass: str | None = None) -> list[str] | None:
         """Shortest-time path start..goal, or None. ``avoid_*`` are hard exclusions."""
         if start == goal:
             return [start]
@@ -67,10 +69,10 @@ class Planner:
                 return path[::-1]
             for e in self.layout.out_edges[cur]:
                 nxt = e.end
-                if nxt in avoid_nodes or e.lane in avoid_lanes:
+                if nxt in avoid_nodes or e.lane in avoid_lanes or not self.layout.allowed(e, vclass):
                     continue
                 # stubs (stations, chargers, parks) are only entered as the goal
-                if self.layout.nodes[nxt].kind in ("inbound", "outbound", "charger", "park") and nxt != goal:
+                if self.layout.nodes[nxt].kind in STUB_KINDS and nxt != goal:
                     continue
                 cost = g + e.length / e.max_speed + self.turn_cost(p, cur, nxt) + penalty.get(nxt, 0.0)
                 ns = (nxt, cur)
@@ -81,7 +83,7 @@ class Planner:
                     heapq.heappush(heap, (cost + h(nxt), cost, nxt, cur))
         return None
 
-    def _dijkstra(self, source: str) -> tuple[dict[str, float], dict[str, float]]:
+    def _dijkstra(self, source: str, vclass: str | None = None) -> tuple[dict[str, float], dict[str, float]]:
         dist_t = {source: 0.0}
         dist_m = {source: 0.0}
         heap = [(0.0, source)]
@@ -89,7 +91,11 @@ class Planner:
             d, cur = heapq.heappop(heap)
             if d > dist_t.get(cur, math.inf):
                 continue
+            if cur != source and self.layout.nodes[cur].kind in STUB_KINDS:
+                continue   # never drive through a dead end
             for e in self.layout.out_edges[cur]:
+                if not self.layout.allowed(e, vclass):
+                    continue
                 nd = d + e.length / e.max_speed
                 if nd < dist_t.get(e.end, math.inf):
                     dist_t[e.end] = nd
@@ -97,15 +103,17 @@ class Planner:
                     heapq.heappush(heap, (nd, e.end))
         return dist_t, dist_m
 
-    def travel_time(self, a: str, b: str) -> float:
-        if a not in self._static:
-            self._static[a], self._static_m[a] = self._dijkstra(a)
-        return self._static[a].get(b, math.inf)
+    def _tables(self, a: str, vclass: str | None):
+        key = (a, vclass)
+        if key not in self._static:
+            self._static[key], self._static_m[key] = self._dijkstra(a, vclass)
+        return self._static[key], self._static_m[key]
 
-    def distance(self, a: str, b: str) -> float:
-        if a not in self._static_m:
-            self._static[a], self._static_m[a] = self._dijkstra(a)
-        return self._static_m[a].get(b, math.inf)
+    def travel_time(self, a: str, b: str, vclass: str | None = None) -> float:
+        return self._tables(a, vclass)[0].get(b, math.inf)
+
+    def distance(self, a: str, b: str, vclass: str | None = None) -> float:
+        return self._tables(a, vclass)[1].get(b, math.inf)
 
     def route_length(self, route: list[str]) -> float:
         return sum(self.layout.edge_between(a, b).length for a, b in zip(route, route[1:]))

@@ -16,7 +16,7 @@ from fleet.server import Runner, make_handler
 class ServerTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.runner = Runner("night", 3, "locks+resolve", 1.0, auto_operator=False, read_only=False)
+        cls.runner = Runner("grid-night", 3, "locks+resolve", 1.0, auto_operator=False, read_only=False)
         cls.runner.start()
         cls.httpd = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(cls.runner, None))
         cls.base = f"http://127.0.0.1:{cls.httpd.server_address[1]}"
@@ -83,7 +83,7 @@ class ServerTests(unittest.TestCase):
 
 class ReadOnlyServerTests(unittest.TestCase):
     def test_read_only_server_refuses_commands(self):
-        runner = Runner("night", 3, "locks+resolve", 1.0, auto_operator=False, read_only=True)
+        runner = Runner("grid-night", 3, "locks+resolve", 1.0, auto_operator=False, read_only=True)
         httpd = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(runner, None))
         threading.Thread(target=httpd.serve_forever, daemon=True).start()
         base = f"http://127.0.0.1:{httpd.server_address[1]}"

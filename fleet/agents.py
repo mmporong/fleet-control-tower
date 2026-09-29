@@ -163,6 +163,10 @@ class Human:
             return True
         return False
 
+    def _at_shelf_face(self) -> bool:
+        """Overridden by collaborative pickers standing at a pick-aisle shelf face."""
+        return False
+
     def _sidestep(self, layout: Layout, obstacle: Point, obstacle_r: float, heading: float) -> bool:
         """Walk around a stationary robot if there is floor space beside it."""
         fx, fy = math.cos(heading), math.sin(heading)
@@ -215,7 +219,7 @@ class Human:
             if gap > 1.6:
                 continue
             if abs(rv) > 0.05 and not self.distracted and gap < 1.2 and now > self.impatient_until and \
-                    circle_hits_forward_box((rx, ry), rr, self.pos, heading, 1.8, 1.2):
+                    not self._at_shelf_face() and circle_hits_forward_box((rx, ry), rr, self.pos, heading, 1.8, 1.2):
                 blocked = True          # a moving robot nearby, in front or crossing: wait for it
                 if self.yield_since is None:
                     self.yield_since = now
@@ -284,8 +288,8 @@ class Human:
         for bx, by, br in bodies:
             d_new = math.hypot(bx - new_pos[0], by - new_pos[1]) - br - self.radius
             d_old = math.hypot(bx - self.x, by - self.y) - br - self.radius
-            if d_new < 0.02 and d_new < d_old:
-                blocked = True      # never walk into a vehicle body
+            if d_new < 0.06 and d_new < d_old:
+                blocked = True      # never walk into a vehicle body (margin above the contact threshold)
                 break
         if blocked:
             self.v = 0.0
@@ -303,13 +307,15 @@ class Human:
         self.x, self.y = new_pos
 
 
-def expand_loop(layout: Layout, loop: list[str]) -> list[str]:
-    """Insert holding nodes between consecutive loop nodes that are not adjacent."""
+def expand_loop(layout: Layout, loop: list[str], allowed: set[str] | None = None) -> list[str]:
+    """Fill in the nodes between consecutive loop waypoints that are not adjacent."""
     out: list[str] = []
     for a, b in zip(loop, loop[1:] + loop[:1]):
         out.append(a)
         if b not in layout.neighbors[a]:
-            path = undirected_path(layout, a, b, {"queue"})
+            path = undirected_path(layout, a, b, allowed or {"queue"})
+            if not path:
+                raise ValueError(f"loop waypoints {a} and {b} are not connected")
             out.extend(path[1:-1])
     return out
 
@@ -321,7 +327,7 @@ class Forklift:
     loop: list[str]
     layout: Layout
     rng: random.Random
-    radius: float = 1.0          # bounding radius (planning and coarse checks)
+    radius: float = 1.9          # bounding radius (planning and coarse checks)
     speed: float = 2.0
     idx: int = 0
     x: float = 0.0
@@ -346,9 +352,10 @@ class Forklift:
         self.bx, self.by = n.x, n.y
         self.x, self.y = n.x, n.y
 
-    def _free_offset(self, heading: float, offset: float) -> bool:
+    def _free_offset(self, heading: float, offset: float, robots=()) -> bool:
+        """Room beside the lane for the whole truck: no racks, walls or other vehicles."""
         nx, ny = -math.sin(heading), math.cos(heading)
-        for d in (-0.65, 0.0, 0.65, 1.6):
+        for d in (-1.2, -0.4, 0.4, 1.2, 2.2):
             px = self.bx + math.cos(heading) * d + nx * offset
             py = self.by + math.sin(heading) * d + ny * offset
             if not (0.7 < px < self.layout.width - 0.7 and 0.7 < py < self.layout.height - 0.7):
@@ -357,6 +364,9 @@ class Forklift:
                 x0, y0 = r[0]
                 x1, y1 = r[2]
                 if x0 - 0.6 < px < x1 + 0.6 and y0 - 0.6 < py < y1 + 0.6:
+                    return False
+            for _rid, rx, ry, rr, _rv in robots:
+                if math.hypot(rx - px, ry - py) < rr + 0.6 + 0.3:
                     return False
         return True
 
@@ -377,8 +387,9 @@ class Forklift:
         return (self.x, self.y)
 
     def circles(self) -> list[tuple[float, float, float]]:
+        """3.6 m x 1.17 m counterbalance truck including forks."""
         c, s = math.cos(self.heading), math.sin(self.heading)
-        return [(self.x + c * d, self.y + s * d, 0.6) for d in (-0.65, 0.0, 0.65)]
+        return [(self.x + c * d, self.y + s * d, 0.6) for d in (-1.2, -0.4, 0.4, 1.2)]
 
     def step(self, dt: float, now: float, robots: list[tuple[str, float, float, float, float]],
              humans: list[Human]) -> None:
@@ -392,13 +403,18 @@ class Forklift:
         if not any(until > now for until in self.passing.values()):
             self.lat_target = 0.0
         if abs(self.lat - self.lat_target) > 1e-3:
+            mine = self.circles()
+            if any(math.hypot(rx - cx, ry - cy) < rr + cr + 0.5 for _i, rx, ry, rr, _v in robots
+                   for cx, cy, cr in mine):
+                self.v = 0.0          # something beside the truck: hold the sideways move
+                return
             step_lat = min(abs(self.lat_target - self.lat), 0.8 * dt)
             self.lat += step_lat if self.lat_target > self.lat else -step_lat
             self._place(heading)
             self.v = 0.4
             return
         for h in humans:
-            if circle_hits_forward_box(h.pos, h.radius, self.pos, heading, 3.0, 0.7, start=1.2):
+            if circle_hits_forward_box(h.pos, h.radius, self.pos, heading, 3.0, 0.7, start=1.8):
                 self.v = 0.0
                 if self.blocked_since is None:
                     self.blocked_since = now
@@ -409,12 +425,12 @@ class Forklift:
         for rid, rx, ry, rr, rv in robots:
             if self.passing.get(rid, -1.0) > now:
                 continue
-            if circle_hits_forward_box((rx, ry), rr, self.pos, heading, 1.6, 0.75, start=1.2):
+            if circle_hits_forward_box((rx, ry), rr, self.pos, heading, 1.6, 0.75, start=1.8):
                 self.v = 0.0
                 if self.blocked_since is None:
                     self.blocked_since = now
                 elif now - self.blocked_since > 8.0:
-                    side = next((o for o in (1.3, -1.3) if self._free_offset(heading, o)), None)
+                    side = next((o for o in (1.3, -1.3) if self._free_offset(heading, o, robots)), None)
                     if abs(rv) < 0.05 and side is not None:
                         # driver steers around a robot that stays put, with body clearance
                         self.passing[rid] = now + 15.0
@@ -429,7 +445,7 @@ class Forklift:
         speed = self.speed
         zone_limit = [z for z in self.layout.zones_at(self.pos) if z.kind in ("human_work", "walkway")]
         if zone_limit:
-            speed = min(speed, 1.2)
+            speed = min(speed, 1.39)      # 5 km/h where people work or walk
         if self.lat != 0.0:
             speed = min(speed, 0.8)
         self.v = speed

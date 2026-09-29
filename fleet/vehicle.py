@@ -34,6 +34,11 @@ FAULT_TYPES = {
 
 @dataclass
 class VehicleSpec:
+    vclass: str = "CARRIER"       # VDA 5050 factsheet agvClass
+    series: str = "Generic AMR"
+    kinematic: str = "DIFF"       # VDA 5050 agvKinematic
+    max_load_kg: float = 100.0
+    lift_height: float = 0.0
     length: float = 0.9
     width: float = 0.7
     radius: float = 0.45          # collision circle used by the evaluator
@@ -50,6 +55,67 @@ class VehicleSpec:
     # blind-corner rule: slow down within this distance of an intersection (None disables)
     intersection_speed: float | None = 0.6
     intersection_radius: float = 1.5
+    loaded_speed: float | None = None   # speed cap while carrying a load
+    field_base: float = 0.35      # protective field length at standstill (m)
+    field_gain: float = 0.9       # extra protective length per m/s
+
+    def circles(self, x: float, y: float, theta: float) -> list[tuple[float, float, float]]:
+        """Body as circles of the chassis half-width spaced along its length.
+
+        A single circle around a 0.8 m x 0.58 m AMR would make it 1 m wide and
+        close a 2 m pick aisle to a picker standing at the shelf face.
+        """
+        r = self.width / 2 + 0.02
+        n = max(1, math.ceil(self.length / self.width))
+        off = max(0.0, self.length / 2 - r)
+        c, s = math.cos(theta), math.sin(theta)
+        ds = [0.0] if n == 1 else [-off + 2 * off * i / (n - 1) for i in range(n)]
+        return [(x + c * d, y + s * d, r) for d in ds]
+
+
+# Nominal vehicle classes. Values and their sources are listed in docs/SITE.md.
+SPEC_GRID = VehicleSpec()     # generic AMR of the algorithm test grid
+
+
+def tote_amr_spec() -> VehicleSpec:
+    """Tote / cart AMR: 0.80 m x 0.60 m, differential drive, turns on the spot (MiR250 / OTTO 100 class).
+
+    1.5 m/s operating speed (2.0 m/s design), 1.0 rad/s turning; acceleration values are assumptions
+    because vendors rarely publish them (docs/SITE.md).
+    """
+    return VehicleSpec(vclass="CARRIER", series="토트 AMR (MiR250·OTTO 100급)", kinematic="DIFF", max_load_kg=250.0,
+                       length=0.80, width=0.60, radius=0.5, max_speed=1.5, accel=0.5, decel=0.8, stop_decel=1.5,
+                       turn_rate=1.0, drain_per_m=0.015, drain_idle_s=0.002, charge_rate_s=0.05)
+
+
+def agf_spec() -> VehicleSpec:
+    """Autonomous counterbalance forklift: 2.7 m x 1.3 m incl. forks (VisionNav VNP15 / OTTO Lifter class).
+
+    1.5 m/s empty, 1.3 m/s loaded; three-wheel steering cannot turn on the spot: the ~2 m radius arc is
+    approximated by an in-place turn of the same duration (0.3 rad/s). Li battery 10->90 % in about 1 h.
+    """
+    return VehicleSpec(vclass="FORKLIFT", series="자율 카운터밸런스 지게차 (1.5 t급)", kinematic="THREEWHEEL",
+                       max_load_kg=1500.0, lift_height=4.5, length=2.7, width=1.3, radius=1.5, max_speed=1.5,
+                       loaded_speed=1.3, accel=0.3, decel=0.5, stop_decel=1.2, turn_rate=0.3, drain_per_m=0.01,
+                       drain_idle_s=0.002, charge_rate_s=0.022, field_base=0.5, field_gain=1.3)
+
+
+def agf_pick_time(height_m: float) -> float:
+    """Pallet pick: approach and fork-in 30 s + lift (0.15 m/s) + lower (0.18 m/s).
+
+    >>> round(agf_pick_time(3.2), 1)
+    69.1
+    """
+    return 30.0 + height_m / 0.15 + height_m / 0.18
+
+
+def agf_drop_time(height_m: float) -> float:
+    """Pallet drop: approach and fork-out 25 s + lift and lower at 0.10 m/s loaded.
+
+    >>> agf_drop_time(0.0)
+    25.0
+    """
+    return 25.0 + height_m / 0.10 + height_m / 0.10
 
 
 @dataclass
@@ -120,6 +186,8 @@ class Vehicle:
         self._next_state = 0.0
         self._next_vis = 0.0
         self.stop_reason = ""
+        self.served = False            # set by the site when a picker is working at this robot
+        self._factsheet_due = True     # published once at start-up and on factsheetRequest
 
     # ------------------------------------------------------------------ helpers
     def _node_msg(self, node_id: str, seq: int, released: bool) -> dict:
@@ -254,6 +322,8 @@ class Vehicle:
                     self._drop_order("cancelOrder")
             elif kind == "stateRequest":
                 pass
+            elif kind == "factsheetRequest":
+                self._factsheet_due = True
             elif kind == "x_fleetSpeedLimit":
                 zone = str(params.get("zoneId"))
                 limit = params.get("limit")
@@ -376,7 +446,7 @@ class Vehicle:
         heading = self.theta + (math.pi if reverse else 0.0)
         speed = abs(self.v)
         # clearing needs extra distance so a stopped vehicle does not creep back into its own field
-        p_len = 0.35 + speed * 0.9 + (0.3 if self.field == "PROTECTIVE" else 0.0)
+        p_len = s.field_base + speed * s.field_gain + (0.15 if self.field == "PROTECTIVE" else 0.0)
         w_len = max(2.5, 1.8 + speed * 1.2) + (0.5 if self.field != "CLEAR" else 0.0)
         # field-set switching: in rack aisles at creep speed the protective field narrows to the
         # body (reduced clearance is only allowed at <= 0.3 m/s)
@@ -389,7 +459,8 @@ class Vehicle:
             if o.id == self.serial or abs(o.x - self.x) > 5.0 or abs(o.y - self.y) > 5.0:
                 continue
             if rotating:
-                if math.hypot(o.x - self.x, o.y - self.y) <= 0.75 + o.r:
+                # the swept circle of an in-place turn: half the chassis diagonal plus a margin
+                if math.hypot(o.x - self.x, o.y - self.y) <= math.hypot(s.length, s.width) / 2 + 0.1 + o.r:
                     return "PROTECTIVE", f"{o.kind}:{o.id}"
                 continue
             if circle_hits_forward_box((o.x, o.y), o.r, self.pos, heading, p_len, p_half,
@@ -401,6 +472,10 @@ class Vehicle:
                 return "PROTECTIVE", f"{o.kind}:{o.id}"
             if worst == "CLEAR" and circle_hits_forward_box((o.x, o.y), o.r, self.pos, heading, w_len,
                                                              s.width / 2 + 0.45, start=s.length / 2):
+                worst, cause = "WARNING", f"{o.kind}:{o.id}"
+            # side warning: a person within 0.5 m of the chassis keeps the vehicle at creep speed
+            if worst == "CLEAR" and o.kind == "human" and \
+                    box_gap((o.x, o.y), o.r, self.pos, self.theta, s.length / 2, s.width / 2) < 0.5:
                 worst, cause = "WARNING", f"{o.kind}:{o.id}"
         return worst, cause
 
@@ -425,6 +500,8 @@ class Vehicle:
                     cap = min(cap, s.intersection_speed)
         if self.field == "WARNING":
             cap = min(cap, 0.3 if self.field_cause.startswith(("human", "forklift")) else 0.6)
+        if self.load and s.loaded_speed is not None:
+            cap = min(cap, s.loaded_speed)
         return cap
 
     def _stop_distance_ahead(self) -> float:
@@ -494,6 +571,61 @@ class Vehicle:
                 self._state_dirty = True
             self.field, self.field_cause = state, cause
 
+    def _action_text(self) -> str:
+        for a in self.actions:
+            if a.status != "RUNNING":
+                continue
+            if a.action_type == "x_pickItems":
+                return "피킹 중(피커 작업)" if self.served else "피커 대기"
+            if a.action_type in ("pick", "drop"):
+                h = a.params.get("height")
+                verb = "팔레트 적재" if a.action_type == "pick" else "팔레트 하역"
+                return f"{verb}{f' · 높이 {float(h):.1f} m' if h else ''}"
+            if a.action_type == "x_toteInduct":
+                return "빈 토트 투입"
+            if a.action_type == "x_toteDrop":
+                return "토트 하차(패킹)"
+            if a.action_type in ("startCharging",):
+                return "충전 연결"
+        return "작업 동작 수행"
+
+    def factsheet_msg(self, now: float) -> dict:
+        """VDA 5050 factsheet: what this vehicle is and which actions it supports."""
+        s = self.spec
+        t = topic(self.manufacturer, self.serial, "factsheet")
+        node_actions = sorted(NODE_ACTIONS & set(self.supported_actions()))
+        return {
+            **header(self._ids, t, self.manufacturer, self.serial, now),
+            "typeSpecification": {"seriesName": s.series, "agvKinematic": s.kinematic, "agvClass": s.vclass,
+                                  "maxLoadMass": s.max_load_kg, "localizationTypes": ["NATURAL"],
+                                  "navigationTypes": ["VIRTUAL_LINE_GUIDED"]},
+            "physicalParameters": {"speedMin": 0.0, "speedMax": s.max_speed, "accelerationMax": s.accel,
+                                   "decelerationMax": s.decel, "heightMin": 0.0,
+                                   "heightMax": s.lift_height, "width": s.width, "length": s.length},
+            "protocolLimits": {"timing": {"minOrderInterval": 0.2, "minStateInterval": 0.2,
+                                          "defaultStateInterval": 1.0, "visualizationInterval": 0.2}},
+            "protocolFeatures": {
+                "optionalParameters": [],
+                "agvActions": ([{"actionType": a, "actionScopes": ["NODE"]} for a in node_actions] +
+                               [{"actionType": a, "actionScopes": ["INSTANT"]} for a in sorted(INSTANT_ACTIONS)]),
+            },
+            "agvGeometry": {"envelopes2d": [{"set": "default", "description": "chassis",
+                                             "polygonPoints": [{"x": sx * s.length / 2, "y": sy * s.width / 2}
+                                                               for sx, sy in ((1, 1), (1, -1), (-1, -1), (-1, 1))]}]},
+            "loadSpecification": {"loadSets": ([{"setName": "pallet", "loadType": "T11", "maxWeight": s.max_load_kg,
+                                                 "maxLoadHeight": s.lift_height,
+                                                 "agvSpeedLimit": s.loaded_speed or s.max_speed,
+                                                 "pickTime": round(agf_pick_time(0.0), 1),
+                                                 "dropTime": round(agf_drop_time(0.0), 1)}]
+                                               if s.vclass == "FORKLIFT" else
+                                               [{"setName": "tote", "loadType": "TOTE", "maxWeight": s.max_load_kg}])},
+        }
+
+    def supported_actions(self) -> list[str]:
+        if self.spec.vclass == "FORKLIFT":
+            return ["pick", "drop", "startCharging", "stopCharging"]
+        return ["pick", "drop", "x_toteInduct", "x_toteDrop", "x_pickItems", "startCharging", "stopCharging"]
+
     def _step_manual(self, dt: float, now: float, obstacles: list[Obstacle], halted: bool) -> float:
         vx, om, until = self.manual_cmd
         if now > until or halted:
@@ -536,7 +668,7 @@ class Vehicle:
             elif self.paused:
                 self.stop_reason = "관제 일시정지"
             elif running_hard:
-                self.stop_reason = "작업 동작 수행"
+                self.stop_reason = self._action_text()
             elif end == 0:
                 self.stop_reason = "경로 해제 대기" if len(self.nodes) > 1 else ""
             return moved
@@ -564,6 +696,9 @@ class Vehicle:
         if self.field == "PROTECTIVE":
             self.v = max(0.0, self.v - s.stop_decel * dt)
             self.stop_reason = f"보호필드 정지({self.field_cause})"
+            if self.v == 0.0 and self._within_deviation():
+                self._arrive(snap=False)       # VDA 5050: node reached within allowedDeviationXY
+                return 0.0
         elif self.v < cap:
             self.v = min(cap, self.v + s.accel * dt)
             self.stop_reason = ""
@@ -589,7 +724,14 @@ class Vehicle:
             self._arrive()
         return moved
 
-    def _arrive(self) -> None:
+    def _within_deviation(self) -> bool:
+        """Stopped short of the base end, but within the node's allowed deviation."""
+        if not self.edges or self.base_end_index() != 1:
+            return False
+        dev = float(self.nodes[1].get("nodePosition", {}).get("allowedDeviationXY", 0.3))
+        return self._edge_len(self.edges[0]) - self.progress <= dev
+
+    def _arrive(self, snap: bool = True) -> None:
         self.nodes.pop(0)
         self.edges.pop(0)
         node = self.nodes[0]
@@ -597,7 +739,8 @@ class Vehicle:
         self.last_node_seq = node["sequenceId"]
         self.progress = 0.0
         n = self.layout.nodes[node["nodeId"]]
-        self.x, self.y = n.x, n.y
+        if snap:
+            self.x, self.y = n.x, n.y
         if self.pending_cancel is not None:
             self._drop_order("cancelOrder")
             self.v = 0.0
@@ -621,18 +764,23 @@ class Vehicle:
                     a.remaining_s = 0.0
                 self._state_dirty = True
 
+    def waiting_for_picker(self) -> bool:
+        return any(a.status == "RUNNING" and a.action_type == "x_pickItems" for a in self.actions) and not self.served
+
     def _step_actions(self, dt: float) -> None:
         if self.fault or self.estop or self.paused:
             return
         for a in self.actions:
             if a.status != "RUNNING":
                 continue
+            if a.action_type == "x_pickItems" and not self.served:
+                continue          # collaborative picking: the clock runs only while a picker works at the robot
             a.remaining_s -= dt
             if a.remaining_s <= 0.0:
                 a.status = "FINISHED"
-                if a.action_type == "pick":
+                if a.action_type in ("pick", "x_toteInduct"):
                     self.load = True
-                elif a.action_type == "drop":
+                elif a.action_type in ("drop", "x_toteDrop"):
                     self.load = False
                 self._state_dirty = True
         done = [a for a in self.actions if a.status in ("FINISHED", "FAILED")]
@@ -697,6 +845,9 @@ class Vehicle:
 
     def publish_due(self, now: float, state_period: float = 1.0, vis_period: float = 0.2) -> list[tuple[str, dict]]:
         out = []
+        if self._factsheet_due:
+            out.append((topic(self.manufacturer, self.serial, "factsheet"), self.factsheet_msg(now)))
+            self._factsheet_due = False
         if self._state_dirty or now >= self._next_state:
             out.append((topic(self.manufacturer, self.serial, "state"), self.state_msg(now)))
             self._state_dirty = False

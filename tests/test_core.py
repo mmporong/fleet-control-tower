@@ -7,6 +7,7 @@ import random
 import unittest
 
 from fleet import bus as bus_mod
+from fleet import vehicle as vehicle_mod
 from fleet import control, geometry, traffic
 from fleet.alarms import AlarmManager
 from fleet.bus import Bus
@@ -21,7 +22,7 @@ from tests.helpers import MiniWorld
 
 
 def load_tests(loader, tests, ignore):
-    for mod in (geometry, traffic, bus_mod):
+    for mod in (geometry, traffic, bus_mod, vehicle_mod):
         tests.addTests(doctest.DocTestSuite(mod))
     return tests
 
@@ -46,6 +47,13 @@ class LayoutTests(unittest.TestCase):
         q = "qA9B9"                                                   # row 9 runs west
         self.assertIn(q, {e.end for e in L.out_edges["B9"]})
         self.assertNotIn(q, {e.end for e in L.out_edges["A9"]})
+
+    def test_dc_classes_are_strongly_connected(self):
+        from fleet.site_dc import AGF, AMR, dc_layout
+        L = dc_layout()
+        self.assertEqual(L.validate_class(AGF), [])
+        self.assertEqual(L.validate_class(AMR), [])
+        self.assertFalse(any(L.is_intersection(n) for n in L.nodes_of_kind("queue")))
 
     def test_holding_nodes_are_not_intersections(self):
         L = warehouse_layout()

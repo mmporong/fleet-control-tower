@@ -120,6 +120,11 @@ class RobotRecord:
     state_remaining: int = 0
     protective_since: float | None = None
     yield_next: float = 0.0
+    vclass: str | None = None          # from the VDA 5050 factsheet
+    rot_zone: dict = field(default_factory=dict)   # route index -> resources reserved for turning there
+    length: float = 0.9
+    width: float = 0.7
+    factsheet: dict | None = None
     mode_sent_at: float = -1e9
     pause_sent_at: float = -1e9
     fault_since: float | None = None
@@ -180,6 +185,7 @@ class FleetManager:
         bus.subscribe(f"uagv/v2/{manufacturer}/+/state", self._on_state)
         bus.subscribe(f"uagv/v2/{manufacturer}/+/visualization", self._on_vis)
         bus.subscribe(f"uagv/v2/{manufacturer}/+/connection", self._on_connection)
+        bus.subscribe(f"uagv/v2/{manufacturer}/+/factsheet", self._on_factsheet)
 
     # ================================================================ events
     def event(self, kind: str, source: str, msg: str, level: str = "info", **data) -> None:
@@ -198,6 +204,18 @@ class FleetManager:
         rec = self.register(self._serial(t))
         rec.connection = msg["connectionState"]
         rec.last_seen = self.now
+
+    def _on_factsheet(self, t: str, msg: dict) -> None:
+        rec = self.register(self._serial(t))
+        rec.factsheet = msg
+        rec.vclass = msg["typeSpecification"]["agvClass"]
+        rec.length = float(msg["physicalParameters"]["length"])
+        rec.width = float(msg["physicalParameters"]["width"])
+
+    def supports(self, rec: RobotRecord, action_type: str) -> bool:
+        if not rec.factsheet:
+            return True
+        return any(a["actionType"] == action_type for a in rec.factsheet["protocolFeatures"]["agvActions"])
 
     def _on_vis(self, t: str, msg: dict) -> None:
         rec = self.register(self._serial(t))
@@ -402,11 +420,13 @@ class FleetManager:
         prev = rec.route[rec.cur_idx - 1] if rec.route and rec.cur_idx > 0 and rec.cur_idx < len(rec.route) \
             and rec.route[rec.cur_idx] == start else None
         path = self.planner.plan(start, goal, avoid_nodes=avoid_nodes or set(),
-                                 avoid_lanes=avoid_lanes or set(), node_penalty=self._penalties(rec, goal), prev=prev)
+                                 avoid_lanes=avoid_lanes or set(), node_penalty=self._penalties(rec, goal), prev=prev,
+                                 vclass=rec.vclass)
         if path is None:
             return False
         self._order_seq += 1
         rec.route = path
+        rec.rot_zone = {}
         rec.order_id = f"{rec.serial}-O{self._order_seq}"
         rec.update_id = 0
         rec.base_end = 0
@@ -608,8 +628,13 @@ class FleetManager:
     def _update_blocks(self) -> None:
         blocks: dict[str, tuple[str, str]] = {}
         horizon = {"human": self.cfg.human_horizon_s, "forklift": self.cfg.forklift_horizon_s}
+        collab = [z.polygon for z in self.layout.zones.values() if z.kind == "picking"]
         if self.cfg.strategy != "none":
             for tid, cls, x, y, r in self.tracker.predicted_discs(self.now, horizon):
+                if cls == "human" and any(point_in_polygon((x, y), poly) for poly in collab):
+                    # collaborative picking zone: people and robots share the aisle by design; block only when
+                    # the person stands in the robot's corridor, slow passes are left to the safety fields
+                    r -= 0.25
                 for kind, ident in self._query(x, y, r):
                     if kind == "N":
                         n = self.layout.nodes[ident]
@@ -682,8 +707,12 @@ class FleetManager:
             need.add(node_res(rec.route[i]))
         for i in range(rec.cur_idx, rec.base_end):
             need.add(lane_res(self.layout.edge_between(rec.route[i], rec.route[i + 1]).lane))
-        if rec.dist_since > self.cfg.clear_dist and rec.cur_idx < rec.base_end:
+        left_node = rec.dist_since > max(self.cfg.clear_dist, rec.length / 2 + 0.7) and rec.cur_idx < rec.base_end
+        if left_node:
             need.discard(node_res(rec.route[rec.cur_idx]))
+        for idx, rs in rec.rot_zone.items():
+            if rec.cur_idx <= idx <= rec.base_end and not (idx == rec.cur_idx and left_node):
+                need.update(rs)
         return need
 
     def _occupied(self, rec: RobotRecord) -> set[str]:
@@ -696,11 +725,13 @@ class FleetManager:
         """
         occ = set()
         p = (rec.x, rec.y)
+        node_r = max(0.9, rec.length / 2)
+        lane_r = max(0.6, rec.width / 2 + 0.1)
         near_node = False
-        for kind, ident in self._query(rec.x, rec.y, 1.0):
+        for kind, ident in self._query(rec.x, rec.y, node_r + 0.1):
             if kind == "N":
                 n = self.layout.nodes[ident]
-                if math.hypot(n.x - rec.x, n.y - rec.y) <= 0.9:
+                if math.hypot(n.x - rec.x, n.y - rec.y) <= node_r:
                     occ.add(node_res(ident))
                     near_node = True
         if near_node:
@@ -708,7 +739,7 @@ class FleetManager:
         for kind, ident in self._query(rec.x, rec.y, 1.0):
             if kind == "L":
                 a, b = self._lane_points(ident)
-                if seg_point_dist(p, a, b) <= 0.6:
+                if seg_point_dist(p, a, b) <= lane_r:
                     occ.add(lane_res(ident))
         return occ
 
@@ -745,6 +776,7 @@ class FleetManager:
                 rec.order_pending = True
             return
         blocked: WaitInfo | None = None
+        first = True
         while rec.base_end < len(rec.route) - 1 and rec.base_end - rec.cur_idx < self.cfg.lookahead_nodes:
             j = rec.base_end + 1
             chain = [j]
@@ -764,16 +796,54 @@ class FleetManager:
                     break
             if blocked:
                 break
-            ok, holder, res = self.locks.try_acquire(rec.serial, resources)
+            # swept area of turns: the start node (turning on the spot) and every sharp corner in the chain
+            zones: dict[int, list[str]] = {}
+            turn_idx = ([j - 1] if first and rec.at_base_end() and self._turns_at(rec, j - 1) else []) + \
+                [k for k in chain if self._turns_at(rec, k)]
+            for k in turn_idx:
+                zones[k] = [r for r in self._turn_zone(rec, k) if r not in resources]
+            extra = [r for rs in zones.values() for r in rs]
+            ok, holder, res = self.locks.try_acquire(rec.serial, resources + extra)
             if not ok:
                 blocked = self._wait(rec, self._holder_kind(holder), res, holder)
                 break
+            for k, rs in zones.items():
+                rec.rot_zone.setdefault(k, set()).update(rs)
+            first = False
             rec.base_end = chain[-1]
             rec.order_pending = True
         if blocked is None:
             rec.pending_block = None
         stationary = rec.at_base_end() and rec.base_end < len(rec.route) - 1
         rec.wait = rec.pending_block if stationary else None
+
+    def _heading(self, a: str, b: str) -> float:
+        na, nb = self.layout.nodes[a], self.layout.nodes[b]
+        return math.atan2(nb.y - na.y, nb.x - na.x)
+
+    def _turns_at(self, rec: RobotRecord, idx: int) -> bool:
+        """Will the robot turn on the spot at route[idx]?"""
+        if idx >= len(rec.route) - 1:
+            return False
+        out = self._heading(rec.route[idx], rec.route[idx + 1])
+        if idx == 0 or idx == rec.cur_idx and rec.at_base_end():
+            heading_in = rec.theta if idx == rec.cur_idx else out
+        else:
+            heading_in = self._heading(rec.route[idx - 1], rec.route[idx])
+        d = abs((out - heading_in + math.pi) % (2 * math.pi) - math.pi)
+        return d > 0.5
+
+    def _turn_zone(self, rec: RobotRecord, idx: int) -> list[str]:
+        """Nodes another vehicle could stand on inside the circle this robot sweeps when turning."""
+        node = self.layout.nodes[rec.route[idx]]
+        others = max((r.length for r in self.robots.values() if r.serial != rec.serial), default=rec.length)
+        radius = math.hypot(rec.length, rec.width) / 2 + others / 2 + 0.2
+        out = []
+        for kind, ident in self._query(node.x, node.y, radius):
+            if kind == "N" and ident != node.id and \
+                    math.hypot(self.layout.nodes[ident].x - node.x, self.layout.nodes[ident].y - node.y) <= radius:
+                out.append(node_res(ident))
+        return out
 
     def _wait(self, rec: RobotRecord, kind: str, resource: str, holder: str | None) -> WaitInfo:
         pb = rec.pending_block
@@ -822,7 +892,7 @@ class FleetManager:
         elif rec.charging:
             st, why = "CHARGING", f"충전 {rec.battery:.0f}%"
         elif self._goal_action_running(rec) and not rec.driving:
-            st, why = "ACTION", "작업 동작 수행"
+            st, why = "ACTION", rec.stop_reason or "작업 동작 수행"
         elif rec.route and not self.route_done(rec):
             st, why = "MOVING", {"pickup": "적재 위치로", "dropoff": "하역 위치로", "charge": "충전기로",
                                  "park": "주차 위치로", "evade": "교착 회피 이동",
@@ -966,7 +1036,7 @@ class FleetManager:
                 continue
             for e in self.layout.out_edges[cur]:
                 n = e.end
-                if n in seen or n in blocked:
+                if n in seen or n in blocked or not self.layout.allowed(e, rec.vclass):
                     continue
                 seen.add(n)
                 if self.locks.holder_of(node_res(n)) not in (None, rec.serial) or node_res(n) in self.blocks:
@@ -1110,7 +1180,7 @@ class FleetManager:
                     continue
                 if abs(tr.x - rec.x) > 3 or abs(tr.y - rec.y) > 3:
                     continue
-                gap = box_gap((tr.x, tr.y), 0.3, (rec.x, rec.y), rec.theta, 0.45, 0.35)
+                gap = box_gap((tr.x, tr.y), 0.3, (rec.x, rec.y), rec.theta, rec.length / 2, rec.width / 2)
                 if near_miss(abs(rec.v), gap, margin=0.1):
                     key = rec.serial
                     if self.now - self._nm_last.get(key, -1e9) > 20.0:
@@ -1226,7 +1296,8 @@ class FleetManager:
         base = rec.route[rec.cur_idx:rec.base_end + 1] if rec.route else []
         horizon = rec.route[rec.base_end + 1:rec.base_end + 1 + self.cfg.horizon_nodes] if rec.route else []
         return {
-            "id": rec.serial, "x": round(rec.x, 2), "y": round(rec.y, 2), "th": round(rec.theta, 2),
+            "id": rec.serial, "cls": rec.vclass, "len": rec.length, "wid": rec.width,
+            "x": round(rec.x, 2), "y": round(rec.y, 2), "th": round(rec.theta, 2),
             "v": round(rec.v, 2), "st": rec.status, "label": STATUS_LABEL.get(rec.status, rec.status),
             "why": rec.reason, "bat": round(rec.battery, 1), "chg": rec.charging, "mode": rec.mode,
             "conn": rec.connection, "field": rec.safety_field, "fault": rec.fatal, "load": rec.loaded,

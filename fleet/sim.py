@@ -13,6 +13,10 @@ import math
 import random
 
 from .agents import ExternalRobot, Forklift, Human, expand_loop, external_loop, forklift_loops, worker_spots
+from .agents_dc import DcHuman, DockForklift
+from .process import GridProcess
+from .process_dc import DcProcess
+from .site_dc import AGF, AMR, PICK_AISLES, dc_layout, dock_spots
 from .bus import Bus
 from .control import FleetManager, ManagerConfig, near_miss
 from .dispatcher import Dispatcher
@@ -20,7 +24,7 @@ from .geometry import box_gap, point_in_polygon
 from .layout import COLUMN_X, ROW_Y, warehouse_layout
 from .perception import Detection
 from .scenario import Scenario
-from .vehicle import FAULT_TYPES, Obstacle, Vehicle, VehicleSpec
+from .vehicle import FAULT_TYPES, Obstacle, Vehicle, VehicleSpec, agf_spec, tote_amr_spec
 from .vda5050 import topic
 
 FRAME_PERIOD = 0.5
@@ -76,11 +80,13 @@ class Evaluator:
         others += [(e.id, "external", [(e.x, e.y, e.radius)]) for e in externals]
         for i, v in enumerate(vehicles):
             r = v.spec.radius
+            vc = v.spec.circles(v.x, v.y, v.theta)
             for w in vehicles[i + 1:]:
-                if abs(v.x - w.x) > 3 or abs(v.y - w.y) > 3:
+                if abs(v.x - w.x) > 4 or abs(v.y - w.y) > 4:
                     self._pair_contact.discard((v.serial, w.serial))
                     continue
-                gap = math.hypot(v.x - w.x, v.y - w.y) - r - w.spec.radius
+                wc = w.spec.circles(w.x, w.y, w.theta)
+                gap = min(math.hypot(a[0] - b[0], a[1] - b[1]) - a[2] - b[2] for a in vc for b in wc)
                 self.min_amr_gap = min(self.min_amr_gap, gap)
                 new_contacts += self._contact(now, v, w.serial, "amr", gap, (w.x, w.y))
             for oid, kind, circles in others:
@@ -135,14 +141,21 @@ class Simulation:
         self.dt = dt
         self.now = 0.0
         self.steps = 0
-        self.layout = warehouse_layout(scenario.two_way)
+        self.layout = dc_layout() if scenario.site == "dc" else warehouse_layout(scenario.two_way)
         self.rng_faults = random.Random(seed * 7 + 3)
         self.rng_sense = random.Random(seed * 7 + 4)
         self.bus = Bus(random.Random(seed * 7 + 1))
         cfg = config or ManagerConfig(strategy=strategy)
         cfg.strategy = strategy
         self.manager = FleetManager(self.layout, self.bus, cfg)
-        self.dispatcher = Dispatcher(self.manager, random.Random(seed * 7 + 2), scenario.rate_per_h)
+        self.dispatcher = Dispatcher(self.manager, random.Random(seed * 7 + 2))
+        prng = random.Random(seed * 7 + 6)
+        if scenario.site == "dc":
+            self.process = DcProcess(self.dispatcher, prng, trucks_h=scenario.trucks_h,
+                                     out_pallets_h=scenario.out_pallets_h, tote_orders_h=scenario.tote_orders_h)
+        else:
+            self.process = GridProcess(self.dispatcher, prng, scenario.rate_per_h)
+        self.dispatcher.process = self.process
         self.vehicles: list[Vehicle] = []
         self.humans: list[Human] = []
         self.forklifts: list[Forklift] = []
@@ -159,7 +172,88 @@ class Simulation:
         self._build(random.Random(seed * 7 + 5))
 
     # ------------------------------------------------------------ setup
+    def _add_vehicle(self, serial: str, node: str, spec: VehicleSpec | None, rng: random.Random, idx: int) -> None:
+        sc = self.scenario
+        v = Vehicle(serial, self.layout, node, random.Random(self.seed * 1000 + idx), battery=rng.uniform(55, 98),
+                    spec=spec)
+        v.theta = rng.choice((0.0, math.pi / 2, math.pi, -math.pi / 2))
+        self.vehicles.append(v)
+        self.manager.register(serial)
+        self.bus.subscribe(topic("sim", serial, "order"), lambda t, m, v=v: v.on_order(m))
+        self.bus.subscribe(topic("sim", serial, "instantActions"), lambda t, m, v=v: v.on_instant_actions(m, self.now))
+        self.bus.link(serial).loss = sc.comms_loss
+        self.bus.publish(topic("sim", serial, "connection"), v.connection_msg(0.0), 0.0)
+
+    def _class_spots(self, vclass: str, kinds: tuple[str, ...]) -> list[str]:
+        L = self.layout
+        return [n for n in L.nodes if L.nodes[n].kind in kinds
+                and any(L.allowed(e, vclass) and (L.nodes[e.start].kind not in kinds or e.end == n)
+                        for e in L.in_edges[n])]
+
     def _build(self, rng: random.Random) -> None:
+        if self.scenario.site == "dc":
+            self._build_dc(rng)
+        else:
+            self._build_grid(rng)
+
+    def _build_dc(self, rng: random.Random) -> None:
+        sc = self.scenario
+        L = self.layout
+        agf_q = [n for n in L.nodes_of_kind("queue")
+                 if any(L.allowed(e, AGF) and e.classes for e in L.out_edges[n])]
+        agf_starts = self._class_spots(AGF, ("park", "charger")) + agf_q
+        lane_q = [n for n in L.nodes_of_kind("queue")
+                  if any(L.allowed(e, AMR) for e in L.out_edges[n]) and L.nodes[n].x > 46.0]
+        amr_starts = self._class_spots(AMR, ("park", "charger")) + L.nodes_of_kind("pack") + lane_q
+        for i in range(sc.agf):
+            self._add_vehicle(f"AGF-{i + 1:02d}", agf_starts[i], replace(self.vehicle_spec) if self.vehicle_spec
+                              else agf_spec(), rng, i)
+        for i in range(sc.amr):
+            self._add_vehicle(f"AMR-{i + 1:02d}", amr_starts[i], replace(self.vehicle_spec) if self.vehicle_spec
+                              else tote_amr_spec(), rng, 100 + i)
+        spots = dock_spots()
+        hid = 1
+
+        def human(prefix: str, role: str, pos, spot_list, speed=1.2) -> None:
+            nonlocal hid
+            h = DcHuman(f"{prefix}{hid:02d}", role, pos[0], pos[1], random.Random(self.seed * 50 + hid),
+                        speed=speed, spot_list=spot_list, site=self.process)
+            h.dwell_until = rng.uniform(0, 20)
+            h.plan_next(L)
+            self.humans.append(h)
+            hid += 1
+
+        n_aisles = len(PICK_AISLES)
+        for k in range(sc.pickers):
+            # zone picking: aisles split between pickers (several pickers share an aisle when there are more)
+            own = tuple(PICK_AISLES[i] for i in range(n_aisles) if i % max(1, sc.pickers) == k % n_aisles
+                        or (sc.pickers < n_aisles and i % sc.pickers == k)) or (PICK_AISLES[k % n_aisles],)
+            x = own[0] + 0.75
+            human("K", "picker", (x, rng.choice([13.0, 22.0, 31.0])), [], speed=1.1)   # walking with a cart
+            self.humans[-1].zone_aisles = own
+        for k in range(sc.packers):
+            human("PK", "packer", spots["pack"][k % len(spots["pack"])], spots["pack"], speed=0.8)
+        for k in range(sc.dock_workers):
+            side = "in" if k % 3 != 2 else "out"
+            human("W", f"dock_{side}", rng.choice(spots[side]), spots[side])
+        for k in range(sc.walkers):
+            human("P", "walker", (rng.uniform(5, 79), 1.3), [], speed=1.31)   # mean free walking speed
+        for k in range(sc.dock_forklifts_in):
+            self.forklifts.append(DockForklift(f"FL-IN{k + 1}", "in", random.Random(self.seed * 60 + k), self.process))
+        for k in range(sc.dock_forklifts_out):
+            self.forklifts.append(DockForklift(f"FL-OUT{k + 1}", "out", random.Random(self.seed * 61 + k),
+                                               self.process))
+        lane_kinds = {"cross", "queue", "spine", "rack"}
+        if sc.rack_forklift:
+            loop = expand_loop(L, ["SE10", "SE16_2", "SW16_2", "R1-01", "R1-09", "NE16_2", "NW16_2", "NW10",
+                                   "W36", "W11", "SW10"], lane_kinds)
+            self.forklifts.append(Forklift("FL-R1", loop, L, random.Random(self.seed * 62), dwell_nodes=("R1-05",)))
+        for k in range(sc.external):
+            # floor scrubber of another vendor: south main aisle along the rack block (AGF-only segments)
+            loop = expand_loop(L, ["SE10", "SE42_6", "SW42_6", "SW10"], {"cross", "queue"})
+            self.externals.append(ExternalRobot(f"EXT-SCR-{k + 1}", loop, L, speed=0.6))
+
+    def _build_grid(self, rng: random.Random) -> None:
         sc = self.scenario
         starts = self.layout.nodes_of_kind("park") + self.layout.nodes_of_kind("charger")
         extra = [n for n in self.layout.nodes_of_kind("storage")]
@@ -244,7 +338,7 @@ class Simulation:
         return {
             "t": round(self.now, 1),
             "r": [[v.serial, round(v.x, 2), round(v.y, 2), round(v.theta, 2),
-                   self.manager.robots[v.serial].status] for v in self.vehicles],
+                   self.manager.robots[v.serial].status, v.spec.vclass] for v in self.vehicles],
             "h": [[h.id, round(h.x, 2), round(h.y, 2)] for h in self.humans],
             "f": [[f.id, round(f.x, 2), round(f.y, 2), round(f.heading, 2)] for f in self.forklifts],
             "e": [[e.id, round(e.x, 2), round(e.y, 2)] for e in self.externals],
@@ -257,17 +351,24 @@ class Simulation:
         self.now = round(self.now + dt, 6)
         now = self.now
         self.steps += 1
-        robots_obs = [(v.serial, v.x, v.y, v.spec.radius, v.v) for v in self.vehicles]
+        bodies = {v.serial: v.spec.circles(v.x, v.y, v.theta) for v in self.vehicles}
+        robots_obs = [(v.serial, cx, cy, cr, v.v) for v in self.vehicles for cx, cy, cr in bodies[v.serial]]
+        pickers = [h for h in self.humans if h.role == "picker" and isinstance(h, DcHuman)]
+        if pickers or isinstance(self.process, DcProcess):
+            self.process.update_pickers(self.vehicles, pickers, now, dt)
         for h in self.humans:
+            if isinstance(h, DcHuman) and h.role == "picker" and h.picker_update(now, self.layout,
+                                                                                self.process.waiting_robots()):
+                continue
             h.step(dt, now, self.layout, robots_obs, self.forklifts)
         for f in self.forklifts:
             f.step(dt, now, robots_obs, self.humans)
-        ext_obs = [(v.serial, v.x, v.y, v.spec.radius) for v in self.vehicles] + \
+        ext_obs = [(v.serial, cx, cy, cr) for v in self.vehicles for cx, cy, cr in bodies[v.serial]] + \
                   [(h.id, h.x, h.y, h.radius) for h in self.humans] + \
                   [(f.id, cx, cy, cr) for f in self.forklifts for cx, cy, cr in f.circles()]
         for e in self.externals:
             e.step(dt, ext_obs, now)
-        obstacles = [Obstacle(v.serial, "amr", v.x, v.y, v.spec.radius) for v in self.vehicles]
+        obstacles = [Obstacle(v.serial, "amr", cx, cy, cr) for v in self.vehicles for cx, cy, cr in bodies[v.serial]]
         obstacles += [Obstacle(h.id, "human", h.x, h.y, h.radius) for h in self.humans]
         obstacles += [Obstacle(f.id, "forklift", cx, cy, cr) for f in self.forklifts for cx, cy, cr in f.circles()]
         obstacles += [Obstacle(e.id, "external", e.x, e.y, e.radius) for e in self.externals]
@@ -368,7 +469,7 @@ class Simulation:
     def drill_intruder(self, zone_id: str, seconds: float = 45.0) -> str:
         zone = self.layout.zones[zone_id]
         nodes = [n for n, zs in self.layout.node_zones.items() if zone_id in zs
-                 and self.layout.nodes[n].kind in ("storage", "cross", "spine")]
+                 and self.layout.nodes[n].kind in ("storage", "cross", "spine", "rack", "pickface", "queue")]
         if not nodes:
             xs = [p[0] for p in zone.polygon]
             ys = [p[1] for p in zone.polygon]
@@ -377,7 +478,8 @@ class Simulation:
             n = self.layout.nodes[self.rng_faults.choice(nodes)]
             x, y = n.x + 0.3, n.y
         hid = f"X{len(self.humans) + 1:02d}"
-        h = Human(hid, "walker", x, y, random.Random(self.seed + len(self.humans)))
+        h = (DcHuman(hid, "walker", x, y, random.Random(self.seed + len(self.humans)), site=self.process)
+             if self.scenario.site == "dc" else Human(hid, "walker", x, y, random.Random(self.seed + len(self.humans))))
         h.frozen_until = self.now + seconds
         h.plan_next(self.layout)
         self.humans.append(h)
@@ -418,6 +520,7 @@ class Simulation:
             "alarms_per_h": round(m.alarms.total_activations / hours, 1),
             "bus_dropped": self.bus.stats["dropped"], "bus_published": self.bus.stats["published"],
             "sim_hours": round(hours, 3),
+            "site": self.process.stats(self.now),
         }
 
     def snapshot(self) -> dict:
@@ -465,6 +568,9 @@ class Simulation:
             "links_down": [s for s, q in self.bus.links.items() if self.now < q.down_until],
             "paused": sorted(m.robot_paused | m.area_paused),
             "task_rate": self.dispatcher.rate_per_h,
+            "site": self.layout.site,
+            "site_state": self.process.snapshot(),
+            "task_kinds": self.process.task_kinds,
         }
 
     def incident(self, inc_id: str) -> dict:

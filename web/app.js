@@ -20,7 +20,7 @@
   };
   const LAYERS = [['locks', '예약'], ['routes', '경로'], ['wait', '대기 관계'], ['predict', '사람·지게차 예측'], ['zones', '구역'],
     ['heat', '혼잡'], ['cams', '카메라 범위'], ['truth', '실제 위치(평가)'], ['ids', 'ID']];
-  const TABS = [['fleet', '차량 목록'], ['tasks', '작업 큐'], ['zones', '구역 제어'], ['incidents', '사고 기록·재생'], ['log', '이벤트·감사'],
+  const TABS = [['fleet', '차량 목록'], ['site', '현장 현황'], ['tasks', '작업 큐'], ['zones', '구역 제어'], ['incidents', '사고 기록·재생'], ['log', '이벤트·감사'],
     ['vda', 'VDA 5050 검사기'], ['jdamr', '실물 JD-AMR'], ['drill', '훈련·시나리오'], ['trend', '추세']];
   const CMD_LABEL = {
     zone_lock: '구역 봉쇄', zone_unlock: '구역 봉쇄 해제', set_mode_manual: '원격 조종 인계', set_mode_auto: '자동 복귀',
@@ -231,13 +231,22 @@
     const k = s.kpi;
     const load = L.alarmLoad(s.alarm_counts.last10min);
     const pct = (v) => (v == null ? '—' : `${Math.round(v * 100)}%`);
-    const cells = [
+    const site = k.site || {};
+    const dc = s.site === 'dc';
+    const head = dc ? [
+      ['적치·출고/시간', `${L.fmtNum(site.putaway_h, 0)} · ${L.fmtNum(site.shipped_h, 0)}`, `팔레트 · 레인 입고 ${site.staged_in}/출고 ${site.staged_out}`, site.staged_in >= 20 ? 'warn' : ''],
+      ['토트 오더/시간', L.fmtNum(site.tote_h, 0), `피킹 ${site.picks}건 · 대기열 ${k.queued}`, ''],
+      ['입고→적치', site.dock_to_stock_avg == null ? '—' : L.fmtDuration(site.dock_to_stock_avg), `p90 ${site.dock_to_stock_p90 == null ? '—' : L.fmtDuration(site.dock_to_stock_p90)}`, site.dock_to_stock_avg > 900 ? 'warn' : ''],
+    ] : [
       ['처리량/시간', L.fmtNum(k.throughput_h, 0), `완료 ${k.done} · 대기열 ${k.queued}`, ''],
       ['평균 사이클', k.cycle_avg == null ? '—' : L.fmtDuration(k.cycle_avg), `p90 ${k.cycle_p90 == null ? '—' : L.fmtDuration(k.cycle_p90)}`, ''],
+    ];
+    const cells = [
+      ...head,
       ['가동률', pct(k.utilization), `작업 중 ${k.working}/${k.robots}대`, ''],
       ['교통 대기 비율', pct(k.traffic_wait_ratio), '작업 시간 중 대기', k.traffic_wait_ratio > 0.5 ? 'warn' : ''],
       ['교착', `${k.deadlocks}`, `해소 ${k.deadlocks_resolved} · 활성 ${k.deadlocks_active}`, k.deadlocks_active ? 'danger' : ''],
-      ['우회·비켜서기', `${k.reroutes + k.evasions}`, `우회 ${k.reroutes} · 비켜서기 ${k.evasions}`, ''],
+      ...(dc ? [] : [['우회·비켜서기', `${k.reroutes + k.evasions}`, `우회 ${k.reroutes} · 비켜서기 ${k.evasions}`, '']]),
       ['보호정지', `${k.protective_stops}`, `사람 원인 ${k.protective_human}`, ''],
       ['근접사고', `${k.near_miss_truth}`, `관제 인지 ${k.near_miss_fms}`, k.near_miss_truth > 0 ? 'warn' : ''],
       ['주행 중 접촉', `${k.contacts}`, `사람 ${k.contacts_human} · 정지 중 ${k.contacts_static}`, k.contacts > 0 ? 'danger' : ''],
@@ -609,11 +618,46 @@
         ctx.beginPath(); ctx.arc(px, py, (0.5 + 1.3 * (v / max)) * k, 0, Math.PI * 2); ctx.fill();
       }
     }
+    // site state: pallets waiting on the floor staging lanes, rack slot occupancy, trucks at doors
+    const st = s.site_state || {};
+    if (st.rack && k > 5) {
+      for (const [n, cnt] of Object.entries(st.rack)) {
+        const node = S.nodes[n];
+        if (!node) continue;
+        const [px, py] = P(node.x, node.y);
+        const frac = cnt / (st.slots_per_node || 6);
+        ctx.fillStyle = `rgba(146,110,52,${0.12 + 0.45 * frac})`;
+        ctx.fillRect(px - 2.95 * k, py - 1.4 * k, 0.9 * k, 2.8 * k);
+        ctx.fillRect(px + 2.05 * k, py - 1.4 * k, 0.9 * k, 2.8 * k);
+      }
+    }
+    const lane = (map, dir) => {
+      for (const [n, cnt] of Object.entries(map || {})) {
+        const node = S.nodes[n];
+        if (!node || !cnt) continue;
+        for (let i = 0; i < cnt; i++) {
+          const [px, py] = P(node.x + dir * (1.55 + i * 1.2), node.y);
+          ctx.fillStyle = '#d6b37a'; ctx.strokeStyle = '#8a6a2f'; ctx.lineWidth = 1;
+          ctx.fillRect(px - 0.5 * k, py - 0.5 * k, 1.0 * k, 1.0 * k); ctx.strokeRect(px - 0.5 * k, py - 0.5 * k, 1.0 * k, 1.0 * k);
+        }
+        if (k > 7) { const [lx, ly] = P(node.x + dir * 1.55, node.y + 1.1); ctx.fillStyle = '#7a5a20'; ctx.font = '600 10px system-ui'; ctx.fillText(`${cnt}/${st.lane_capacity || 4}`, lx - 8, ly); }
+      }
+    };
+    lane(st.in_stage, -1);
+    lane(st.out_stage, 1);
+    if (st.docks_in && k > 6) {
+      for (const [dock, left] of Object.entries(st.docks_in)) {
+        const node = S.nodes[`SI${dock.slice(2)}`];
+        if (!node) continue;
+        const [px, py] = P(0.2, node.y + 1.6);
+        ctx.fillStyle = '#334155'; ctx.font = '600 10px system-ui'; ctx.fillText(`트럭 ${left}`, px, py);
+      }
+    }
     // stations
     for (const n of S.layout.nodes) {
       const [px, py] = P(n.x, n.y);
-      if (['inbound', 'outbound', 'charger', 'park'].includes(n.kind)) {
-        ctx.fillStyle = { inbound: '#dbeafe', outbound: '#dcfce7', charger: '#fef3c7', park: '#f1f5f9' }[n.kind];
+      if (['inbound', 'outbound', 'charger', 'park', 'in_stage', 'out_stage', 'pack'].includes(n.kind)) {
+        ctx.fillStyle = { inbound: '#dbeafe', outbound: '#dcfce7', charger: '#fef3c7', park: '#f1f5f9', in_stage: '#dbeafe', out_stage: '#dcfce7', pack: '#ede9fe' }[n.kind];
         ctx.strokeStyle = '#94a3b8';
         const sz = 0.7 * k;
         ctx.fillRect(px - sz / 2, py - sz / 2, sz, sz);
@@ -756,8 +800,8 @@
       } else {
         const ang = Math.hypot(vx, vy) > 0.1 ? Math.atan2(vy, vx) : 0;
         ctx.save(); ctx.translate(px, py); ctx.rotate(-ang);
-        ctx.fillStyle = '#a16207'; ctx.fillRect(-1.2 * k, -0.6 * k, 2.4 * k, 1.2 * k);
-        ctx.fillStyle = '#fde68a'; ctx.fillRect(0.8 * k, -0.45 * k, 0.4 * k, 0.9 * k);
+        ctx.fillStyle = '#a16207'; ctx.fillRect(-1.8 * k, -0.58 * k, 2.4 * k, 1.17 * k);
+        ctx.fillStyle = '#ca8a04'; ctx.fillRect(0.6 * k, -0.42 * k, 1.2 * k, 0.16 * k); ctx.fillRect(0.6 * k, 0.26 * k, 1.2 * k, 0.16 * k);
         ctx.restore();
       }
       if (S.sel && S.sel.kind === 'track' && S.sel.id === id) { ctx.strokeStyle = '#1761c4'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(px, py, 0.9 * k, 0, Math.PI * 2); ctx.stroke(); }
@@ -774,7 +818,7 @@
       for (const f of s.truth.forklifts) {
         const [px, py] = P(f[1], f[2]);
         ctx.save(); ctx.translate(px, py); ctx.rotate(-f[3]);
-        ctx.strokeStyle = '#16805b'; ctx.lineWidth = 1.5; ctx.strokeRect(-1.2 * k, -0.6 * k, 2.4 * k, 1.2 * k);
+        ctx.strokeStyle = '#16805b'; ctx.lineWidth = 1.5; ctx.strokeRect(-1.8 * k, -0.58 * k, 3.6 * k, 1.17 * k);
         ctx.restore();
       }
     }
@@ -782,15 +826,27 @@
     for (const r of robots) {
       const [px, py] = P(r.dx, r.dy);
       ctx.save(); ctx.translate(px, py); ctx.rotate(-r.dth);
-      const Lr = 0.9 * k;
-      const Wr = 0.7 * k;
+      const Lr = (r.len || 0.9) * k;
+      const Wr = (r.wid || 0.7) * k;
+      const agf = r.cls === 'FORKLIFT';
       ctx.fillStyle = color(r);
-      ctx.beginPath();
-      if (ctx.roundRect) ctx.roundRect(-Lr / 2, -Wr / 2, Lr, Wr, Math.min(4, 0.12 * k)); else ctx.rect(-Lr / 2, -Wr / 2, Lr, Wr);
-      ctx.fill();
-      ctx.fillStyle = 'rgba(255,255,255,.85)';
-      ctx.fillRect(Lr / 2 - 0.16 * k, -Wr / 2 + 0.1 * k, 0.1 * k, Wr - 0.2 * k);
-      if (r.load) { ctx.fillStyle = '#fef3c7'; ctx.fillRect(-0.2 * k, -0.18 * k, 0.36 * k, 0.36 * k); }
+      if (agf) {
+        // counterbalance chassis (rear 60 %) and two fork tines in front
+        const body = Lr * 0.6;
+        ctx.fillRect(-Lr / 2, -Wr / 2, body, Wr);
+        ctx.fillRect(-Lr / 2 + body, -Wr * 0.36, Lr * 0.4, Wr * 0.14);
+        ctx.fillRect(-Lr / 2 + body, Wr * 0.22, Lr * 0.4, Wr * 0.14);
+        ctx.fillStyle = 'rgba(255,255,255,.8)';
+        ctx.fillRect(-Lr / 2 + body - 0.12 * k, -Wr / 2 + 0.1 * k, 0.08 * k, Wr - 0.2 * k);
+        if (r.load) { ctx.fillStyle = '#d6b37a'; ctx.fillRect(-Lr / 2 + body + 0.05 * k, -0.55 * k, 1.1 * k, 1.1 * k); ctx.strokeStyle = '#8a6a2f'; ctx.strokeRect(-Lr / 2 + body + 0.05 * k, -0.55 * k, 1.1 * k, 1.1 * k); }
+      } else {
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(-Lr / 2, -Wr / 2, Lr, Wr, Math.min(4, 0.12 * k)); else ctx.rect(-Lr / 2, -Wr / 2, Lr, Wr);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(255,255,255,.85)';
+        ctx.fillRect(Lr / 2 - 0.14 * k, -Wr / 2 + 0.08 * k, 0.08 * k, Wr - 0.16 * k);
+        if (r.load) { ctx.fillStyle = '#93c5fd'; ctx.fillRect(-0.25 * k, -0.2 * k, 0.4 * k, 0.4 * k); }
+      }
       if (r.field === 'PROTECTIVE') { ctx.strokeStyle = '#c2410c'; ctx.lineWidth = 2; ctx.strokeRect(-Lr / 2 - 2, -Wr / 2 - 2, Lr + 4, Wr + 4); }
       ctx.restore();
       if (S.sel && S.sel.kind === 'robot' && S.sel.id === r.id) { ctx.strokeStyle = '#1761c4'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(px, py, 0.85 * k, 0, Math.PI * 2); ctx.stroke(); }
@@ -859,6 +915,7 @@
     const s = S.snap;
     if (!s) return;
     if (S.tab === 'fleet') renderFleet(s);
+    else if (S.tab === 'site') renderSite(s);
     else if (S.tab === 'tasks') renderTasks(s);
     else if (S.tab === 'zones') renderZones(s);
     else if (S.tab === 'incidents') renderIncidents(s);
@@ -867,18 +924,37 @@
     else if (S.tab === 'drill') renderDrill(s);
   }
 
+  function renderSite(s) {
+    const st = s.site_state || {};
+    const k = (s.kpi && s.kpi.site) || {};
+    if (s.site !== 'dc') { $('site-body').innerHTML = '<div class="empty">격자 창고(알고리즘 검증) 시나리오에는 현장 공정 모델이 없습니다</div>'; return; }
+    const lanes = (map, label) => Object.entries(map || {}).map(([n, c]) => `<tr><td>${esc(label)} ${esc(n)}</td><td class="num">${c} / ${st.lane_capacity}</td><td>${'■'.repeat(c)}${'□'.repeat(Math.max(0, st.lane_capacity - c))}</td></tr>`).join('');
+    const pickers = s.truth.humans.filter((h) => h[3] === 'picker').length;
+    const cells = [
+      ['입고 트럭(도착/대기)', `${k.trucks} / ${k.trucks_waiting}`], ['하역 팔레트', k.pallets_unloaded], ['적치 완료', `${k.putaway} (${L.fmtNum(k.putaway_h, 0)}/h)`],
+      ['출고 선적', `${k.shipped} (${L.fmtNum(k.shipped_h, 0)}/h)`], ['출고 적체 주문', k.out_backlog], ['랙 점유율', `${Math.round((k.rack_fill || 0) * 100)}%`],
+      ['토트 오더 완료', `${k.tote_done} (${L.fmtNum(k.tote_h, 0)}/h)`], ['피킹 건수', k.picks], ['로봇의 피커 대기(누적)', L.fmtDuration(k.picker_wait_s)],
+      ['입고→적치 평균', k.dock_to_stock_avg == null ? '—' : L.fmtDuration(k.dock_to_stock_avg)], ['입고→적치 p90', k.dock_to_stock_p90 == null ? '—' : L.fmtDuration(k.dock_to_stock_p90)], ['피커', `${pickers}명 · 존 피킹`],
+    ];
+    $('site-body').innerHTML = `<div class="jd">${cells.map(([a, b]) => `<div><span class="kicker">${esc(a)}</span><b>${esc(b)}</b></div>`).join('')}</div>
+      <div class="grid2"><section><div class="phead"><h2>입고 스테이징 레인</h2><span class="meta">수동 지게차 하역 → 자율 지게차 적치</span></div><table><tbody>${lanes(st.in_stage, '입고')}</tbody></table></section>
+      <section><div class="phead"><h2>출고 스테이징 레인</h2><span class="meta">자율 지게차 출고 → 수동 지게차 상차</span></div><table><tbody>${lanes(st.out_stage, '출고')}</tbody></table></section></div>`;
+  }
+
   function renderFleet(s) {
     const rows = L.exceptionSort(s.robots);
     $('fleet-rows').innerHTML = rows.map((r) => {
       const info = L.statusInfo(r.st);
-      return `<tr data-robot="${esc(r.id)}" class="${S.sel && S.sel.id === r.id ? 'sel' : ''}"><td><b>${esc(r.id)}</b></td><td><span class="tag ${info.tone}">${esc(r.label)}</span></td><td>${esc(r.why)}</td><td class="num">${L.fmtNum(r.bat, 0)}%${r.chg ? ' ⚡' : ''}</td><td>${esc(r.task || '—')}</td><td>${esc(r.goal || '—')}</td><td class="num">${r.wait_s ? L.fmtDuration(r.wait_s) : '—'}</td><td>${r.conn === 'ONLINE' ? `정상 · ${r.age}s` : `<span class="tag danger">${esc(r.conn)}</span>`}</td><td class="num">${L.fmtNum(r.v, 2)}</td></tr>`;
+      const cls = { FORKLIFT: '자율 지게차', CARRIER: '토트 AMR' }[r.cls] || 'AMR';
+      return `<tr data-robot="${esc(r.id)}" class="${S.sel && S.sel.id === r.id ? 'sel' : ''}"><td><b>${esc(r.id)}</b><br><span class="meta" style="text-align:left">${esc(cls)}</span></td><td><span class="tag ${info.tone}">${esc(r.label)}</span></td><td>${esc(r.why)}</td><td class="num">${L.fmtNum(r.bat, 0)}%${r.chg ? ' ⚡' : ''}</td><td>${esc(r.task || '—')}</td><td>${esc(r.goal || '—')}</td><td class="num">${r.wait_s ? L.fmtDuration(r.wait_s) : '—'}</td><td>${r.conn === 'ONLINE' ? `정상 · ${r.age}s` : `<span class="tag danger">${esc(r.conn)}</span>`}</td><td class="num">${L.fmtNum(r.v, 2)}</td></tr>`;
     }).join('');
   }
   $('fleet-rows').addEventListener('click', (e) => { const tr = e.target.closest('[data-robot]'); if (tr) { S.sel = { kind: 'robot', id: tr.dataset.robot }; renderAll(); } });
 
   function renderTasks(s) {
     if (document.activeElement !== $('tf-rate')) $('tf-rate').value = s.task_rate;
-    $('task-rows').innerHTML = s.tasks.map((t) => `<tr><td><b>${esc(t.id)}</b></td><td><span class="tag ${t.state === 'QUEUED' ? (t.age > 600 ? 'warn' : '') : 'normal'}">${esc(t.label)}</span></td><td>${esc(t.kind)}</td><td>${esc(t.src)} → ${esc(t.dst || '(배정 시 선택)')}</td><td class="num">${t.pri}</td><td>${esc(t.robot || '—')}</td><td class="num">${L.fmtDuration(t.age)}</td><td class="num">${t.attempts}</td><td>${esc(t.note)}</td><td style="white-space:nowrap"><button class="btn sm" type="button" data-task="${esc(t.id)}" data-a="pri">우선↑</button> ${t.robot ? `<button class="btn sm" type="button" data-task="${esc(t.id)}" data-a="reassign">재할당</button>` : ''} <button class="btn sm" type="button" data-task="${esc(t.id)}" data-a="cancel">취소</button></td></tr>`).join('') || '<tr><td colspan="10" class="empty">작업 없음</td></tr>';
+    if (!$('tf-kind').dataset.k) fillTaskSelects();
+    $('task-rows').innerHTML = s.tasks.map((t) => `<tr><td><b>${esc(t.id)}</b></td><td><span class="tag ${t.state === 'QUEUED' ? (t.age > 600 ? 'warn' : '') : 'normal'}">${esc(t.label)}${t.state === 'ACTIVE' ? ` ${t.leg + 1}/${t.legs}` : ''}</span></td><td>${esc(t.kind)}</td><td>${esc((t.stops || [t.src, t.dst || '(배정 시 선택)']).join(' → '))}</td><td class="num">${t.pri}</td><td>${esc(t.robot || '—')}</td><td class="num">${L.fmtDuration(t.age)}</td><td class="num">${t.attempts}</td><td>${esc(t.note)}</td><td style="white-space:nowrap"><button class="btn sm" type="button" data-task="${esc(t.id)}" data-a="pri">우선↑</button> ${t.robot ? `<button class="btn sm" type="button" data-task="${esc(t.id)}" data-a="reassign">재할당</button>` : ''} <button class="btn sm" type="button" data-task="${esc(t.id)}" data-a="cancel">취소</button></td></tr>`).join('') || '<tr><td colspan="10" class="empty">작업 없음</td></tr>';
   }
   $('task-rows').addEventListener('click', (e) => {
     const b = e.target.closest('[data-task]');
@@ -893,12 +969,20 @@
   $('tf-rate-set').onclick = () => command('set_task_rate', { rate: Number($('tf-rate').value) });
 
   function fillTaskSelects() {
-    if (!S.layout) return;
-    const kind = $('tf-kind').value;
-    const ids = (k) => S.layout.nodes.filter((n) => n.kind === k).map((n) => n.id).sort();
+    if (!S.layout || !S.snap) return;
+    const kinds = S.snap.task_kinds || [];
+    const cur = $('tf-kind').value;
+    const kindKey = kinds.map((x) => x.kind).join(',');
+    if ($('tf-kind').dataset.k !== kindKey) {
+      $('tf-kind').innerHTML = kinds.map((x) => `<option value="${esc(x.kind)}">${esc(x.label)}</option>`).join('');
+      $('tf-kind').dataset.k = kindKey;
+    }
+    const spec = kinds.find((x) => x.kind === ($('tf-kind').value || cur)) || kinds[0];
+    if (!spec) return;
+    const ids = (ks) => S.layout.nodes.filter((n) => ks.includes(n.kind)).map((n) => n.id).sort();
     const opts = (list, empty) => (empty ? '<option value="">자동 선택</option>' : '') + list.map((n) => `<option>${esc(n)}</option>`).join('');
-    $('tf-src').innerHTML = opts(kind === 'PICK' ? ids('storage') : ids('inbound'));
-    $('tf-dst').innerHTML = opts(kind === 'PICK' ? ids('outbound') : ids('storage'), kind === 'PICK');
+    $('tf-src').innerHTML = opts(ids(spec.src));
+    $('tf-dst').innerHTML = opts(ids(spec.dst), spec.dst_optional);
   }
 
   function fillStaticSelects() {

@@ -46,6 +46,7 @@ class Edge:
     max_speed: float
     lane: str        # undirected key shared by both directions of a two-way lane
     oneway: bool
+    classes: frozenset = frozenset()   # vehicle classes allowed (VDA 5050 agvClass); empty = all
 
 
 @dataclass
@@ -73,6 +74,7 @@ class Layout:
     neighbors: dict[str, set[str]] = field(default_factory=dict)
     node_zones: dict[str, list[str]] = field(default_factory=dict)
     two_way: bool = False
+    site: str = "grid"
 
     def __post_init__(self) -> None:
         self.reindex()
@@ -136,6 +138,39 @@ class Layout:
                     queue.append(e.end)
         return seen
 
+    def allowed(self, e: Edge, vclass: str | None) -> bool:
+        return not e.classes or vclass is None or vclass in e.classes
+
+    def class_nodes(self, vclass: str) -> set[str]:
+        return {n for e in self.edges.values() if self.allowed(e, vclass) for n in (e.start, e.end)}
+
+    def reachable_from_class(self, start: str, vclass: str) -> set[str]:
+        seen = {start}
+        queue = deque([start])
+        while queue:
+            cur = queue.popleft()
+            for e in self.out_edges[cur]:
+                if self.allowed(e, vclass) and e.end not in seen:
+                    seen.add(e.end)
+                    queue.append(e.end)
+        return seen
+
+    def validate_class(self, vclass: str) -> list[str]:
+        """Every node a class may use must reach every other such node using only its edges."""
+        nodes = self.class_nodes(vclass)
+        if not nodes:
+            return [f"no edges for {vclass}"]
+        start = min(nodes)
+        problems = []
+        fwd = self.reachable_from_class(start, vclass)
+        if nodes - fwd:
+            problems.append(f"{vclass}: {len(nodes - fwd)} nodes unreachable from {start}: {sorted(nodes - fwd)[:5]}")
+        for n in sorted(nodes):
+            if start not in self.reachable_from_class(n, vclass):
+                problems.append(f"{vclass}: {n} cannot return to {start}")
+                break
+        return problems
+
     def validate(self) -> list[str]:
         """Return problems; an empty list means every node reaches every node."""
         problems: list[str] = []
@@ -161,10 +196,12 @@ class Layout:
             "width": self.width,
             "height": self.height,
             "two_way": self.two_way,
+            "site": self.site,
             "nodes": [{"id": n.id, "x": n.x, "y": n.y, "kind": n.kind,
                        "intersection": self.is_intersection(n.id)} for n in self.nodes.values()],
             "edges": [{"id": e.id, "s": e.start, "e": e.end, "lane": e.lane,
-                       "oneway": e.oneway, "v": e.max_speed} for e in self.edges.values()],
+                       "oneway": e.oneway, "v": e.max_speed, "cls": sorted(e.classes)}
+                      for e in self.edges.values()],
             "racks": self.racks,
             "zones": [{"id": z.id, "name": z.name, "kind": z.kind, "polygon": z.polygon,
                        "static_speed": z.static_speed, "human_speed": z.human_speed}

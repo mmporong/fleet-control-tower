@@ -229,11 +229,11 @@ class Operations:
         if not self.sim.manager.can_take_route(rec) or rec.task_id:
             raise CommandError("작업 없이 정지한 로봇만 충전 지시 가능")
         d = self.sim.dispatcher
-        free = [c for c in d.chargers if c not in d.charger_owner
+        free = [c for c in d.spots_for("charger", rec.vclass) if c not in d.charger_owner
                 and self.sim.manager.locks.holder_of(node_res(c)) in (None, rec.serial)]
         if not free:
-            raise CommandError("빈 충전기 없음")
-        c = min(free, key=lambda c: d.planner.travel_time(rec.last_node, c))
+            raise CommandError("이 차종이 쓸 수 있는 빈 충전기 없음")
+        c = min(free, key=lambda c: d.planner.travel_time(rec.last_node, c, rec.vclass))
         from .vda5050 import action
         start = action("startCharging", d._aid(f"{rec.serial}-chg"), "HARD")
         if not self.sim.manager.assign_route(rec, c, "charge", [start]):
@@ -283,8 +283,9 @@ class Operations:
                 stuck.append(rec.serial)
                 continue
             outside = sorted((n for n in self.sim.layout.nodes if n not in inside_nodes
-                              and self.sim.layout.nodes[n].kind not in ("inbound", "outbound", "charger")),
-                             key=lambda n: m.planner.travel_time(rec.last_node, n))
+                              and self.sim.layout.nodes[n].kind not in ("inbound", "outbound", "charger", "in_stage",
+                                                                        "out_stage", "pack")),
+                             key=lambda n: m.planner.travel_time(rec.last_node, n, rec.vclass))
             for target in outside[:5]:
                 if m.assign_route(rec, target, "evacuate"):
                     moved.append(rec.serial)
@@ -356,19 +357,19 @@ class Operations:
             if prev["body"] != body:
                 raise CommandError(f"order_id {oid}가 다른 내용으로 이미 접수됨")
             return {"ok": True, "duplicate": True, "task": prev["task"]}
-        kind = body["kind"]
-        if kind not in ("PICK", "PUTAWAY"):
-            raise CommandError("kind는 PICK 또는 PUTAWAY")
+        kinds = {k["kind"]: k for k in self.sim.process.task_kinds}
+        if body["kind"] not in kinds:
+            raise CommandError(f"kind는 {', '.join(kinds)} 중 하나")
+        spec = kinds[body["kind"]]
         layout = self.sim.layout
-        src_kinds = {"PICK": ("storage",), "PUTAWAY": ("inbound",)}[kind]
-        if body["source"] not in layout.nodes or layout.nodes[body["source"]].kind not in src_kinds:
-            raise CommandError(f"source는 {'/'.join(src_kinds)} 노드여야 함")
-        if kind == "PUTAWAY" and (body["dest"] not in layout.nodes or layout.nodes[body["dest"]].kind != "storage"):
-            raise CommandError("PUTAWAY dest는 storage 노드여야 함")
-        if kind == "PICK" and body["dest"] is not None and (
-                body["dest"] not in layout.nodes or layout.nodes[body["dest"]].kind != "outbound"):
-            raise CommandError("PICK dest는 outbound 노드이거나 비워 둠")
-        t = self.sim.dispatcher.add_task(kind, body["source"], body["dest"], body["priority"])
+        if body["source"] not in layout.nodes or layout.nodes[body["source"]].kind not in spec["src"]:
+            raise CommandError(f"source는 {'/'.join(spec['src'])} 노드여야 함")
+        if body["dest"] is None and not spec.get("dst_optional"):
+            raise CommandError("dest가 필요함")
+        if body["dest"] is not None and (body["dest"] not in layout.nodes
+                                         or layout.nodes[body["dest"]].kind not in spec["dst"]):
+            raise CommandError(f"dest는 {'/'.join(spec['dst'])} 노드여야 함")
+        t = self.sim.dispatcher.add_task(body["kind"], body["source"], body["dest"], body["priority"])
         t.note = f"WMS {oid}"
         seen[oid] = {"body": body, "task": t.id}
         self.audit.append({"t": round(self.sim.now, 1), "wall": datetime.now(timezone.utc).isoformat(timespec="seconds"),

@@ -24,8 +24,10 @@ BLOCKING_TYPES = {"NONE", "SOFT", "HARD"}
 ERROR_LEVELS = {"WARNING", "FATAL"}
 CONNECTION_STATES = {"ONLINE", "OFFLINE", "CONNECTIONBROKEN"}
 # actions this simulated vehicle declares support for
-NODE_ACTIONS = {"pick", "drop", "startCharging", "stopCharging"}
-INSTANT_ACTIONS = {"startPause", "stopPause", "cancelOrder", "stateRequest", "initPosition",
+NODE_ACTIONS = {"pick", "drop", "startCharging", "stopCharging",
+                # custom node actions for collaborative tote picking (declared in the factsheet)
+                "x_toteInduct", "x_toteDrop", "x_pickItems"}
+INSTANT_ACTIONS = {"startPause", "stopPause", "cancelOrder", "stateRequest", "initPosition", "factsheetRequest",
                    # custom actions, declared in this vehicle's factsheet
                    "x_fleetSpeedLimit", "x_resetFault", "x_fieldServiceDone", "x_remoteStop",
                    "x_setOperatingMode", "x_teleop"}
@@ -124,7 +126,7 @@ def build_order(hdr: dict, order_id: str, update_id: int, nodes: list[RouteNode]
             "sequenceId": first_sequence_id + 2 * i,
             "released": i < released_nodes,
             "nodePosition": {"x": round(n.x, 3), "y": round(n.y, 3), "mapId": MAP_ID,
-                             "allowedDeviationXY": 0.3},
+                             "allowedDeviationXY": 0.5},
             "actions": list(n.actions),
         })
     out_edges = []
