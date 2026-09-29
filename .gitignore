@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+.local/
+.omc/
+node_modules/
+results/*.tmp

@@ -1,0 +1,10 @@
+[project]
+name = "fleet-control-tower"
+version = "0.1.0"
+description = "Multi-AMR fleet control room: VDA 5050 master control, reservation-based traffic control, people and forklift awareness, alarm management, incident replay"
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
