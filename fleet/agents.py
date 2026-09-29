@@ -472,6 +472,9 @@ class Forklift:
                         self.reversed_at = now
                         self._reverse()
                 return
+        if self._aisle_occupied(tn, robots):
+            self.v = 0.0            # aisle signal: a robot is working the narrow aisle ahead, wait at its mouth
+            return
         turn = math.remainder(heading - self.heading, 2 * math.pi)
         if abs(turn) > 0.05 and self.lat == 0.0:
             inside = [rv for _i, rx, ry, rr, rv in robots if math.hypot(rx - self.bx, ry - self.by) < 1.9 + rr + 0.2]
@@ -515,6 +518,13 @@ class Forklift:
             self.bx += (tn.x - self.bx) / d * step
             self.by += (tn.y - self.by) / d * step
         self._place(heading)
+
+    def _aisle_occupied(self, target, robots) -> bool:
+        """Entering a narrow aisle (zone kind "aisle") that a robot is inside."""
+        ahead = [z for z in self.layout.zones_at(target.pos) if z.kind == "aisle"]
+        if not ahead or any(z.kind == "aisle" for z in self.layout.zones_at((self.bx, self.by))):
+            return False
+        return any(point_in_polygon((rx, ry), z.polygon) for z in ahead for _i, rx, ry, _r, _v in robots)
 
     def _stalled(self, now: float) -> None:
         """A sideways move that stays blocked even at the offset: after 30 s the driver backs out

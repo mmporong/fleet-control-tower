@@ -1,6 +1,7 @@
 """Whole-simulation checks: invariants, null models, the DC process, dispatcher and operator commands."""
 from __future__ import annotations
 
+import math
 import random
 import unittest
 
@@ -155,6 +156,36 @@ class StubApproachTests(unittest.TestCase):
             sim.run(1)
         self.assertEqual(second.last_node, "SO3")
         self.assertEqual(m.counters["deadlocks"], 0)
+
+
+class AisleSignalTests(unittest.TestCase):
+    def test_robots_do_not_enter_an_aisle_a_manual_truck_is_working(self):
+        from fleet.perception import Detection
+        sim = lone_agf()
+        m = sim.manager
+        m.ingest_detections([Detection("forklift", 16.2, 20.0, "infra")])   # reach truck inside rack aisle R1
+        m.tick(sim.now, 0.2)
+        self.assertEqual(m.blocks["N:R1-01"][0], "forklift")                 # the whole aisle, not just nearby
+        self.assertNotIn("N:R2-01", m.blocks)
+
+    def test_manual_truck_waits_at_the_mouth_while_a_robot_is_in_the_aisle(self):
+        from fleet.agents import Forklift, expand_loop
+        sim = lone_agf()
+        L = sim.layout
+        loop = expand_loop(L, ["SW16_2", "R1-01", "R1-09", "NE16_2", "NE22_8", "R2-09", "R2-01", "SW22_8"],
+                           {"cross", "queue", "spine", "rack"})
+        f = Forklift("FL-X", loop, L, random.Random(1))
+        f.heading = math.pi / 2                                              # facing into the aisle
+        robot_inside = [("AGF-99", 16.2, 25.0, 0.67, 0.0)]
+        t = 0.0
+        for _ in range(200):
+            f.step(0.1, t, robot_inside, [])
+            t += 0.1
+        self.assertLess(f.y, 8.6)                                            # still at the mouth
+        for _ in range(100):
+            f.step(0.1, t, [], [])
+            t += 0.1
+        self.assertGreater(f.y, 8.6)                                         # aisle clear: drives in
 
 
 class BayTurnTests(unittest.TestCase):

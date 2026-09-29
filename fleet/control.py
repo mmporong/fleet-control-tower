@@ -195,6 +195,10 @@ class FleetManager:
         bus.subscribe(f"uagv/v2/{manufacturer}/+/connection", self._on_connection)
         bus.subscribe(f"uagv/v2/{manufacturer}/+/factsheet", self._on_factsheet)
         self.doors = DoorSupervisor(layout.doors, bus, self.alarms, self.event) if layout.doors else None
+        self._zone_nodes: dict[str, list[str]] = {}
+        for nid, zones in layout.node_zones.items():
+            for zid in zones:
+                self._zone_nodes.setdefault(zid, []).append(nid)
 
     # ================================================================ events
     def event(self, kind: str, source: str, msg: str, level: str = "info", **data) -> None:
@@ -672,6 +676,15 @@ class FleetManager:
                         a, b = self._lane_points(ident)
                         if seg_point_dist((x, y), a, b) <= r - 0.25:
                             blocks.setdefault(lane_res(ident), (cls, tid))
+            # aisle signal: while a manual truck works a narrow aisle no robot enters it (robots already
+            # inside finish their move); a truck and a robot meeting in a 4 m aisle cannot pass each other
+            for tr in self.tracker.tracks.values():
+                if tr.cls != "forklift":
+                    continue
+                for z in self.layout.zones_at((tr.x, tr.y)):
+                    if z.kind == "aisle":
+                        for nid in self._zone_nodes.get(z.id, ()):
+                            blocks.setdefault(node_res(nid), ("forklift", tr.id))
         for z in self.layout.zones.values():
             if z.locked:
                 for nid, zones in self.layout.node_zones.items():
