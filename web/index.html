@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>AMR 관제탑</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='3' y='3' width='26' height='26' rx='5' fill='none' stroke='%231761c4' stroke-width='3'/%3E%3Cpath d='M16 9v14M9 16h14' stroke='%231761c4' stroke-width='3'/%3E%3C/svg%3E">
+<style>
+:root{color-scheme:light;--base:#f4f7fb;--panel:#fff;--ink:#142538;--muted:#53657a;--faint:#8a9aad;--line:#dce4ee;--line2:#eef2f7;--accent:#1761c4;--accent-soft:#eaf2fd;--ok:#16805b;--ok-soft:#eaf7f2;--warn:#996313;--warn-soft:#fff6df;--danger:#b42332;--danger-soft:#fff0f1;--special:#6d28d9;--special-soft:#f3edff;--radius:6px;font-family:Pretendard,"Noto Sans KR","Apple SD Gothic Neo",system-ui,sans-serif}
+*{box-sizing:border-box}
+body{margin:0;min-width:320px;background:var(--base);color:var(--ink);font-size:13px;line-height:1.45}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:3px solid rgba(23,97,196,.28);outline-offset:2px}
+.shell{width:min(1720px,100%);margin:auto;padding:0 18px 30px}
+.topbar{min-height:60px;display:flex;align-items:center;justify-content:space-between;gap:14px;border-bottom:1px solid var(--line);flex-wrap:wrap;padding:8px 0}
+.brand{display:flex;align-items:center;gap:11px;min-width:0}
+.brand-mark{width:30px;height:30px;border:2px solid var(--accent);border-radius:6px;position:relative;flex:none}
+.brand-mark:before,.brand-mark:after{content:"";position:absolute;background:var(--accent)}
+.brand-mark:before{width:14px;height:2px;left:6px;top:12px}.brand-mark:after{width:2px;height:14px;left:12px;top:6px}
+h1{font-size:17px;line-height:1.15;margin:0;font-weight:760;letter-spacing:-.025em}
+.brand p{margin:3px 0 0;color:var(--muted);font-size:11.5px}
+.controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ctl{height:32px;border:1px solid var(--line);background:var(--panel);border-radius:4px;padding:0 9px}
+select.ctl{padding-right:24px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:4px;overflow:hidden;background:var(--panel)}
+.seg button{border:0;background:transparent;height:30px;padding:0 9px;cursor:pointer;color:var(--muted);font-variant-numeric:tabular-nums}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed=true]{background:var(--accent-soft);color:var(--accent);font-weight:700}
+.btn{height:32px;border:1px solid var(--line);background:var(--panel);border-radius:4px;padding:0 11px;cursor:pointer;white-space:nowrap}
+.btn:hover{border-color:#b9c7d8}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.danger{border-color:#e7b3b9;color:var(--danger);background:var(--danger-soft)}
+.btn.danger.solid{background:var(--danger);color:#fff;border-color:var(--danger)}
+.btn.warn{border-color:#ecd49a;color:var(--warn);background:var(--warn-soft)}
+.btn.sm{height:26px;padding:0 8px;font-size:12px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.clock{font-variant-numeric:tabular-nums;font-weight:700;font-size:15px}
+.sim-tag{display:inline-flex;align-items:center;height:22px;padding:0 7px;border-radius:4px;background:#eef2f6;color:var(--muted);font-size:11px;font-weight:700}
+.ribbon{margin:12px 0 10px;background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--ok);border-radius:var(--radius);display:grid;grid-template-columns:1.05fr 1.2fr 1.1fr 1.1fr 1fr auto;overflow:hidden}
+.ribbon.hold{border-left-color:var(--warn)}.ribbon.estop{border-left-color:var(--danger);background:var(--danger-soft)}
+.cell{padding:8px 12px;min-width:0}.cell+.cell{border-left:1px solid var(--line)}
+.kicker{display:block;color:var(--muted);font-size:11px;margin-bottom:1px}
+.val{font-size:14px;font-weight:720;overflow-wrap:anywhere}
+.val.danger{color:var(--danger)}.val.warn{color:var(--warn)}.val.ok{color:var(--ok)}
+.fleet-actions{display:flex;align-items:center;gap:6px;padding:8px 10px}
+.kpis{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);overflow:hidden;margin-bottom:12px}
+.kpi{padding:8px 10px;min-width:0}.kpi+.kpi{border-left:1px solid var(--line)}
+.kpi strong{display:block;font-size:17px;letter-spacing:-.02em;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kpi small{color:var(--muted);font-size:10.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+.kpi.warn{background:var(--warn-soft)}.kpi.danger{background:var(--danger-soft)}.kpi.danger strong{color:var(--danger)}
+.work{display:grid;grid-template-columns:minmax(0,1.85fr) minmax(330px,.95fr);gap:12px;align-items:start}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;min-width:0}
+.phead{min-height:40px;padding:7px 11px;display:flex;align-items:center;justify-content:space-between;gap:10px;border-bottom:1px solid var(--line)}
+.phead h2{margin:0;font-size:13.5px;font-weight:750;letter-spacing:-.01em}
+.meta{color:var(--muted);font-size:11px;text-align:right;font-variant-numeric:tabular-nums}
+.map-wrap{position:relative;height:clamp(420px,39vw,640px);background:#f8fafc;touch-action:none}
+.map-wrap canvas{width:100%;height:100%;display:block;cursor:grab}
+.map-wrap canvas.dragging{cursor:grabbing}
+.layers{display:flex;flex-wrap:wrap;gap:5px;padding:7px 10px;border-top:1px solid var(--line)}
+.chip{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 8px;border:1px solid var(--line);border-radius:12px;background:var(--panel);font-size:11.5px;cursor:pointer;color:var(--muted)}
+.chip[aria-pressed=true]{border-color:#9fbfe8;background:var(--accent-soft);color:var(--accent);font-weight:650}
+.legend{display:flex;flex-wrap:wrap;gap:4px 12px;padding:6px 10px;border-top:1px solid var(--line);color:var(--muted);font-size:11px}
+.sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+.tooltip{position:absolute;pointer-events:none;background:rgba(20,37,56,.94);color:#fff;font-size:11.5px;border-radius:4px;padding:5px 8px;max-width:260px;z-index:3}
+.tooltip[hidden]{display:none}
+.side{display:grid;gap:12px}
+.alarm-list{max-height:330px;overflow:auto}
+.alarm{border-bottom:1px solid var(--line2)}
+.alarm>button{all:unset;display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:start;width:100%;box-sizing:border-box;padding:8px 11px;cursor:pointer}
+.alarm>button:hover{background:#f8fafc}
+.alarm.open>button{background:#f3f7fc}
+.prio{display:inline-flex;align-items:center;justify-content:center;min-width:34px;height:20px;padding:0 5px;border-radius:3px;font-size:10.5px;font-weight:800}
+.prio.p1{background:var(--danger);color:#fff}.prio.p2{background:#f2c46b;color:#4b3405}.prio.p3{background:#e6ecf3;color:#40536a}
+.alarm .t{font-weight:700;font-size:12.5px}.alarm .m{color:var(--muted);font-size:11.5px;overflow-wrap:anywhere}
+.alarm .st{font-size:10.5px;color:var(--muted);text-align:right;white-space:nowrap}
+.alarm.unack .t:before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--danger);margin-right:5px;vertical-align:1px}
+.alarm.shelved{opacity:.6}
+.sop{padding:4px 12px 11px 12px;background:#f8fafc;border-top:1px dashed var(--line)}
+.sop h4{margin:8px 0 4px;font-size:11.5px;color:var(--muted);font-weight:700}
+.sop ol{margin:0;padding-left:18px}.sop li{margin:2px 0}
+.sop label{display:flex;gap:6px;align-items:flex-start;cursor:pointer}
+.row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:7px}
+.flood{padding:7px 11px;background:var(--danger-soft);color:var(--danger);font-weight:700;font-size:12px;border-bottom:1px solid #f1cdd1}
+.flood[hidden]{display:none}
+.empty{padding:16px;text-align:center;color:var(--muted)}
+.unit-head{display:flex;align-items:center;gap:8px;padding:10px 11px 4px}
+.unit-head strong{font-size:16px;letter-spacing:-.02em}
+.tag{display:inline-flex;align-items:center;min-height:20px;padding:1px 7px;border-radius:4px;background:#eef2f6;color:var(--muted);font-size:11px;font-weight:700;white-space:nowrap}
+.tag.danger{background:var(--danger-soft);color:var(--danger)}.tag.warn{background:var(--warn-soft);color:var(--warn)}.tag.ok{background:var(--ok-soft);color:var(--ok)}.tag.special{background:var(--special-soft);color:var(--special)}.tag.normal{background:#e8edf3;color:#334155}
+.why{padding:2px 11px 8px;color:var(--ink);font-weight:650;overflow-wrap:anywhere}
+.kv{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid var(--line)}
+.kv div{padding:6px 10px;min-width:0;border-bottom:1px solid var(--line2)}
+.kv div:not(:nth-child(3n+1)){border-left:1px solid var(--line2)}
+.kv b{display:block;font-size:12.5px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.cmds{display:flex;flex-wrap:wrap;gap:5px;padding:9px 11px;border-top:1px solid var(--line)}
+.teleop{display:grid;grid-template-columns:1fr 150px;gap:10px;padding:10px 11px;border-top:1px solid var(--line);align-items:center}
+.teleop canvas{width:100%;height:180px;background:#f8fafc;border:1px solid var(--line);border-radius:4px}
+.pad{display:grid;grid-template-columns:repeat(3,44px);gap:4px;justify-content:center}
+.pad button{height:40px;border:1px solid var(--line);background:#fff;border-radius:4px;cursor:pointer;font-size:15px}
+.pad button:active,.pad button.on{background:var(--special-soft);border-color:#c9b5f5}
+.note{padding:7px 11px;color:var(--muted);font-size:11px;border-top:1px solid var(--line)}
+.tabs{margin-top:14px}
+.tablist{display:flex;gap:2px;overflow-x:auto;border-bottom:1px solid var(--line);scrollbar-width:thin}
+.tablist button{border:0;background:transparent;padding:9px 12px;cursor:pointer;color:var(--muted);font-weight:650;white-space:nowrap;border-bottom:2px solid transparent}
+.tablist button[aria-selected=true]{color:var(--accent);border-bottom-color:var(--accent)}
+.tabpanel{background:var(--panel);border:1px solid var(--line);border-top:0;border-radius:0 0 var(--radius) var(--radius);min-height:260px}
+.tabpanel[hidden]{display:none}
+.table-wrap{overflow:auto;max-height:420px}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th,td{text-align:left;padding:6px 9px;border-bottom:1px solid var(--line2);vertical-align:top}
+th{position:sticky;top:0;background:#f8fafc;color:var(--muted);font-weight:650;z-index:1;white-space:nowrap}
+td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+tr.sel td{background:var(--accent-soft)}
+tbody tr{cursor:pointer}
+tbody tr:hover td{background:#f8fafc}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:0}
+.grid2>section+section{border-left:1px solid var(--line)}
+.form{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;padding:10px 11px;border-bottom:1px solid var(--line)}
+.form label{display:grid;gap:3px;color:var(--muted);font-size:11px}
+.form input,.form select{height:30px;border:1px solid var(--line);border-radius:4px;padding:0 7px;background:#fff;min-width:88px}
+.replay{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:0}
+.replay canvas{width:100%;height:360px;display:block;background:#f8fafc}
+.replay aside{border-left:1px solid var(--line);padding:10px 11px}
+.replay-ctl{display:flex;gap:8px;align-items:center;padding:8px 11px;border-top:1px solid var(--line)}
+.replay-ctl input[type=range]{flex:1}
+pre.json{margin:0;padding:10px 11px;font-size:11px;line-height:1.4;max-height:420px;overflow:auto;background:#fbfcfe;white-space:pre-wrap;word-break:break-all}
+.msg-list button{all:unset;display:grid;grid-template-columns:52px 1fr auto;gap:8px;padding:6px 11px;border-bottom:1px solid var(--line2);cursor:pointer;width:100%;box-sizing:border-box;font-size:11.5px}
+.msg-list button:hover,.msg-list button.sel{background:var(--accent-soft)}
+.charts{display:grid;grid-template-columns:repeat(3,1fr);gap:0}
+.chart{padding:10px 12px}.chart+.chart{border-left:1px solid var(--line)}
+.chart svg{width:100%;height:90px;display:block}
+.chart b{font-size:18px;font-variant-numeric:tabular-nums}
+.confirm{position:fixed;inset:0;background:rgba(20,37,56,.35);display:grid;place-items:center;z-index:20;padding:16px}
+.confirm[hidden]{display:none}
+.confirm .box{background:#fff;border-radius:8px;max-width:420px;width:100%;padding:16px 18px;box-shadow:0 12px 40px rgba(20,37,56,.25)}
+.confirm h3{margin:0 0 6px;font-size:15px}
+.confirm p{margin:0 0 10px;color:var(--muted)}
+.confirm input{width:100%;height:32px;border:1px solid var(--line);border-radius:4px;padding:0 8px;margin-bottom:10px}
+.toast{position:fixed;right:16px;bottom:16px;background:#142538;color:#fff;padding:9px 13px;border-radius:6px;font-size:12.5px;max-width:420px;z-index:30;opacity:0;transform:translateY(8px);transition:.18s}
+.toast.show{opacity:1;transform:none}.toast.err{background:var(--danger)}
+.jd{display:grid;grid-template-columns:repeat(4,1fr)}
+.jd div{padding:10px 12px;border-bottom:1px solid var(--line2)}.jd div:not(:nth-child(4n+1)){border-left:1px solid var(--line2)}
+.jd b{display:block;font-size:14px}
+.pill-list{display:flex;flex-wrap:wrap;gap:5px}
+@media(max-width:1280px){.kpis{grid-template-columns:repeat(6,1fr)}.kpi:nth-child(7){border-left:0}.kpi:nth-child(n+7){border-top:1px solid var(--line)}.ribbon{grid-template-columns:repeat(3,1fr)}.ribbon .cell:nth-child(4){border-left:0}.ribbon .cell:nth-child(n+4),.fleet-actions{border-top:1px solid var(--line)}.fleet-actions{grid-column:1/-1}}
+@media(max-width:1060px){.work{grid-template-columns:1fr}.side{grid-template-columns:1fr 1fr}.replay{grid-template-columns:1fr}.replay aside{border-left:0;border-top:1px solid var(--line)}}
+@media(max-width:760px){.shell{padding:0 10px 22px}.brand p{display:none}.controls{width:100%}.ribbon{grid-template-columns:1fr 1fr}.ribbon .cell:nth-child(odd){border-left:0}.ribbon .cell:nth-child(n+3){border-top:1px solid var(--line)}.kpis{grid-template-columns:repeat(3,1fr)}.kpi:nth-child(3n+1){border-left:0}.kpi:nth-child(n+4){border-top:1px solid var(--line)}.side{grid-template-columns:1fr}.map-wrap{height:380px}.kv{grid-template-columns:1fr 1fr}.kv div:not(:nth-child(3n+1)){border-left:0}.kv div:nth-child(even){border-left:1px solid var(--line2)}.grid2,.charts{grid-template-columns:1fr}.grid2>section+section,.chart+.chart{border-left:0;border-top:1px solid var(--line)}.teleop{grid-template-columns:1fr}.jd{grid-template-columns:1fr 1fr}.jd div:not(:nth-child(4n+1)){border-left:0}.jd div:nth-child(even){border-left:1px solid var(--line2)}.replay canvas{height:280px}}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div class="shell">
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark" aria-hidden="true"></span><div><h1>AMR 관제탑 <span class="sim-tag" id="sim-tag">시뮬레이션</span></h1><p id="subtitle">창고 A · 60×34 m · VDA 5050 마스터 컨트롤</p></div></div>
+    <div class="controls">
+      <label class="kicker" for="scenario" style="margin:0">시나리오</label>
+      <select class="ctl" id="scenario" aria-label="시나리오"></select>
+      <select class="ctl" id="strategy" aria-label="교통 제어 전략" title="교통 제어 전략"></select>
+      <div class="seg" id="speed" role="group" aria-label="시뮬레이션 배속"></div>
+      <button class="btn" id="pause-sim" type="button">일시정지</button>
+      <input class="ctl" id="operator" placeholder="운영자 이름" aria-label="운영자 이름" style="width:110px">
+      <span class="clock" id="clock" title="교대 시작 08:00 기준 시뮬레이션 시각">--:--:--</span>
+    </div>
+  </header>
+
+  <section class="ribbon" id="ribbon" aria-label="운영 상태">
+    <div class="cell"><span class="kicker">운영 모드</span><div class="val" id="mode">연결 대기</div></div>
+    <div class="cell"><span class="kicker">알람 (긴급 · 높음 · 보통 · 미확인)</span><div class="val" id="alarm-sum">—</div></div>
+    <div class="cell"><span class="kicker">교통 (대기 · 차단 · 교착)</span><div class="val" id="traffic-sum">—</div></div>
+    <div class="cell"><span class="kicker">사람·지게차 (관제 추적 / 실제)</span><div class="val" id="people-sum">—</div></div>
+    <div class="cell"><span class="kicker">실물 JD-AMR (읽기 전용)</span><div class="val" id="jd-sum">—</div></div>
+    <div class="fleet-actions">
+      <button class="btn warn sm" id="fleet-hold" type="button">전체 일시정지</button>
+      <button class="btn sm" id="fleet-resume" type="button">전체 재개</button>
+      <button class="btn danger solid sm" id="fleet-estop" type="button">비상정지</button>
+    </div>
+  </section>
+
+  <section class="kpis" id="kpis" aria-label="핵심 지표"></section>
+
+  <main class="work">
+    <article class="panel">
+      <div class="phead"><h2>창고 지도 · 교통 예약</h2><span class="meta" id="map-meta">—</span></div>
+      <div class="map-wrap" id="map-wrap"><canvas id="map" aria-label="창고 지도: 로봇, 사람, 지게차, 예약 구간"></canvas><div class="tooltip" id="tip" hidden></div></div>
+      <div class="layers" id="layers" role="group" aria-label="지도 레이어"></div>
+      <div class="legend">
+        <span><i class="sw" style="background:#334155"></i>주행·작업(정상)</span>
+        <span><i class="sw" style="background:#a16207"></i>교통 대기</span>
+        <span><i class="sw" style="background:#b45309"></i>사람·지게차·구역 차단</span>
+        <span><i class="sw" style="background:#c2410c"></i>보호정지</span>
+        <span><i class="sw" style="background:#b42332"></i>고장·통신 두절·비상정지</span>
+        <span><i class="sw" style="background:#6d28d9"></i>원격 조종</span>
+        <span><i class="sw" style="background:#cbd5e1"></i>주차·충전·대기</span>
+        <span><i class="sw" style="background:#0f172a;border-radius:50%"></i>사람(추적)</span>
+        <span><i class="sw" style="background:#a16207;border-radius:1px"></i>지게차</span>
+        <span><i class="sw" style="background:#0e7490;transform:rotate(45deg)"></i>외부 로봇(명령 불가)</span>
+      </div>
+    </article>
+
+    <div class="side">
+      <article class="panel">
+        <div class="phead"><h2>알람 큐</h2><span class="meta" id="alarm-meta">—</span></div>
+        <div class="flood" id="flood" hidden>알람 홍수: 우선순위 1부터 처리하고 같은 원인은 묶어서 판단하세요</div>
+        <div class="alarm-list" id="alarm-list"><div class="empty">활성 알람 없음</div></div>
+        <div class="row" style="padding:0 11px 9px"><button class="btn sm" id="ack-all" type="button">보통·높음 일괄 확인</button><span class="meta" id="alarm-load"></span></div>
+      </article>
+      <article class="panel" id="unit-panel">
+        <div class="phead"><h2>선택 유닛</h2><span class="meta" id="unit-meta">지도나 목록에서 선택</span></div>
+        <div id="unit-body"><div class="empty">선택된 유닛 없음</div></div>
+      </article>
+    </div>
+  </main>
+
+  <section class="tabs">
+    <div class="tablist" role="tablist" id="tablist"></div>
+    <div class="tabpanel" role="tabpanel" id="tab-fleet"><div class="table-wrap"><table><thead><tr><th>로봇</th><th>상태</th><th>사유(왜 멈췄나)</th><th>배터리</th><th>작업</th><th>목적지</th><th>대기</th><th>통신</th><th>속도</th></tr></thead><tbody id="fleet-rows"></tbody></table></div></div>
+    <div class="tabpanel" role="tabpanel" id="tab-tasks" hidden>
+      <div class="form" id="task-form">
+        <label>종류<select id="tf-kind"><option value="PICK">PICK · 보관→출고</option><option value="PUTAWAY">PUTAWAY · 입고→보관</option></select></label>
+        <label>출발<select id="tf-src"></select></label>
+        <label>도착<select id="tf-dst"></select></label>
+        <label>우선순위<select id="tf-pri"><option value="0">0 보통</option><option value="1">1 높음</option><option value="2">2 긴급</option></select></label>
+        <button class="btn primary" type="button" id="tf-add">작업 등록</button>
+        <label>투입률(건/시간)<input id="tf-rate" type="number" min="0" max="2000" step="10" style="width:90px"></label>
+        <button class="btn" type="button" id="tf-rate-set">적용</button>
+        <span class="meta">상위 시스템은 <code>POST /api/wms/orders</code> (order_id 멱등)</span>
+      </div>
+      <div class="table-wrap"><table><thead><tr><th>작업</th><th>상태</th><th>종류</th><th>구간</th><th>우선</th><th>로봇</th><th>경과</th><th>재시도</th><th>비고</th><th></th></tr></thead><tbody id="task-rows"></tbody></table></div>
+    </div>
+    <div class="tabpanel" role="tabpanel" id="tab-zones" hidden><div class="table-wrap"><table><thead><tr><th>구역</th><th>종류</th><th>현재 속도 제한</th><th>봉쇄</th><th>조치</th></tr></thead><tbody id="zone-rows"></tbody></table></div><div class="note">사람 작업·보행·피킹 구역은 사람이 추적되면 자동 감속합니다. 봉쇄는 신규 진입만 막고, 대피는 봉쇄 후 구역 안 로봇을 밖으로 보냅니다.</div></div>
+    <div class="tabpanel" role="tabpanel" id="tab-incidents" hidden>
+      <div class="replay"><div><canvas id="replay" aria-label="사고 전후 재생"></canvas><div class="replay-ctl"><button class="btn sm" id="rp-play" type="button">재생</button><input type="range" id="rp-slider" min="0" max="0" value="0" aria-label="재생 위치"><span class="meta" id="rp-time">—</span></div></div>
+      <aside><div id="incident-info"><div class="empty">사고 기록을 선택하세요. 긴급 알람과 근접 사고가 발생하면 전 30초·후 10초를 저장합니다.</div></div></aside></div>
+      <div class="table-wrap" style="max-height:220px;border-top:1px solid var(--line)"><table><thead><tr><th>기록</th><th>종류</th><th>대상</th><th>발생</th><th>확인까지</th><th>해제까지</th><th>상태</th></tr></thead><tbody id="incident-rows"></tbody></table></div>
+    </div>
+    <div class="tabpanel" role="tabpanel" id="tab-log" hidden><div class="grid2"><section><div class="phead"><h2>이벤트</h2><select class="ctl" id="ev-filter" aria-label="이벤트 필터"><option value="">전체</option><option value="crit">긴급</option><option value="warn">주의</option><option value="info">정보</option></select></div><div class="table-wrap"><table><thead><tr><th>시각</th><th>종류</th><th>대상</th><th>내용</th></tr></thead><tbody id="event-rows"></tbody></table></div></section><section><div class="phead"><h2>운영자 감사 로그</h2><span class="meta">거부된 명령도 기록</span></div><div class="table-wrap"><table><thead><tr><th>시각</th><th>운영자</th><th>명령</th><th>대상</th><th>결과</th></tr></thead><tbody id="audit-rows"></tbody></table></div></section></div></div>
+    <div class="tabpanel" role="tabpanel" id="tab-vda" hidden><div class="grid2"><section><div class="phead"><h2>VDA 5050 메시지</h2><select class="ctl" id="vda-robot" aria-label="로봇 선택"></select></div><div class="msg-list" id="vda-list"></div></section><section><div class="phead"><h2>원문(JSON)</h2><span class="meta" id="vda-meta">—</span></div><pre class="json" id="vda-json">메시지를 선택하세요</pre></section></div></div>
+    <div class="tabpanel" role="tabpanel" id="tab-jdamr" hidden><div id="jd-body"></div><div class="note">실물 JD-AMR 1대를 기존 AMMR 관제 API(<code>/api/state</code>)에서 읽기만 합니다. 명령을 보내지 않으며 지도 좌표는 시뮬레이션 창고와 별개입니다.</div></div>
+    <div class="tabpanel" role="tabpanel" id="tab-drill" hidden>
+      <div class="form"><label>로봇<select id="dr-robot"></select></label><label>고장 종류<select id="dr-fault"><option value="DRIVE_FAULT">구동부 과전류</option><option value="LOCALIZATION_LOST">위치 추정 실패</option><option value="SENSOR_FAULT">안전 스캐너 이상</option><option value="BATTERY_DEPLETED">배터리 방전</option></select></label><label>원격 리셋<select id="dr-rec"><option value="1">가능</option><option value="0">불가(현장 조치)</option></select></label><button class="btn warn" type="button" id="dr-fault-go">고장 주입</button></div>
+      <div class="form"><label>로봇<select id="dr-robot2"></select></label><label>통신 차단(초)<input id="dr-sec" type="number" value="20" min="1" max="120"></label><button class="btn warn" type="button" id="dr-comms-go">통신 두절 주입</button></div>
+      <div class="form"><label>구역<select id="dr-zone"></select></label><label>머무는 시간(초)<input id="dr-isec" type="number" value="45" min="5" max="300"></label><button class="btn warn" type="button" id="dr-intr-go">사람 진입 주입</button></div>
+      <div class="form"><label>시드<input id="rs-seed" type="number" value="7" style="width:80px"></label><button class="btn" type="button" id="rs-go">현재 시나리오 재시작</button><label style="flex-direction:row;display:flex;align-items:center;gap:6px"><input type="checkbox" id="auto-op"> 가상 운영자(SOP 자동 대응)</label></div>
+      <div class="note">훈련 명령은 시뮬레이션에만 적용되며 감사 로그에 [훈련]으로 남습니다. 가상 운영자는 벤치마크와 무인 시연용이며 켜면 알람을 SOP대로 확인·조치합니다.</div>
+    </div>
+    <div class="tabpanel" role="tabpanel" id="tab-trend" hidden><div class="charts" id="charts"></div><div class="note">10초(시뮬레이션) 간격 표본입니다. 처리량은 최근 1시간 완료 기준 환산값입니다.</div></div>
+  </section>
+</div>
+
+<div class="confirm" id="confirm" hidden role="dialog" aria-modal="true" aria-labelledby="cf-title">
+  <div class="box"><h3 id="cf-title">확인</h3><p id="cf-text"></p><input id="cf-input" placeholder="사유" hidden><div class="row"><button class="btn" type="button" id="cf-cancel">취소</button><button class="btn danger solid" type="button" id="cf-ok">실행</button></div></div>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script src="/logic.js"></script>
+<script src="/app.js" defer></script>
+</body>
+</html>

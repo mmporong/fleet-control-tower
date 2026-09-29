@@ -434,6 +434,7 @@ class Simulation:
         return {
             "t": round(self.now, 1),
             "scenario": self.scenario.name, "scenario_title": self.scenario.title,
+            "layout_key": f"{self.scenario.name}:{int(self.layout.two_way)}",
             "strategy": m.cfg.strategy, "mode": m.mode, "seed": self.seed,
             "robots": [m.robot_view(r) for r in m.robots.values()],
             "truth": {

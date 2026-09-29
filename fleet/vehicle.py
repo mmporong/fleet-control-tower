@@ -352,6 +352,13 @@ class Vehicle:
         """Onboard detections of people and forklifts, blocked by racks."""
         found = []
         rng2 = self.spec.sense_range
+        # one detection per object: a forklift body is several circles with the same id
+        merged: dict[str, list[Obstacle]] = {}
+        for o in obstacles:
+            merged.setdefault(o.id, []).append(o)
+        obstacles = [Obstacle(parts[0].id, parts[0].kind, sum(p.x for p in parts) / len(parts),
+                              sum(p.y for p in parts) / len(parts), max(p.r for p in parts))
+                     for parts in merged.values()]
         for o in obstacles:
             if o.id == self.serial or o.kind not in ("human", "forklift") or abs(o.x - self.x) > rng2 or abs(o.y - self.y) > rng2:
                 continue
