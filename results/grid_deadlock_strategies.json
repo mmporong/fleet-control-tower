@@ -1,0 +1,1087 @@
+{
+ "created": "2026-09-30T08:40:29+0900",
+ "git": "83b3923",
+ "python": "3.12.3",
+ "scenario": {
+  "name": "grid-deadlock",
+  "title": "교착 스트레스",
+  "description": "모든 레인 1차선 양방향 + AMR 36대, 시간당 240건. 정면 교착 유발(비교 기준선)",
+  "site": "grid",
+  "agf": 10,
+  "amr": 16,
+  "trucks_h": 2.2,
+  "out_pallets_h": 15.0,
+  "tote_orders_h": 45.0,
+  "pickers": 0,
+  "packers": 4,
+  "dock_workers": 3,
+  "walkers": 2,
+  "dock_forklifts_in": 2,
+  "dock_forklifts_out": 1,
+  "rack_forklift": 1,
+  "robots": 36,
+  "workers": 0,
+  "forklifts": 0,
+  "rate_per_h": 240.0,
+  "two_way": true,
+  "external": 0,
+  "fault_mtbf_h": 0.0,
+  "comms_mtbf_h": 0.0,
+  "comms_loss": 0.0,
+  "door_mtbf_h": 0.0
+ },
+ "duration_s": 3600.0,
+ "seeds": [
+  1,
+  2,
+  3
+ ],
+ "wall_s": 452.6,
+ "summary": {
+  "none/default": {
+   "runs": 3,
+   "done": {
+    "mean": 6.333,
+    "sd": 2.309,
+    "min": 5,
+    "max": 9
+   },
+   "throughput_h": {
+    "mean": 6.333,
+    "sd": 2.309,
+    "min": 5.0,
+    "max": 9.0
+   },
+   "cycle_avg": {
+    "mean": 89.1,
+    "sd": 9.44,
+    "min": 79.2,
+    "max": 98.0
+   },
+   "cycle_p90": {
+    "mean": 113.6,
+    "sd": 15.4,
+    "min": 98.2,
+    "max": 129.0
+   },
+   "wait_avg": {
+    "mean": 0.0,
+    "sd": 0.0,
+    "min": 0.0,
+    "max": 0.0
+   },
+   "traffic_wait_ratio": {
+    "mean": 0.0,
+    "sd": 0.0,
+    "min": 0.0,
+    "max": 0.0
+   },
+   "utilization": {
+    "mean": 0.889,
+    "sd": 0.028,
+    "min": 0.861,
+    "max": 0.917
+   },
+   "deadlocks": {
+    "mean": 0,
+    "sd": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "deadlocks_resolved": {
+    "mean": 0,
+    "sd": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "reroutes": {
+    "mean": 0,
+    "sd": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "evasions": {
+    "mean": 0,
+    "sd": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "protective_stops": {
+    "mean": 96,
+    "sd": 2.646,
+    "min": 94,
+    "max": 99
+   },
+   "protective_human": {
+    "mean": 2,
+    "sd": 1.732,
+    "min": 0,
+    "max": 3
+   },
+   "near_miss_truth": {
+    "mean": 0,
+    "sd": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "near_miss_fms": {
+    "mean": 1.667,
+    "sd": 1.528,
+    "min": 0,
+    "max": 3
+   },
+   "contacts": {
+    "mean": 0,
+    "sd": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "contacts_human": {
+    "mean": 0,
+    "sd": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "contacts_static": {
+    "mean": 28.667,
+    "sd": 16.563,
+    "min": 13,
+    "max": 46
+   },
+   "min_amr_gap": {
+    "mean": 0.41,
+    "sd": 0.095,
+    "min": 0.3,
+    "max": 0.47
+   },
+   "tracking_ratio": {
+    "mean": 0.999,
+    "sd": 0.002,
+    "min": 0.996,
+    "max": 1.0
+   },
+   "mismatch": {
+    "mean": 0,
+    "sd": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "alarms_per_h": {
+    "mean": 38.0,
+    "sd": 0.0,
+    "min": 38.0,
+    "max": 38.0
+   },
+   "mtta_s": {
+    "mean": 24.7,
+    "sd": 1.758,
+    "min": 22.7,
+    "max": 26.0
+   },
+   "interventions": {
+    "mean": 0,
+    "sd": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "queued": {
+    "mean": 211.333,
+    "sd": 30.105,
+    "min": 187,
+    "max": 245
+   }
+  },
+  "locks/default": {
+   "runs": 3,
+   "done": {
+    "mean": 41.333,
+    "sd": 9.713,
+    "min": 33,
+    "max": 52
+   },
+   "throughput_h": {
+    "mean": 41.333,
+    "sd": 9.713,
+    "min": 33.0,
+    "max": 52.0
+   },
+   "cycle_avg": {
+    "mean": 432.833,
+    "sd": 297.422,
+    "min": 239.3,
+    "max": 775.3
+   },
+   "cycle_p90": {
+    "mean": 1037.8,
+    "sd": 811.866,
+    "min": 543.8,
+    "max": 1974.8
+   },
+   "wait_avg": {
+    "mean": 69.967,
+    "sd": 84.42,
+    "min": 2.7,
+    "max": 164.7
+   },
+   "traffic_wait_ratio": {
+    "mean": 0.869,
+    "sd": 0.029,
+    "min": 0.838,
+    "max": 0.894
+   },
+   "utilization": {
+    "mean": 1.0,
+    "sd": 0.0,
+    "min": 1.0,
+    "max": 1.0
+   },
+   "deadlocks": {
+    "mean": 152,
+    "sd": 61.262,
+    "min": 104,
+    "max": 221
+   },
+   "deadlocks_resolved": {
+    "mean": 0,
+    "sd": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "reroutes": {
+    "mean": 206.333,
+    "sd": 206.146,
+    "min": 76,
+    "max": 444
+   },
+   "evasions": {
+    "mean": 0,
+    "sd": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "protective_stops": {
+    "mean": 4.333,
+    "sd": 3.215,
+    "min": 2,
+    "max": 8
+   },
+   "protective_human": {
+    "mean": 4.333,
+    "sd": 3.215,
+    "min": 2,
+    "max": 8
+   },
+   "near_miss_truth": {
+    "mean": 1.667,
+    "sd": 0.577,
+    "min": 1,
+    "max": 2
+   },
+   "near_miss_fms": {
+    "mean": 8.333,
+    "sd": 4.041,
+    "min": 4,
+    "max": 12
+   },
+   "contacts": {
+    "mean": 0,
+    "sd": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "contacts_human": {
+    "mean": 0,
+    "sd": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "contacts_static": {
+    "mean": 2,
+    "sd": 1.732,
+    "min": 1,
+    "max": 4
+   },
+   "min_amr_gap": {
+    "mean": 0.837,
+    "sd": 0.023,
+    "min": 0.81,
+    "max": 0.85
+   },
+   "tracking_ratio": {
+    "mean": 0.991,
+    "sd": 0.003,
+    "min": 0.988,
+    "max": 0.994
+   },
+   "mismatch": {
+    "mean": 0,
+    "sd": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "alarms_per_h": {
+    "mean": 125.333,
+    "sd": 43.844,
+    "min": 92.0,
+    "max": 175.0
+   },
+   "mtta_s": {
+    "mean": 24.067,
+    "sd": 0.404,
+    "min": 23.7,
+    "max": 24.5
+   },
+   "interventions": {
+    "mean": 90.333,
+    "sd": 26.577,
+    "min": 65,
+    "max": 118
+   },
+   "queued": {
+    "mean": 82,
+    "sd": 5.568,
+    "min": 76,
+    "max": 87
+   }
+  },
+  "locks+resolve/default": {
+   "runs": 3,
+   "done": {
+    "mean": 92.333,
+    "sd": 20.257,
+    "min": 76,
+    "max": 115
+   },
+   "throughput_h": {
+    "mean": 92.333,
+    "sd": 20.257,
+    "min": 76.0,
+    "max": 115.0
+   },
+   "cycle_avg": {
+    "mean": 406.3,
+    "sd": 300.098,
+    "min": 183.3,
+    "max": 747.5
+   },
+   "cycle_p90": {
+    "mean": 847.933,
+    "sd": 742.84,
+    "min": 297.2,
+    "max": 1692.8
+   },
+   "wait_avg": {
+    "mean": 48.567,
+    "sd": 40.113,
+    "min": 13.1,
+    "max": 92.1
+   },
+   "traffic_wait_ratio": {
+    "mean": 0.757,
+    "sd": 0.033,
+    "min": 0.722,
+    "max": 0.786
+   },
+   "utilization": {
+    "mean": 0.991,
+    "sd": 0.016,
+    "min": 0.972,
+    "max": 1.0
+   },
+   "deadlocks": {
+    "mean": 1820.667,
+    "sd": 872.725,
+    "min": 918,
+    "max": 2660
+   },
+   "deadlocks_resolved": {
+    "mean": 1820.667,
+    "sd": 872.725,
+    "min": 918,
+    "max": 2660
+   },
+   "reroutes": {
+    "mean": 2509.667,
+    "sd": 1094.196,
+    "min": 1261,
+    "max": 3301
+   },
+   "evasions": {
+    "mean": 0,
+    "sd": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "protective_stops": {
+    "mean": 18.667,
+    "sd": 15.044,
+    "min": 9,
+    "max": 36
+   },
+   "protective_human": {
+    "mean": 18.667,
+    "sd": 15.044,
+    "min": 9,
+    "max": 36
+   },
+   "near_miss_truth": {
+    "mean": 1.667,
+    "sd": 0.577,
+    "min": 1,
+    "max": 2
+   },
+   "near_miss_fms": {
+    "mean": 15,
+    "sd": 7.0,
+    "min": 10,
+    "max": 23
+   },
+   "contacts": {
+    "mean": 0,
+    "sd": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "contacts_human": {
+    "mean": 0,
+    "sd": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "contacts_static": {
+    "mean": 3.667,
+    "sd": 3.055,
+    "min": 1,
+    "max": 7
+   },
+   "min_amr_gap": {
+    "mean": 0.85,
+    "sd": 0.0,
+    "min": 0.85,
+    "max": 0.85
+   },
+   "tracking_ratio": {
+    "mean": 0.979,
+    "sd": 0.014,
+    "min": 0.962,
+    "max": 0.988
+   },
+   "mismatch": {
+    "mean": 0,
+    "sd": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "alarms_per_h": {
+    "mean": 23.333,
+    "sd": 5.859,
+    "min": 19.0,
+    "max": 30.0
+   },
+   "mtta_s": {
+    "mean": 21.167,
+    "sd": 1.305,
+    "min": 19.8,
+    "max": 22.4
+   },
+   "interventions": {
+    "mean": 0,
+    "sd": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "queued": {
+    "mean": 121.667,
+    "sd": 44.411,
+    "min": 73,
+    "max": 160
+   }
+  }
+ },
+ "runs": [
+  {
+   "job": {
+    "scenario": "grid-deadlock",
+    "strategy": "none",
+    "seed": 1,
+    "duration": 3600.0,
+    "manager": {},
+    "vehicle": {},
+    "scenario_overrides": {},
+    "operator": true,
+    "label": "none/default"
+   },
+   "kpi": {
+    "queued": 245,
+    "active": 32,
+    "throughput_h": 5.0,
+    "by_kind_h": {
+     "PICK": 4.0,
+     "PUTAWAY": 1.0
+    },
+    "cycle_avg": 79.2,
+    "cycle_p90": 98.2,
+    "wait_avg": 0.0,
+    "created": 282,
+    "done": 5,
+    "failed": 0,
+    "canceled": 0,
+    "requeued": 0,
+    "robots": 36,
+    "online": 36,
+    "working": 32,
+    "utilization": 0.889,
+    "traffic_wait_ratio": 0.0,
+    "deadlocks": 0,
+    "deadlocks_resolved": 0,
+    "deadlocks_active": 0,
+    "deadlock_avg_s": null,
+    "reroutes": 0,
+    "evasions": 0,
+    "nudges": 0,
+    "protective_stops": 94,
+    "protective_human": 3,
+    "near_miss_fms": 3,
+    "near_miss_truth": 0,
+    "contacts": 0,
+    "contacts_human": 0,
+    "contacts_static": 46,
+    "min_amr_gap": 0.3,
+    "tracking_ratio": 0.996,
+    "mismatch": 0,
+    "comms_lost": 0,
+    "order_rejects": 0,
+    "resends": 0,
+    "mttr_s": null,
+    "alarms_per_h": 38.0,
+    "bus_dropped": 0,
+    "bus_published": 1852515,
+    "sim_hours": 1.0,
+    "interventions": 0,
+    "mtta_s": 26.0,
+    "lock_problems": 0
+   },
+   "wall_s": 434.5,
+   "forklift_reversals": []
+  },
+  {
+   "job": {
+    "scenario": "grid-deadlock",
+    "strategy": "none",
+    "seed": 2,
+    "duration": 3600.0,
+    "manager": {},
+    "vehicle": {},
+    "scenario_overrides": {},
+    "operator": true,
+    "label": "none/default"
+   },
+   "kpi": {
+    "queued": 202,
+    "active": 33,
+    "throughput_h": 9.0,
+    "by_kind_h": {
+     "PUTAWAY": 3.0,
+     "PICK": 6.0
+    },
+    "cycle_avg": 90.1,
+    "cycle_p90": 113.6,
+    "wait_avg": 0.0,
+    "created": 244,
+    "done": 9,
+    "failed": 0,
+    "canceled": 0,
+    "requeued": 0,
+    "robots": 36,
+    "online": 36,
+    "working": 33,
+    "utilization": 0.917,
+    "traffic_wait_ratio": 0.0,
+    "deadlocks": 0,
+    "deadlocks_resolved": 0,
+    "deadlocks_active": 0,
+    "deadlock_avg_s": null,
+    "reroutes": 0,
+    "evasions": 0,
+    "nudges": 0,
+    "protective_stops": 99,
+    "protective_human": 3,
+    "near_miss_fms": 2,
+    "near_miss_truth": 0,
+    "contacts": 0,
+    "contacts_human": 0,
+    "contacts_static": 27,
+    "min_amr_gap": 0.46,
+    "tracking_ratio": 1.0,
+    "mismatch": 0,
+    "comms_lost": 0,
+    "order_rejects": 0,
+    "resends": 0,
+    "mttr_s": null,
+    "alarms_per_h": 38.0,
+    "bus_dropped": 0,
+    "bus_published": 1763581,
+    "sim_hours": 1.0,
+    "interventions": 0,
+    "mtta_s": 22.7,
+    "lock_problems": 0
+   },
+   "wall_s": 442.0,
+   "forklift_reversals": []
+  },
+  {
+   "job": {
+    "scenario": "grid-deadlock",
+    "strategy": "none",
+    "seed": 3,
+    "duration": 3600.0,
+    "manager": {},
+    "vehicle": {},
+    "scenario_overrides": {},
+    "operator": true,
+    "label": "none/default"
+   },
+   "kpi": {
+    "queued": 187,
+    "active": 31,
+    "throughput_h": 5.0,
+    "by_kind_h": {
+     "PICK": 5.0
+    },
+    "cycle_avg": 98.0,
+    "cycle_p90": 129.0,
+    "wait_avg": 0.0,
+    "created": 223,
+    "done": 5,
+    "failed": 0,
+    "canceled": 0,
+    "requeued": 0,
+    "robots": 36,
+    "online": 36,
+    "working": 31,
+    "utilization": 0.861,
+    "traffic_wait_ratio": 0.0,
+    "deadlocks": 0,
+    "deadlocks_resolved": 0,
+    "deadlocks_active": 0,
+    "deadlock_avg_s": null,
+    "reroutes": 0,
+    "evasions": 0,
+    "nudges": 0,
+    "protective_stops": 95,
+    "protective_human": 0,
+    "near_miss_fms": 0,
+    "near_miss_truth": 0,
+    "contacts": 0,
+    "contacts_human": 0,
+    "contacts_static": 13,
+    "min_amr_gap": 0.47,
+    "tracking_ratio": 1.0,
+    "mismatch": 0,
+    "comms_lost": 0,
+    "order_rejects": 0,
+    "resends": 0,
+    "mttr_s": null,
+    "alarms_per_h": 38.0,
+    "bus_dropped": 0,
+    "bus_published": 1777205,
+    "sim_hours": 1.0,
+    "interventions": 0,
+    "mtta_s": 25.4,
+    "lock_problems": 0
+   },
+   "wall_s": 439.4,
+   "forklift_reversals": []
+  },
+  {
+   "job": {
+    "scenario": "grid-deadlock",
+    "strategy": "locks",
+    "seed": 1,
+    "duration": 3600.0,
+    "manager": {},
+    "vehicle": {},
+    "scenario_overrides": {},
+    "operator": true,
+    "label": "locks/default"
+   },
+   "kpi": {
+    "queued": 76,
+    "active": 36,
+    "throughput_h": 52.0,
+    "by_kind_h": {
+     "PICK": 31.0,
+     "PUTAWAY": 21.0
+    },
+    "cycle_avg": 775.3,
+    "cycle_p90": 1974.8,
+    "wait_avg": 164.7,
+    "created": 282,
+    "done": 52,
+    "failed": 0,
+    "canceled": 118,
+    "requeued": 118,
+    "robots": 36,
+    "online": 36,
+    "working": 36,
+    "utilization": 1.0,
+    "traffic_wait_ratio": 0.838,
+    "deadlocks": 221,
+    "deadlocks_resolved": 0,
+    "deadlocks_active": 8,
+    "deadlock_avg_s": null,
+    "reroutes": 444,
+    "evasions": 0,
+    "nudges": 0,
+    "protective_stops": 8,
+    "protective_human": 8,
+    "near_miss_fms": 12,
+    "near_miss_truth": 2,
+    "contacts": 0,
+    "contacts_human": 0,
+    "contacts_static": 4,
+    "min_amr_gap": 0.85,
+    "tracking_ratio": 0.994,
+    "mismatch": 0,
+    "comms_lost": 0,
+    "order_rejects": 0,
+    "resends": 0,
+    "mttr_s": null,
+    "alarms_per_h": 175.0,
+    "bus_dropped": 0,
+    "bus_published": 782818,
+    "sim_hours": 1.0,
+    "interventions": 118,
+    "mtta_s": 23.7,
+    "lock_problems": 0
+   },
+   "wall_s": 240.3,
+   "forklift_reversals": []
+  },
+  {
+   "job": {
+    "scenario": "grid-deadlock",
+    "strategy": "locks",
+    "seed": 2,
+    "duration": 3600.0,
+    "manager": {},
+    "vehicle": {},
+    "scenario_overrides": {},
+    "operator": true,
+    "label": "locks/default"
+   },
+   "kpi": {
+    "queued": 87,
+    "active": 36,
+    "throughput_h": 33.0,
+    "by_kind_h": {
+     "PUTAWAY": 14.0,
+     "PICK": 19.0
+    },
+    "cycle_avg": 283.9,
+    "cycle_p90": 594.8,
+    "wait_avg": 42.5,
+    "created": 244,
+    "done": 33,
+    "failed": 0,
+    "canceled": 88,
+    "requeued": 88,
+    "robots": 36,
+    "online": 36,
+    "working": 36,
+    "utilization": 1.0,
+    "traffic_wait_ratio": 0.894,
+    "deadlocks": 131,
+    "deadlocks_resolved": 0,
+    "deadlocks_active": 5,
+    "deadlock_avg_s": null,
+    "reroutes": 99,
+    "evasions": 0,
+    "nudges": 0,
+    "protective_stops": 3,
+    "protective_human": 3,
+    "near_miss_fms": 9,
+    "near_miss_truth": 2,
+    "contacts": 0,
+    "contacts_human": 0,
+    "contacts_static": 1,
+    "min_amr_gap": 0.81,
+    "tracking_ratio": 0.992,
+    "mismatch": 0,
+    "comms_lost": 0,
+    "order_rejects": 0,
+    "resends": 0,
+    "mttr_s": null,
+    "alarms_per_h": 109.0,
+    "bus_dropped": 0,
+    "bus_published": 780147,
+    "sim_hours": 1.0,
+    "interventions": 88,
+    "mtta_s": 24.0,
+    "lock_problems": 0
+   },
+   "wall_s": 249.3,
+   "forklift_reversals": []
+  },
+  {
+   "job": {
+    "scenario": "grid-deadlock",
+    "strategy": "locks",
+    "seed": 3,
+    "duration": 3600.0,
+    "manager": {},
+    "vehicle": {},
+    "scenario_overrides": {},
+    "operator": true,
+    "label": "locks/default"
+   },
+   "kpi": {
+    "queued": 83,
+    "active": 36,
+    "throughput_h": 39.0,
+    "by_kind_h": {
+     "PICK": 22.0,
+     "PUTAWAY": 17.0
+    },
+    "cycle_avg": 239.3,
+    "cycle_p90": 543.8,
+    "wait_avg": 2.7,
+    "created": 223,
+    "done": 39,
+    "failed": 0,
+    "canceled": 65,
+    "requeued": 65,
+    "robots": 36,
+    "online": 36,
+    "working": 36,
+    "utilization": 1.0,
+    "traffic_wait_ratio": 0.876,
+    "deadlocks": 104,
+    "deadlocks_resolved": 0,
+    "deadlocks_active": 3,
+    "deadlock_avg_s": null,
+    "reroutes": 76,
+    "evasions": 0,
+    "nudges": 0,
+    "protective_stops": 2,
+    "protective_human": 2,
+    "near_miss_fms": 4,
+    "near_miss_truth": 1,
+    "contacts": 0,
+    "contacts_human": 0,
+    "contacts_static": 1,
+    "min_amr_gap": 0.85,
+    "tracking_ratio": 0.988,
+    "mismatch": 0,
+    "comms_lost": 0,
+    "order_rejects": 0,
+    "resends": 0,
+    "mttr_s": null,
+    "alarms_per_h": 92.0,
+    "bus_dropped": 0,
+    "bus_published": 789935,
+    "sim_hours": 1.0,
+    "interventions": 65,
+    "mtta_s": 24.5,
+    "lock_problems": 0
+   },
+   "wall_s": 246.1,
+   "forklift_reversals": []
+  },
+  {
+   "job": {
+    "scenario": "grid-deadlock",
+    "strategy": "locks+resolve",
+    "seed": 1,
+    "duration": 3600.0,
+    "manager": {},
+    "vehicle": {},
+    "scenario_overrides": {},
+    "operator": true,
+    "label": "locks+resolve/default"
+   },
+   "kpi": {
+    "queued": 160,
+    "active": 36,
+    "throughput_h": 86.0,
+    "by_kind_h": {
+     "PICK": 56.0,
+     "PUTAWAY": 30.0
+    },
+    "cycle_avg": 747.5,
+    "cycle_p90": 1692.8,
+    "wait_avg": 92.1,
+    "created": 282,
+    "done": 86,
+    "failed": 0,
+    "canceled": 0,
+    "requeued": 0,
+    "robots": 36,
+    "online": 36,
+    "working": 36,
+    "utilization": 1.0,
+    "traffic_wait_ratio": 0.764,
+    "deadlocks": 2660,
+    "deadlocks_resolved": 2660,
+    "deadlocks_active": 0,
+    "deadlock_avg_s": 0.2,
+    "reroutes": 3301,
+    "evasions": 0,
+    "nudges": 0,
+    "protective_stops": 36,
+    "protective_human": 36,
+    "near_miss_fms": 23,
+    "near_miss_truth": 2,
+    "contacts": 0,
+    "contacts_human": 0,
+    "contacts_static": 7,
+    "min_amr_gap": 0.85,
+    "tracking_ratio": 0.988,
+    "mismatch": 0,
+    "comms_lost": 0,
+    "order_rejects": 0,
+    "resends": 0,
+    "mttr_s": null,
+    "alarms_per_h": 21.0,
+    "bus_dropped": 0,
+    "bus_published": 786636,
+    "sim_hours": 1.0,
+    "interventions": 0,
+    "mtta_s": 22.4,
+    "lock_problems": 0
+   },
+   "wall_s": 204.8,
+   "forklift_reversals": []
+  },
+  {
+   "job": {
+    "scenario": "grid-deadlock",
+    "strategy": "locks+resolve",
+    "seed": 2,
+    "duration": 3600.0,
+    "manager": {},
+    "vehicle": {},
+    "scenario_overrides": {},
+    "operator": true,
+    "label": "locks+resolve/default"
+   },
+   "kpi": {
+    "queued": 132,
+    "active": 36,
+    "throughput_h": 76.0,
+    "by_kind_h": {
+     "PICK": 35.0,
+     "PUTAWAY": 41.0
+    },
+    "cycle_avg": 288.1,
+    "cycle_p90": 553.8,
+    "wait_avg": 40.5,
+    "created": 244,
+    "done": 76,
+    "failed": 0,
+    "canceled": 0,
+    "requeued": 0,
+    "robots": 36,
+    "online": 36,
+    "working": 36,
+    "utilization": 1.0,
+    "traffic_wait_ratio": 0.786,
+    "deadlocks": 1884,
+    "deadlocks_resolved": 1884,
+    "deadlocks_active": 0,
+    "deadlock_avg_s": 0.2,
+    "reroutes": 2967,
+    "evasions": 0,
+    "nudges": 0,
+    "protective_stops": 9,
+    "protective_human": 9,
+    "near_miss_fms": 10,
+    "near_miss_truth": 2,
+    "contacts": 0,
+    "contacts_human": 0,
+    "contacts_static": 3,
+    "min_amr_gap": 0.85,
+    "tracking_ratio": 0.962,
+    "mismatch": 0,
+    "comms_lost": 0,
+    "order_rejects": 0,
+    "resends": 0,
+    "mttr_s": null,
+    "alarms_per_h": 30.0,
+    "bus_dropped": 0,
+    "bus_published": 793587,
+    "sim_hours": 1.0,
+    "interventions": 0,
+    "mtta_s": 19.8,
+    "lock_problems": 0
+   },
+   "wall_s": 206.4,
+   "forklift_reversals": []
+  },
+  {
+   "job": {
+    "scenario": "grid-deadlock",
+    "strategy": "locks+resolve",
+    "seed": 3,
+    "duration": 3600.0,
+    "manager": {},
+    "vehicle": {},
+    "scenario_overrides": {},
+    "operator": true,
+    "label": "locks+resolve/default"
+   },
+   "kpi": {
+    "queued": 73,
+    "active": 35,
+    "throughput_h": 115.0,
+    "by_kind_h": {
+     "PUTAWAY": 52.0,
+     "PICK": 63.0
+    },
+    "cycle_avg": 183.3,
+    "cycle_p90": 297.2,
+    "wait_avg": 13.1,
+    "created": 223,
+    "done": 115,
+    "failed": 0,
+    "canceled": 0,
+    "requeued": 0,
+    "robots": 36,
+    "online": 36,
+    "working": 35,
+    "utilization": 0.972,
+    "traffic_wait_ratio": 0.722,
+    "deadlocks": 918,
+    "deadlocks_resolved": 918,
+    "deadlocks_active": 0,
+    "deadlock_avg_s": 0.2,
+    "reroutes": 1261,
+    "evasions": 0,
+    "nudges": 10,
+    "protective_stops": 11,
+    "protective_human": 11,
+    "near_miss_fms": 12,
+    "near_miss_truth": 1,
+    "contacts": 0,
+    "contacts_human": 0,
+    "contacts_static": 1,
+    "min_amr_gap": 0.85,
+    "tracking_ratio": 0.986,
+    "mismatch": 0,
+    "comms_lost": 0,
+    "order_rejects": 0,
+    "resends": 0,
+    "mttr_s": null,
+    "alarms_per_h": 19.0,
+    "bus_dropped": 0,
+    "bus_published": 796066,
+    "sim_hours": 1.0,
+    "interventions": 0,
+    "mtta_s": 21.3,
+    "lock_problems": 0
+   },
+   "wall_s": 196.6,
+   "forklift_reversals": []
+  }
+ ]
+}
