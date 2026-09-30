@@ -1,0 +1,6262 @@
+{
+ "metaInformation": {
+  "projectIdentification": "격자 창고 60×34 m",
+  "creator": "fleet-control-tower",
+  "exportTimestamp": "2026-09-30T03:28:38.15Z",
+  "lifVersion": "1.0.0"
+ },
+ "layouts": [
+  {
+   "layoutId": "grid",
+   "layoutName": "격자 창고 60×34 m",
+   "layoutVersion": "1",
+   "nodes": [
+    {
+     "nodeId": "A1",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 3.0,
+      "y": 3.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "A2",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 3.0,
+      "y": 6.5
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "A3",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 3.0,
+      "y": 10.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "A4",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 3.0,
+      "y": 13.5
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "A5",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 3.0,
+      "y": 17.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "A6",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 3.0,
+      "y": 20.5
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "A7",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 3.0,
+      "y": 24.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "A8",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 3.0,
+      "y": 27.5
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "A9",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 3.0,
+      "y": 31.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "B1",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 9.0,
+      "y": 3.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "B2",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 9.0,
+      "y": 6.5
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "pick",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        },
+        {
+         "actionType": "drop",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "B3",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 9.0,
+      "y": 10.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "pick",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        },
+        {
+         "actionType": "drop",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "B4",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 9.0,
+      "y": 13.5
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "pick",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        },
+        {
+         "actionType": "drop",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "B5",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 9.0,
+      "y": 17.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "B6",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 9.0,
+      "y": 20.5
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "pick",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        },
+        {
+         "actionType": "drop",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "B7",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 9.0,
+      "y": 24.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "pick",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        },
+        {
+         "actionType": "drop",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "B8",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 9.0,
+      "y": 27.5
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "pick",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        },
+        {
+         "actionType": "drop",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "B9",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 9.0,
+      "y": 31.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "C1",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 15.0,
+      "y": 3.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "C2",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 15.0,
+      "y": 6.5
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "pick",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        },
+        {
+         "actionType": "drop",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "C3",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 15.0,
+      "y": 10.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "pick",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        },
+        {
+         "actionType": "drop",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "C4",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 15.0,
+      "y": 13.5
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "pick",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        },
+        {
+         "actionType": "drop",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "C5",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 15.0,
+      "y": 17.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "C6",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 15.0,
+      "y": 20.5
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "pick",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        },
+        {
+         "actionType": "drop",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "C7",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 15.0,
+      "y": 24.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "pick",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        },
+        {
+         "actionType": "drop",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "C8",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 15.0,
+      "y": 27.5
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "pick",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        },
+        {
+         "actionType": "drop",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "C9",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 15.0,
+      "y": 31.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "D1",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 21.0,
+      "y": 3.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "D2",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 21.0,
+      "y": 6.5
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "pick",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        },
+        {
+         "actionType": "drop",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "D3",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 21.0,
+      "y": 10.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "pick",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        },
+        {
+         "actionType": "drop",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "D4",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 21.0,
+      "y": 13.5
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "pick",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        },
+        {
+         "actionType": "drop",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "D5",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 21.0,
+      "y": 17.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "D6",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 21.0,
+      "y": 20.5
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "pick",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        },
+        {
+         "actionType": "drop",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "D7",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 21.0,
+      "y": 24.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "pick",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        },
+        {
+         "actionType": "drop",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "D8",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 21.0,
+      "y": 27.5
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "pick",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        },
+        {
+         "actionType": "drop",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "D9",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 21.0,
+      "y": 31.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "E1",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 27.0,
+      "y": 3.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "E2",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 27.0,
+      "y": 6.5
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "pick",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        },
+        {
+         "actionType": "drop",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "E3",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 27.0,
+      "y": 10.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "pick",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        },
+        {
+         "actionType": "drop",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "E4",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 27.0,
+      "y": 13.5
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "pick",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        },
+        {
+         "actionType": "drop",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "E5",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 27.0,
+      "y": 17.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "E6",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 27.0,
+      "y": 20.5
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "pick",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        },
+        {
+         "actionType": "drop",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "E7",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 27.0,
+      "y": 24.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "pick",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        },
+        {
+         "actionType": "drop",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "E8",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 27.0,
+      "y": 27.5
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "pick",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        },
+        {
+         "actionType": "drop",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "E9",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 27.0,
+      "y": 31.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "F1",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 33.0,
+      "y": 3.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "F2",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 33.0,
+      "y": 6.5
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "pick",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        },
+        {
+         "actionType": "drop",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "F3",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 33.0,
+      "y": 10.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "pick",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        },
+        {
+         "actionType": "drop",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "F4",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 33.0,
+      "y": 13.5
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "pick",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        },
+        {
+         "actionType": "drop",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "F5",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 33.0,
+      "y": 17.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "F6",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 33.0,
+      "y": 20.5
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "pick",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        },
+        {
+         "actionType": "drop",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "F7",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 33.0,
+      "y": 24.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "pick",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        },
+        {
+         "actionType": "drop",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "F8",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 33.0,
+      "y": 27.5
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "pick",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        },
+        {
+         "actionType": "drop",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "F9",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 33.0,
+      "y": 31.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "G1",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 39.0,
+      "y": 3.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "G2",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 39.0,
+      "y": 6.5
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "pick",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        },
+        {
+         "actionType": "drop",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "G3",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 39.0,
+      "y": 10.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "pick",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        },
+        {
+         "actionType": "drop",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "G4",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 39.0,
+      "y": 13.5
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "pick",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        },
+        {
+         "actionType": "drop",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "G5",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 39.0,
+      "y": 17.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "G6",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 39.0,
+      "y": 20.5
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "pick",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        },
+        {
+         "actionType": "drop",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "G7",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 39.0,
+      "y": 24.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "pick",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        },
+        {
+         "actionType": "drop",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "G8",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 39.0,
+      "y": 27.5
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "pick",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        },
+        {
+         "actionType": "drop",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "G9",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 39.0,
+      "y": 31.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "H1",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 45.0,
+      "y": 3.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "H2",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 45.0,
+      "y": 6.5
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "pick",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        },
+        {
+         "actionType": "drop",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "H3",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 45.0,
+      "y": 10.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "pick",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        },
+        {
+         "actionType": "drop",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "H4",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 45.0,
+      "y": 13.5
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "pick",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        },
+        {
+         "actionType": "drop",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "H5",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 45.0,
+      "y": 17.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "H6",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 45.0,
+      "y": 20.5
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "pick",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        },
+        {
+         "actionType": "drop",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "H7",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 45.0,
+      "y": 24.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "pick",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        },
+        {
+         "actionType": "drop",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "H8",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 45.0,
+      "y": 27.5
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "pick",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        },
+        {
+         "actionType": "drop",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "H9",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 45.0,
+      "y": 31.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "I1",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 51.0,
+      "y": 3.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "I2",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 51.0,
+      "y": 6.5
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "pick",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        },
+        {
+         "actionType": "drop",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "I3",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 51.0,
+      "y": 10.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "pick",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        },
+        {
+         "actionType": "drop",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "I4",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 51.0,
+      "y": 13.5
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "pick",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        },
+        {
+         "actionType": "drop",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "I5",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 51.0,
+      "y": 17.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "I6",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 51.0,
+      "y": 20.5
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "pick",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        },
+        {
+         "actionType": "drop",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "I7",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 51.0,
+      "y": 24.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "pick",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        },
+        {
+         "actionType": "drop",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "I8",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 51.0,
+      "y": 27.5
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "pick",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        },
+        {
+         "actionType": "drop",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "I9",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 51.0,
+      "y": 31.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "J1",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 57.0,
+      "y": 3.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "J2",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 57.0,
+      "y": 6.5
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "J3",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 57.0,
+      "y": 10.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "J4",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 57.0,
+      "y": 13.5
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "J5",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 57.0,
+      "y": 17.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "J6",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 57.0,
+      "y": 20.5
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "J7",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 57.0,
+      "y": 24.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "J8",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 57.0,
+      "y": 27.5
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "J9",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 57.0,
+      "y": 31.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "qA1A2",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 3.0,
+      "y": 4.75
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "qA2A3",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 3.0,
+      "y": 8.25
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "qA3A4",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 3.0,
+      "y": 11.75
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "qA4A5",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 3.0,
+      "y": 15.25
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "qA5A6",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 3.0,
+      "y": 18.75
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "qA6A7",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 3.0,
+      "y": 22.25
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "qA7A8",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 3.0,
+      "y": 25.75
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "qA8A9",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 3.0,
+      "y": 29.25
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "qJ1J2",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 57.0,
+      "y": 4.75
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "qJ2J3",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 57.0,
+      "y": 8.25
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "qJ3J4",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 57.0,
+      "y": 11.75
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "qJ4J5",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 57.0,
+      "y": 15.25
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "qJ5J6",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 57.0,
+      "y": 18.75
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "qJ6J7",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 57.0,
+      "y": 22.25
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "qJ7J8",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 57.0,
+      "y": 25.75
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "qJ8J9",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 57.0,
+      "y": 29.25
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "qA1B1",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 6.0,
+      "y": 3.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "qB1C1",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 12.0,
+      "y": 3.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "qC1D1",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 18.0,
+      "y": 3.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "qD1E1",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 24.0,
+      "y": 3.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "qE1F1",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 30.0,
+      "y": 3.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "qF1G1",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 36.0,
+      "y": 3.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "qG1H1",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 42.0,
+      "y": 3.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "qH1I1",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 48.0,
+      "y": 3.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "qI1J1",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 54.0,
+      "y": 3.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "qA5B5",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 6.0,
+      "y": 17.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "qB5C5",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 12.0,
+      "y": 17.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "qC5D5",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 18.0,
+      "y": 17.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "qD5E5",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 24.0,
+      "y": 17.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "qE5F5",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 30.0,
+      "y": 17.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "qF5G5",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 36.0,
+      "y": 17.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "qG5H5",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 42.0,
+      "y": 17.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "qH5I5",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 48.0,
+      "y": 17.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "qI5J5",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 54.0,
+      "y": 17.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "qA9B9",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 6.0,
+      "y": 31.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "qB9C9",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 12.0,
+      "y": 31.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "qC9D9",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 18.0,
+      "y": 31.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "qD9E9",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 24.0,
+      "y": 31.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "qE9F9",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 30.0,
+      "y": 31.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "qF9G9",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 36.0,
+      "y": 31.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "qG9H9",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 42.0,
+      "y": 31.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "qH9I9",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 48.0,
+      "y": 31.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "qI9J9",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 54.0,
+      "y": 31.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "IN1",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 0.8,
+      "y": 6.5
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "pick",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "OUT1",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 59.2,
+      "y": 6.5
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "drop",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "IN2",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 0.8,
+      "y": 10.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "pick",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "OUT2",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 59.2,
+      "y": 10.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "drop",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "IN3",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 0.8,
+      "y": 24.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "pick",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "OUT3",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 59.2,
+      "y": 24.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "drop",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "IN4",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 0.8,
+      "y": 27.5
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "pick",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "OUT4",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 59.2,
+      "y": 27.5
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "drop",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "CH1",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 15.0,
+      "y": 0.8
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "startCharging",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        },
+        {
+         "actionType": "stopCharging",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "CH2",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 21.0,
+      "y": 0.8
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "startCharging",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        },
+        {
+         "actionType": "stopCharging",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "CH3",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 27.0,
+      "y": 0.8
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "startCharging",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        },
+        {
+         "actionType": "stopCharging",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "CH4",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 33.0,
+      "y": 0.8
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "startCharging",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        },
+        {
+         "actionType": "stopCharging",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "CH5",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 39.0,
+      "y": 0.8
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "startCharging",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        },
+        {
+         "actionType": "stopCharging",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "CH6",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 45.0,
+      "y": 0.8
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "actions": [
+        {
+         "actionType": "startCharging",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        },
+        {
+         "actionType": "stopCharging",
+         "requirementType": "CONDITIONAL",
+         "blockingType": "HARD"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "nodeId": "P01",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 3.0,
+      "y": 33.2
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "P02",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 9.0,
+      "y": 33.2
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "P03",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 15.0,
+      "y": 33.2
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "P04",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 21.0,
+      "y": 33.2
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "P05",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 27.0,
+      "y": 33.2
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "P06",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 33.0,
+      "y": 33.2
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "P07",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 39.0,
+      "y": 33.2
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "P08",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 45.0,
+      "y": 33.2
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "P09",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 51.0,
+      "y": 33.2
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "P10",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 57.0,
+      "y": 33.2
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "P11",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 3.0,
+      "y": 0.8
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "P12",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 9.0,
+      "y": 0.8
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "P13",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 51.0,
+      "y": 0.8
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "P14",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 57.0,
+      "y": 0.8
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "P15",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 6.0,
+      "y": 6.5
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "P16",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 6.0,
+      "y": 10.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "P17",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 6.0,
+      "y": 13.5
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "P18",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 6.0,
+      "y": 20.5
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "P19",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 6.0,
+      "y": 24.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "P20",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 6.0,
+      "y": 27.5
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "P21",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 54.0,
+      "y": 6.5
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "P22",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 54.0,
+      "y": 10.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "P23",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 54.0,
+      "y": 13.5
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "P24",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 54.0,
+      "y": 20.5
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "P25",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 54.0,
+      "y": 24.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    },
+    {
+     "nodeId": "P26",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 54.0,
+      "y": 27.5
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC"
+      }
+     ]
+    }
+   ],
+   "edges": [
+    {
+     "edgeId": "A2>qA1A2",
+     "startNodeId": "A2",
+     "endNodeId": "qA1A2",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "qA1A2>A1",
+     "startNodeId": "qA1A2",
+     "endNodeId": "A1",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "A3>qA2A3",
+     "startNodeId": "A3",
+     "endNodeId": "qA2A3",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "qA2A3>A2",
+     "startNodeId": "qA2A3",
+     "endNodeId": "A2",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "A4>qA3A4",
+     "startNodeId": "A4",
+     "endNodeId": "qA3A4",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "qA3A4>A3",
+     "startNodeId": "qA3A4",
+     "endNodeId": "A3",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "A5>qA4A5",
+     "startNodeId": "A5",
+     "endNodeId": "qA4A5",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "qA4A5>A4",
+     "startNodeId": "qA4A5",
+     "endNodeId": "A4",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "A6>qA5A6",
+     "startNodeId": "A6",
+     "endNodeId": "qA5A6",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "qA5A6>A5",
+     "startNodeId": "qA5A6",
+     "endNodeId": "A5",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "A7>qA6A7",
+     "startNodeId": "A7",
+     "endNodeId": "qA6A7",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "qA6A7>A6",
+     "startNodeId": "qA6A7",
+     "endNodeId": "A6",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "A8>qA7A8",
+     "startNodeId": "A8",
+     "endNodeId": "qA7A8",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "qA7A8>A7",
+     "startNodeId": "qA7A8",
+     "endNodeId": "A7",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "A9>qA8A9",
+     "startNodeId": "A9",
+     "endNodeId": "qA8A9",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "qA8A9>A8",
+     "startNodeId": "qA8A9",
+     "endNodeId": "A8",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "B1>B2",
+     "startNodeId": "B1",
+     "endNodeId": "B2",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "B2>B3",
+     "startNodeId": "B2",
+     "endNodeId": "B3",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "B3>B4",
+     "startNodeId": "B3",
+     "endNodeId": "B4",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "B4>B5",
+     "startNodeId": "B4",
+     "endNodeId": "B5",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "B5>B6",
+     "startNodeId": "B5",
+     "endNodeId": "B6",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "B6>B7",
+     "startNodeId": "B6",
+     "endNodeId": "B7",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "B7>B8",
+     "startNodeId": "B7",
+     "endNodeId": "B8",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "B8>B9",
+     "startNodeId": "B8",
+     "endNodeId": "B9",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "C2>C1",
+     "startNodeId": "C2",
+     "endNodeId": "C1",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "C3>C2",
+     "startNodeId": "C3",
+     "endNodeId": "C2",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "C4>C3",
+     "startNodeId": "C4",
+     "endNodeId": "C3",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "C5>C4",
+     "startNodeId": "C5",
+     "endNodeId": "C4",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "C6>C5",
+     "startNodeId": "C6",
+     "endNodeId": "C5",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "C7>C6",
+     "startNodeId": "C7",
+     "endNodeId": "C6",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "C8>C7",
+     "startNodeId": "C8",
+     "endNodeId": "C7",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "C9>C8",
+     "startNodeId": "C9",
+     "endNodeId": "C8",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "D1>D2",
+     "startNodeId": "D1",
+     "endNodeId": "D2",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "D2>D3",
+     "startNodeId": "D2",
+     "endNodeId": "D3",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "D3>D4",
+     "startNodeId": "D3",
+     "endNodeId": "D4",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "D4>D5",
+     "startNodeId": "D4",
+     "endNodeId": "D5",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "D5>D6",
+     "startNodeId": "D5",
+     "endNodeId": "D6",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "D6>D7",
+     "startNodeId": "D6",
+     "endNodeId": "D7",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "D7>D8",
+     "startNodeId": "D7",
+     "endNodeId": "D8",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "D8>D9",
+     "startNodeId": "D8",
+     "endNodeId": "D9",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "E2>E1",
+     "startNodeId": "E2",
+     "endNodeId": "E1",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "E3>E2",
+     "startNodeId": "E3",
+     "endNodeId": "E2",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "E4>E3",
+     "startNodeId": "E4",
+     "endNodeId": "E3",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "E5>E4",
+     "startNodeId": "E5",
+     "endNodeId": "E4",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "E6>E5",
+     "startNodeId": "E6",
+     "endNodeId": "E5",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "E7>E6",
+     "startNodeId": "E7",
+     "endNodeId": "E6",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "E8>E7",
+     "startNodeId": "E8",
+     "endNodeId": "E7",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "E9>E8",
+     "startNodeId": "E9",
+     "endNodeId": "E8",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "F1>F2",
+     "startNodeId": "F1",
+     "endNodeId": "F2",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "F2>F3",
+     "startNodeId": "F2",
+     "endNodeId": "F3",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "F3>F4",
+     "startNodeId": "F3",
+     "endNodeId": "F4",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "F4>F5",
+     "startNodeId": "F4",
+     "endNodeId": "F5",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "F5>F6",
+     "startNodeId": "F5",
+     "endNodeId": "F6",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "F6>F7",
+     "startNodeId": "F6",
+     "endNodeId": "F7",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "F7>F8",
+     "startNodeId": "F7",
+     "endNodeId": "F8",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "F8>F9",
+     "startNodeId": "F8",
+     "endNodeId": "F9",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "G2>G1",
+     "startNodeId": "G2",
+     "endNodeId": "G1",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "G3>G2",
+     "startNodeId": "G3",
+     "endNodeId": "G2",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "G4>G3",
+     "startNodeId": "G4",
+     "endNodeId": "G3",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "G5>G4",
+     "startNodeId": "G5",
+     "endNodeId": "G4",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "G6>G5",
+     "startNodeId": "G6",
+     "endNodeId": "G5",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "G7>G6",
+     "startNodeId": "G7",
+     "endNodeId": "G6",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "G8>G7",
+     "startNodeId": "G8",
+     "endNodeId": "G7",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "G9>G8",
+     "startNodeId": "G9",
+     "endNodeId": "G8",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "H1>H2",
+     "startNodeId": "H1",
+     "endNodeId": "H2",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "H2>H3",
+     "startNodeId": "H2",
+     "endNodeId": "H3",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "H3>H4",
+     "startNodeId": "H3",
+     "endNodeId": "H4",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "H4>H5",
+     "startNodeId": "H4",
+     "endNodeId": "H5",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "H5>H6",
+     "startNodeId": "H5",
+     "endNodeId": "H6",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "H6>H7",
+     "startNodeId": "H6",
+     "endNodeId": "H7",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "H7>H8",
+     "startNodeId": "H7",
+     "endNodeId": "H8",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "H8>H9",
+     "startNodeId": "H8",
+     "endNodeId": "H9",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "I2>I1",
+     "startNodeId": "I2",
+     "endNodeId": "I1",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "I3>I2",
+     "startNodeId": "I3",
+     "endNodeId": "I2",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "I4>I3",
+     "startNodeId": "I4",
+     "endNodeId": "I3",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "I5>I4",
+     "startNodeId": "I5",
+     "endNodeId": "I4",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "I6>I5",
+     "startNodeId": "I6",
+     "endNodeId": "I5",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "I7>I6",
+     "startNodeId": "I7",
+     "endNodeId": "I6",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "I8>I7",
+     "startNodeId": "I8",
+     "endNodeId": "I7",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "I9>I8",
+     "startNodeId": "I9",
+     "endNodeId": "I8",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.2
+      }
+     ]
+    },
+    {
+     "edgeId": "J1>qJ1J2",
+     "startNodeId": "J1",
+     "endNodeId": "qJ1J2",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "qJ1J2>J2",
+     "startNodeId": "qJ1J2",
+     "endNodeId": "J2",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "J2>qJ2J3",
+     "startNodeId": "J2",
+     "endNodeId": "qJ2J3",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "qJ2J3>J3",
+     "startNodeId": "qJ2J3",
+     "endNodeId": "J3",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "J3>qJ3J4",
+     "startNodeId": "J3",
+     "endNodeId": "qJ3J4",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "qJ3J4>J4",
+     "startNodeId": "qJ3J4",
+     "endNodeId": "J4",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "J4>qJ4J5",
+     "startNodeId": "J4",
+     "endNodeId": "qJ4J5",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "qJ4J5>J5",
+     "startNodeId": "qJ4J5",
+     "endNodeId": "J5",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "J5>qJ5J6",
+     "startNodeId": "J5",
+     "endNodeId": "qJ5J6",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "qJ5J6>J6",
+     "startNodeId": "qJ5J6",
+     "endNodeId": "J6",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "J6>qJ6J7",
+     "startNodeId": "J6",
+     "endNodeId": "qJ6J7",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "qJ6J7>J7",
+     "startNodeId": "qJ6J7",
+     "endNodeId": "J7",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "J7>qJ7J8",
+     "startNodeId": "J7",
+     "endNodeId": "qJ7J8",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "qJ7J8>J8",
+     "startNodeId": "qJ7J8",
+     "endNodeId": "J8",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "J8>qJ8J9",
+     "startNodeId": "J8",
+     "endNodeId": "qJ8J9",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "qJ8J9>J9",
+     "startNodeId": "qJ8J9",
+     "endNodeId": "J9",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "A1>qA1B1",
+     "startNodeId": "A1",
+     "endNodeId": "qA1B1",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "qA1B1>B1",
+     "startNodeId": "qA1B1",
+     "endNodeId": "B1",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "B1>qB1C1",
+     "startNodeId": "B1",
+     "endNodeId": "qB1C1",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "qB1C1>C1",
+     "startNodeId": "qB1C1",
+     "endNodeId": "C1",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "C1>qC1D1",
+     "startNodeId": "C1",
+     "endNodeId": "qC1D1",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "qC1D1>D1",
+     "startNodeId": "qC1D1",
+     "endNodeId": "D1",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "D1>qD1E1",
+     "startNodeId": "D1",
+     "endNodeId": "qD1E1",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "qD1E1>E1",
+     "startNodeId": "qD1E1",
+     "endNodeId": "E1",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "E1>qE1F1",
+     "startNodeId": "E1",
+     "endNodeId": "qE1F1",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "qE1F1>F1",
+     "startNodeId": "qE1F1",
+     "endNodeId": "F1",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "F1>qF1G1",
+     "startNodeId": "F1",
+     "endNodeId": "qF1G1",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "qF1G1>G1",
+     "startNodeId": "qF1G1",
+     "endNodeId": "G1",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "G1>qG1H1",
+     "startNodeId": "G1",
+     "endNodeId": "qG1H1",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "qG1H1>H1",
+     "startNodeId": "qG1H1",
+     "endNodeId": "H1",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "H1>qH1I1",
+     "startNodeId": "H1",
+     "endNodeId": "qH1I1",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "qH1I1>I1",
+     "startNodeId": "qH1I1",
+     "endNodeId": "I1",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "I1>qI1J1",
+     "startNodeId": "I1",
+     "endNodeId": "qI1J1",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "qI1J1>J1",
+     "startNodeId": "qI1J1",
+     "endNodeId": "J1",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "A5>qA5B5",
+     "startNodeId": "A5",
+     "endNodeId": "qA5B5",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "qA5B5>B5",
+     "startNodeId": "qA5B5",
+     "endNodeId": "B5",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "B5>qB5C5",
+     "startNodeId": "B5",
+     "endNodeId": "qB5C5",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "qB5C5>C5",
+     "startNodeId": "qB5C5",
+     "endNodeId": "C5",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "C5>qC5D5",
+     "startNodeId": "C5",
+     "endNodeId": "qC5D5",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "qC5D5>D5",
+     "startNodeId": "qC5D5",
+     "endNodeId": "D5",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "D5>qD5E5",
+     "startNodeId": "D5",
+     "endNodeId": "qD5E5",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "qD5E5>E5",
+     "startNodeId": "qD5E5",
+     "endNodeId": "E5",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "E5>qE5F5",
+     "startNodeId": "E5",
+     "endNodeId": "qE5F5",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "qE5F5>F5",
+     "startNodeId": "qE5F5",
+     "endNodeId": "F5",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "F5>qF5G5",
+     "startNodeId": "F5",
+     "endNodeId": "qF5G5",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "qF5G5>G5",
+     "startNodeId": "qF5G5",
+     "endNodeId": "G5",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "G5>qG5H5",
+     "startNodeId": "G5",
+     "endNodeId": "qG5H5",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "qG5H5>H5",
+     "startNodeId": "qG5H5",
+     "endNodeId": "H5",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "H5>qH5I5",
+     "startNodeId": "H5",
+     "endNodeId": "qH5I5",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "qH5I5>I5",
+     "startNodeId": "qH5I5",
+     "endNodeId": "I5",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "I5>qI5J5",
+     "startNodeId": "I5",
+     "endNodeId": "qI5J5",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "qI5J5>J5",
+     "startNodeId": "qI5J5",
+     "endNodeId": "J5",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "B9>qA9B9",
+     "startNodeId": "B9",
+     "endNodeId": "qA9B9",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "qA9B9>A9",
+     "startNodeId": "qA9B9",
+     "endNodeId": "A9",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "C9>qB9C9",
+     "startNodeId": "C9",
+     "endNodeId": "qB9C9",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "qB9C9>B9",
+     "startNodeId": "qB9C9",
+     "endNodeId": "B9",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "D9>qC9D9",
+     "startNodeId": "D9",
+     "endNodeId": "qC9D9",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "qC9D9>C9",
+     "startNodeId": "qC9D9",
+     "endNodeId": "C9",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "E9>qD9E9",
+     "startNodeId": "E9",
+     "endNodeId": "qD9E9",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "qD9E9>D9",
+     "startNodeId": "qD9E9",
+     "endNodeId": "D9",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "F9>qE9F9",
+     "startNodeId": "F9",
+     "endNodeId": "qE9F9",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "qE9F9>E9",
+     "startNodeId": "qE9F9",
+     "endNodeId": "E9",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "G9>qF9G9",
+     "startNodeId": "G9",
+     "endNodeId": "qF9G9",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "qF9G9>F9",
+     "startNodeId": "qF9G9",
+     "endNodeId": "F9",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "H9>qG9H9",
+     "startNodeId": "H9",
+     "endNodeId": "qG9H9",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "qG9H9>G9",
+     "startNodeId": "qG9H9",
+     "endNodeId": "G9",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "I9>qH9I9",
+     "startNodeId": "I9",
+     "endNodeId": "qH9I9",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "qH9I9>H9",
+     "startNodeId": "qH9I9",
+     "endNodeId": "H9",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "J9>qI9J9",
+     "startNodeId": "J9",
+     "endNodeId": "qI9J9",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "qI9J9>I9",
+     "startNodeId": "qI9J9",
+     "endNodeId": "I9",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "A2>IN1",
+     "startNodeId": "A2",
+     "endNodeId": "IN1",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "IN1>A2",
+     "startNodeId": "IN1",
+     "endNodeId": "A2",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "J2>OUT1",
+     "startNodeId": "J2",
+     "endNodeId": "OUT1",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "OUT1>J2",
+     "startNodeId": "OUT1",
+     "endNodeId": "J2",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "A3>IN2",
+     "startNodeId": "A3",
+     "endNodeId": "IN2",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "IN2>A3",
+     "startNodeId": "IN2",
+     "endNodeId": "A3",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "J3>OUT2",
+     "startNodeId": "J3",
+     "endNodeId": "OUT2",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "OUT2>J3",
+     "startNodeId": "OUT2",
+     "endNodeId": "J3",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "A7>IN3",
+     "startNodeId": "A7",
+     "endNodeId": "IN3",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "IN3>A7",
+     "startNodeId": "IN3",
+     "endNodeId": "A7",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "J7>OUT3",
+     "startNodeId": "J7",
+     "endNodeId": "OUT3",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "OUT3>J7",
+     "startNodeId": "OUT3",
+     "endNodeId": "J7",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "A8>IN4",
+     "startNodeId": "A8",
+     "endNodeId": "IN4",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "IN4>A8",
+     "startNodeId": "IN4",
+     "endNodeId": "A8",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "J8>OUT4",
+     "startNodeId": "J8",
+     "endNodeId": "OUT4",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "OUT4>J8",
+     "startNodeId": "OUT4",
+     "endNodeId": "J8",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "C1>CH1",
+     "startNodeId": "C1",
+     "endNodeId": "CH1",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "CH1>C1",
+     "startNodeId": "CH1",
+     "endNodeId": "C1",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "D1>CH2",
+     "startNodeId": "D1",
+     "endNodeId": "CH2",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "CH2>D1",
+     "startNodeId": "CH2",
+     "endNodeId": "D1",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "E1>CH3",
+     "startNodeId": "E1",
+     "endNodeId": "CH3",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "CH3>E1",
+     "startNodeId": "CH3",
+     "endNodeId": "E1",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "F1>CH4",
+     "startNodeId": "F1",
+     "endNodeId": "CH4",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "CH4>F1",
+     "startNodeId": "CH4",
+     "endNodeId": "F1",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "G1>CH5",
+     "startNodeId": "G1",
+     "endNodeId": "CH5",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "CH5>G1",
+     "startNodeId": "CH5",
+     "endNodeId": "G1",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "H1>CH6",
+     "startNodeId": "H1",
+     "endNodeId": "CH6",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "CH6>H1",
+     "startNodeId": "CH6",
+     "endNodeId": "H1",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "A9>P01",
+     "startNodeId": "A9",
+     "endNodeId": "P01",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "P01>A9",
+     "startNodeId": "P01",
+     "endNodeId": "A9",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "B9>P02",
+     "startNodeId": "B9",
+     "endNodeId": "P02",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "P02>B9",
+     "startNodeId": "P02",
+     "endNodeId": "B9",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "C9>P03",
+     "startNodeId": "C9",
+     "endNodeId": "P03",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "P03>C9",
+     "startNodeId": "P03",
+     "endNodeId": "C9",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "D9>P04",
+     "startNodeId": "D9",
+     "endNodeId": "P04",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "P04>D9",
+     "startNodeId": "P04",
+     "endNodeId": "D9",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "E9>P05",
+     "startNodeId": "E9",
+     "endNodeId": "P05",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "P05>E9",
+     "startNodeId": "P05",
+     "endNodeId": "E9",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "F9>P06",
+     "startNodeId": "F9",
+     "endNodeId": "P06",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "P06>F9",
+     "startNodeId": "P06",
+     "endNodeId": "F9",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "G9>P07",
+     "startNodeId": "G9",
+     "endNodeId": "P07",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "P07>G9",
+     "startNodeId": "P07",
+     "endNodeId": "G9",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "H9>P08",
+     "startNodeId": "H9",
+     "endNodeId": "P08",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "P08>H9",
+     "startNodeId": "P08",
+     "endNodeId": "H9",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "I9>P09",
+     "startNodeId": "I9",
+     "endNodeId": "P09",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "P09>I9",
+     "startNodeId": "P09",
+     "endNodeId": "I9",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "J9>P10",
+     "startNodeId": "J9",
+     "endNodeId": "P10",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "P10>J9",
+     "startNodeId": "P10",
+     "endNodeId": "J9",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "A1>P11",
+     "startNodeId": "A1",
+     "endNodeId": "P11",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "P11>A1",
+     "startNodeId": "P11",
+     "endNodeId": "A1",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "B1>P12",
+     "startNodeId": "B1",
+     "endNodeId": "P12",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "P12>B1",
+     "startNodeId": "P12",
+     "endNodeId": "B1",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "I1>P13",
+     "startNodeId": "I1",
+     "endNodeId": "P13",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "P13>I1",
+     "startNodeId": "P13",
+     "endNodeId": "I1",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "J1>P14",
+     "startNodeId": "J1",
+     "endNodeId": "P14",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "P14>J1",
+     "startNodeId": "P14",
+     "endNodeId": "J1",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "A2>P15",
+     "startNodeId": "A2",
+     "endNodeId": "P15",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "P15>A2",
+     "startNodeId": "P15",
+     "endNodeId": "A2",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "A3>P16",
+     "startNodeId": "A3",
+     "endNodeId": "P16",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "P16>A3",
+     "startNodeId": "P16",
+     "endNodeId": "A3",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "A4>P17",
+     "startNodeId": "A4",
+     "endNodeId": "P17",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "P17>A4",
+     "startNodeId": "P17",
+     "endNodeId": "A4",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "A6>P18",
+     "startNodeId": "A6",
+     "endNodeId": "P18",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "P18>A6",
+     "startNodeId": "P18",
+     "endNodeId": "A6",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "A7>P19",
+     "startNodeId": "A7",
+     "endNodeId": "P19",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "P19>A7",
+     "startNodeId": "P19",
+     "endNodeId": "A7",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "A8>P20",
+     "startNodeId": "A8",
+     "endNodeId": "P20",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "P20>A8",
+     "startNodeId": "P20",
+     "endNodeId": "A8",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "J2>P21",
+     "startNodeId": "J2",
+     "endNodeId": "P21",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "P21>J2",
+     "startNodeId": "P21",
+     "endNodeId": "J2",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "J3>P22",
+     "startNodeId": "J3",
+     "endNodeId": "P22",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "P22>J3",
+     "startNodeId": "P22",
+     "endNodeId": "J3",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "J4>P23",
+     "startNodeId": "J4",
+     "endNodeId": "P23",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "P23>J4",
+     "startNodeId": "P23",
+     "endNodeId": "J4",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "J6>P24",
+     "startNodeId": "J6",
+     "endNodeId": "P24",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "P24>J6",
+     "startNodeId": "P24",
+     "endNodeId": "J6",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "J7>P25",
+     "startNodeId": "J7",
+     "endNodeId": "P25",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "P25>J7",
+     "startNodeId": "P25",
+     "endNodeId": "J7",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "J8>P26",
+     "startNodeId": "J8",
+     "endNodeId": "P26",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    },
+    {
+     "edgeId": "P26>J8",
+     "startNodeId": "P26",
+     "endNodeId": "J8",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AMR-GENERIC",
+       "rotationAllowed": false,
+       "maxSpeed": 0.6
+      }
+     ]
+    }
+   ],
+   "stations": [
+    {
+     "stationId": "B2",
+     "interactionNodeIds": [
+      "B2"
+     ]
+    },
+    {
+     "stationId": "B3",
+     "interactionNodeIds": [
+      "B3"
+     ]
+    },
+    {
+     "stationId": "B4",
+     "interactionNodeIds": [
+      "B4"
+     ]
+    },
+    {
+     "stationId": "B6",
+     "interactionNodeIds": [
+      "B6"
+     ]
+    },
+    {
+     "stationId": "B7",
+     "interactionNodeIds": [
+      "B7"
+     ]
+    },
+    {
+     "stationId": "B8",
+     "interactionNodeIds": [
+      "B8"
+     ]
+    },
+    {
+     "stationId": "C2",
+     "interactionNodeIds": [
+      "C2"
+     ]
+    },
+    {
+     "stationId": "C3",
+     "interactionNodeIds": [
+      "C3"
+     ]
+    },
+    {
+     "stationId": "C4",
+     "interactionNodeIds": [
+      "C4"
+     ]
+    },
+    {
+     "stationId": "C6",
+     "interactionNodeIds": [
+      "C6"
+     ]
+    },
+    {
+     "stationId": "C7",
+     "interactionNodeIds": [
+      "C7"
+     ]
+    },
+    {
+     "stationId": "C8",
+     "interactionNodeIds": [
+      "C8"
+     ]
+    },
+    {
+     "stationId": "D2",
+     "interactionNodeIds": [
+      "D2"
+     ]
+    },
+    {
+     "stationId": "D3",
+     "interactionNodeIds": [
+      "D3"
+     ]
+    },
+    {
+     "stationId": "D4",
+     "interactionNodeIds": [
+      "D4"
+     ]
+    },
+    {
+     "stationId": "D6",
+     "interactionNodeIds": [
+      "D6"
+     ]
+    },
+    {
+     "stationId": "D7",
+     "interactionNodeIds": [
+      "D7"
+     ]
+    },
+    {
+     "stationId": "D8",
+     "interactionNodeIds": [
+      "D8"
+     ]
+    },
+    {
+     "stationId": "E2",
+     "interactionNodeIds": [
+      "E2"
+     ]
+    },
+    {
+     "stationId": "E3",
+     "interactionNodeIds": [
+      "E3"
+     ]
+    },
+    {
+     "stationId": "E4",
+     "interactionNodeIds": [
+      "E4"
+     ]
+    },
+    {
+     "stationId": "E6",
+     "interactionNodeIds": [
+      "E6"
+     ]
+    },
+    {
+     "stationId": "E7",
+     "interactionNodeIds": [
+      "E7"
+     ]
+    },
+    {
+     "stationId": "E8",
+     "interactionNodeIds": [
+      "E8"
+     ]
+    },
+    {
+     "stationId": "F2",
+     "interactionNodeIds": [
+      "F2"
+     ]
+    },
+    {
+     "stationId": "F3",
+     "interactionNodeIds": [
+      "F3"
+     ]
+    },
+    {
+     "stationId": "F4",
+     "interactionNodeIds": [
+      "F4"
+     ]
+    },
+    {
+     "stationId": "F6",
+     "interactionNodeIds": [
+      "F6"
+     ]
+    },
+    {
+     "stationId": "F7",
+     "interactionNodeIds": [
+      "F7"
+     ]
+    },
+    {
+     "stationId": "F8",
+     "interactionNodeIds": [
+      "F8"
+     ]
+    },
+    {
+     "stationId": "G2",
+     "interactionNodeIds": [
+      "G2"
+     ]
+    },
+    {
+     "stationId": "G3",
+     "interactionNodeIds": [
+      "G3"
+     ]
+    },
+    {
+     "stationId": "G4",
+     "interactionNodeIds": [
+      "G4"
+     ]
+    },
+    {
+     "stationId": "G6",
+     "interactionNodeIds": [
+      "G6"
+     ]
+    },
+    {
+     "stationId": "G7",
+     "interactionNodeIds": [
+      "G7"
+     ]
+    },
+    {
+     "stationId": "G8",
+     "interactionNodeIds": [
+      "G8"
+     ]
+    },
+    {
+     "stationId": "H2",
+     "interactionNodeIds": [
+      "H2"
+     ]
+    },
+    {
+     "stationId": "H3",
+     "interactionNodeIds": [
+      "H3"
+     ]
+    },
+    {
+     "stationId": "H4",
+     "interactionNodeIds": [
+      "H4"
+     ]
+    },
+    {
+     "stationId": "H6",
+     "interactionNodeIds": [
+      "H6"
+     ]
+    },
+    {
+     "stationId": "H7",
+     "interactionNodeIds": [
+      "H7"
+     ]
+    },
+    {
+     "stationId": "H8",
+     "interactionNodeIds": [
+      "H8"
+     ]
+    },
+    {
+     "stationId": "I2",
+     "interactionNodeIds": [
+      "I2"
+     ]
+    },
+    {
+     "stationId": "I3",
+     "interactionNodeIds": [
+      "I3"
+     ]
+    },
+    {
+     "stationId": "I4",
+     "interactionNodeIds": [
+      "I4"
+     ]
+    },
+    {
+     "stationId": "I6",
+     "interactionNodeIds": [
+      "I6"
+     ]
+    },
+    {
+     "stationId": "I7",
+     "interactionNodeIds": [
+      "I7"
+     ]
+    },
+    {
+     "stationId": "I8",
+     "interactionNodeIds": [
+      "I8"
+     ]
+    },
+    {
+     "stationId": "IN1",
+     "interactionNodeIds": [
+      "IN1"
+     ]
+    },
+    {
+     "stationId": "OUT1",
+     "interactionNodeIds": [
+      "OUT1"
+     ]
+    },
+    {
+     "stationId": "IN2",
+     "interactionNodeIds": [
+      "IN2"
+     ]
+    },
+    {
+     "stationId": "OUT2",
+     "interactionNodeIds": [
+      "OUT2"
+     ]
+    },
+    {
+     "stationId": "IN3",
+     "interactionNodeIds": [
+      "IN3"
+     ]
+    },
+    {
+     "stationId": "OUT3",
+     "interactionNodeIds": [
+      "OUT3"
+     ]
+    },
+    {
+     "stationId": "IN4",
+     "interactionNodeIds": [
+      "IN4"
+     ]
+    },
+    {
+     "stationId": "OUT4",
+     "interactionNodeIds": [
+      "OUT4"
+     ]
+    },
+    {
+     "stationId": "CH1",
+     "interactionNodeIds": [
+      "CH1"
+     ]
+    },
+    {
+     "stationId": "CH2",
+     "interactionNodeIds": [
+      "CH2"
+     ]
+    },
+    {
+     "stationId": "CH3",
+     "interactionNodeIds": [
+      "CH3"
+     ]
+    },
+    {
+     "stationId": "CH4",
+     "interactionNodeIds": [
+      "CH4"
+     ]
+    },
+    {
+     "stationId": "CH5",
+     "interactionNodeIds": [
+      "CH5"
+     ]
+    },
+    {
+     "stationId": "CH6",
+     "interactionNodeIds": [
+      "CH6"
+     ]
+    },
+    {
+     "stationId": "P01",
+     "interactionNodeIds": [
+      "P01"
+     ]
+    },
+    {
+     "stationId": "P02",
+     "interactionNodeIds": [
+      "P02"
+     ]
+    },
+    {
+     "stationId": "P03",
+     "interactionNodeIds": [
+      "P03"
+     ]
+    },
+    {
+     "stationId": "P04",
+     "interactionNodeIds": [
+      "P04"
+     ]
+    },
+    {
+     "stationId": "P05",
+     "interactionNodeIds": [
+      "P05"
+     ]
+    },
+    {
+     "stationId": "P06",
+     "interactionNodeIds": [
+      "P06"
+     ]
+    },
+    {
+     "stationId": "P07",
+     "interactionNodeIds": [
+      "P07"
+     ]
+    },
+    {
+     "stationId": "P08",
+     "interactionNodeIds": [
+      "P08"
+     ]
+    },
+    {
+     "stationId": "P09",
+     "interactionNodeIds": [
+      "P09"
+     ]
+    },
+    {
+     "stationId": "P10",
+     "interactionNodeIds": [
+      "P10"
+     ]
+    },
+    {
+     "stationId": "P11",
+     "interactionNodeIds": [
+      "P11"
+     ]
+    },
+    {
+     "stationId": "P12",
+     "interactionNodeIds": [
+      "P12"
+     ]
+    },
+    {
+     "stationId": "P13",
+     "interactionNodeIds": [
+      "P13"
+     ]
+    },
+    {
+     "stationId": "P14",
+     "interactionNodeIds": [
+      "P14"
+     ]
+    },
+    {
+     "stationId": "P15",
+     "interactionNodeIds": [
+      "P15"
+     ]
+    },
+    {
+     "stationId": "P16",
+     "interactionNodeIds": [
+      "P16"
+     ]
+    },
+    {
+     "stationId": "P17",
+     "interactionNodeIds": [
+      "P17"
+     ]
+    },
+    {
+     "stationId": "P18",
+     "interactionNodeIds": [
+      "P18"
+     ]
+    },
+    {
+     "stationId": "P19",
+     "interactionNodeIds": [
+      "P19"
+     ]
+    },
+    {
+     "stationId": "P20",
+     "interactionNodeIds": [
+      "P20"
+     ]
+    },
+    {
+     "stationId": "P21",
+     "interactionNodeIds": [
+      "P21"
+     ]
+    },
+    {
+     "stationId": "P22",
+     "interactionNodeIds": [
+      "P22"
+     ]
+    },
+    {
+     "stationId": "P23",
+     "interactionNodeIds": [
+      "P23"
+     ]
+    },
+    {
+     "stationId": "P24",
+     "interactionNodeIds": [
+      "P24"
+     ]
+    },
+    {
+     "stationId": "P25",
+     "interactionNodeIds": [
+      "P25"
+     ]
+    },
+    {
+     "stationId": "P26",
+     "interactionNodeIds": [
+      "P26"
+     ]
+    }
+   ]
+  }
+ ]
+}
