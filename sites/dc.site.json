@@ -1,0 +1,1186 @@
+{
+ "format": "fleet-control-tower/site-extras",
+ "formatVersion": "1",
+ "layoutId": "dc",
+ "site": "dc",
+ "width": 88.0,
+ "height": 53.5,
+ "twoWay": false,
+ "vehicleTypes": {
+  "AGF-CB15": "FORKLIFT",
+  "AMR-TOTE": "CARRIER"
+ },
+ "nodeKinds": {
+  "SE10": "cross",
+  "SE16_2": "cross",
+  "SE22_8": "cross",
+  "SE29_4": "cross",
+  "SE36": "cross",
+  "SE42_6": "cross",
+  "SE50": "cross",
+  "SE54": "cross",
+  "SE58": "cross",
+  "SE62": "cross",
+  "SE66": "cross",
+  "SE70_5": "cross",
+  "SE79": "cross",
+  "SW10": "cross",
+  "SW16_2": "cross",
+  "SW22_8": "cross",
+  "SW29_4": "cross",
+  "SW36": "cross",
+  "SW42_6": "cross",
+  "SW50": "cross",
+  "SW54": "cross",
+  "SW58": "cross",
+  "SW62": "cross",
+  "SW66": "cross",
+  "SW70_5": "cross",
+  "SW79": "cross",
+  "NE10": "cross",
+  "NE16_2": "cross",
+  "NE22_8": "cross",
+  "NE29_4": "cross",
+  "NE36": "cross",
+  "NE42_6": "cross",
+  "NE50": "cross",
+  "NE54": "cross",
+  "NE58": "cross",
+  "NE62": "cross",
+  "NE66": "cross",
+  "NE70_5": "cross",
+  "NE79": "cross",
+  "NW10": "cross",
+  "NW16_2": "cross",
+  "NW22_8": "cross",
+  "NW29_4": "cross",
+  "NW36": "cross",
+  "NW42_6": "cross",
+  "NW50": "cross",
+  "NW54": "cross",
+  "NW58": "cross",
+  "NW62": "cross",
+  "NW66": "cross",
+  "NW70_5": "cross",
+  "NW79": "cross",
+  "NE47": "cross",
+  "NW47": "cross",
+  "qSE10SE16_2": "queue",
+  "qSE16_2SE22_8": "queue",
+  "qSE22_8SE29_4": "queue",
+  "qSE29_4SE36": "queue",
+  "qSE36SE42_6": "queue",
+  "qSE50SE54": "queue",
+  "qSE54SE58": "queue",
+  "qSE58SE62": "queue",
+  "qSE62SE66": "queue",
+  "qSE66SE70_5": "queue",
+  "qSE70_5SE79": "queue",
+  "qSW70_5SW79": "queue",
+  "qSW66SW70_5": "queue",
+  "qSW62SW66": "queue",
+  "qSW58SW62": "queue",
+  "qSW54SW58": "queue",
+  "qSW50SW54": "queue",
+  "qSW36SW42_6": "queue",
+  "qSW29_4SW36": "queue",
+  "qSW22_8SW29_4": "queue",
+  "qSW16_2SW22_8": "queue",
+  "qSW10SW16_2": "queue",
+  "qNE10NE16_2": "queue",
+  "qNE16_2NE22_8": "queue",
+  "qNE22_8NE29_4": "queue",
+  "qNE29_4NE36": "queue",
+  "qNE36NE42_6": "queue",
+  "qNE50NE54": "queue",
+  "qNE54NE58": "queue",
+  "qNE58NE62": "queue",
+  "qNE62NE66": "queue",
+  "qNE66NE70_5": "queue",
+  "qNE70_5NE79": "queue",
+  "qNW70_5NW79": "queue",
+  "qNW66NW70_5": "queue",
+  "qNW62NW66": "queue",
+  "qNW58NW62": "queue",
+  "qNW54NW58": "queue",
+  "qNW50NW54": "queue",
+  "qNW36NW42_6": "queue",
+  "qNW29_4NW36": "queue",
+  "qNW22_8NW29_4": "queue",
+  "qNW16_2NW22_8": "queue",
+  "qNW10NW16_2": "queue",
+  "R1-01": "rack",
+  "R1-02": "rack",
+  "R1-03": "rack",
+  "R1-04": "rack",
+  "R1-05": "rack",
+  "R1-06": "rack",
+  "R1-07": "rack",
+  "R1-08": "rack",
+  "R1-09": "rack",
+  "R2-01": "rack",
+  "R2-02": "rack",
+  "R2-03": "rack",
+  "R2-04": "rack",
+  "R2-05": "rack",
+  "R2-06": "rack",
+  "R2-07": "rack",
+  "R2-08": "rack",
+  "R2-09": "rack",
+  "R3-01": "rack",
+  "R3-02": "rack",
+  "R3-03": "rack",
+  "R3-04": "rack",
+  "R3-05": "rack",
+  "R3-06": "rack",
+  "R3-07": "rack",
+  "R3-08": "rack",
+  "R3-09": "rack",
+  "R4-01": "rack",
+  "R4-02": "rack",
+  "R4-03": "rack",
+  "R4-04": "rack",
+  "R4-05": "rack",
+  "R4-06": "rack",
+  "R4-07": "rack",
+  "R4-08": "rack",
+  "R4-09": "rack",
+  "R5-01": "rack",
+  "R5-02": "rack",
+  "R5-03": "rack",
+  "R5-04": "rack",
+  "R5-05": "rack",
+  "R5-06": "rack",
+  "R5-07": "rack",
+  "R5-08": "rack",
+  "R5-09": "rack",
+  "K1-01": "pickface",
+  "K1-02": "pickface",
+  "K1-03": "pickface",
+  "K1-04": "pickface",
+  "K1-05": "pickface",
+  "K1-06": "pickface",
+  "K1-07": "pickface",
+  "K1-08": "pickface",
+  "K1-09": "pickface",
+  "K1-10": "pickface",
+  "K1-11": "pickface",
+  "K2-01": "pickface",
+  "K2-02": "pickface",
+  "K2-03": "pickface",
+  "K2-04": "pickface",
+  "K2-05": "pickface",
+  "K2-06": "pickface",
+  "K2-07": "pickface",
+  "K2-08": "pickface",
+  "K2-09": "pickface",
+  "K2-10": "pickface",
+  "K2-11": "pickface",
+  "K3-01": "pickface",
+  "K3-02": "pickface",
+  "K3-03": "pickface",
+  "K3-04": "pickface",
+  "K3-05": "pickface",
+  "K3-06": "pickface",
+  "K3-07": "pickface",
+  "K3-08": "pickface",
+  "K3-09": "pickface",
+  "K3-10": "pickface",
+  "K3-11": "pickface",
+  "K4-01": "pickface",
+  "K4-02": "pickface",
+  "K4-03": "pickface",
+  "K4-04": "pickface",
+  "K4-05": "pickface",
+  "K4-06": "pickface",
+  "K4-07": "pickface",
+  "K4-08": "pickface",
+  "K4-09": "pickface",
+  "K4-10": "pickface",
+  "K4-11": "pickface",
+  "K5-01": "pickface",
+  "K5-02": "pickface",
+  "K5-03": "pickface",
+  "K5-04": "pickface",
+  "K5-05": "pickface",
+  "K5-06": "pickface",
+  "K5-07": "pickface",
+  "K5-08": "pickface",
+  "K5-09": "pickface",
+  "K5-10": "pickface",
+  "K5-11": "pickface",
+  "W11": "spine",
+  "W16": "spine",
+  "W21": "spine",
+  "W26": "spine",
+  "W31": "spine",
+  "W36": "spine",
+  "BL10": "baylane",
+  "qNE10W36": "queue",
+  "qW31W36": "queue",
+  "qW26W31": "queue",
+  "qW21W26": "queue",
+  "qW16W21": "queue",
+  "qW11W16": "queue",
+  "qSW10W11": "queue",
+  "SI1": "in_stage",
+  "SI2": "in_stage",
+  "SI3": "in_stage",
+  "SI4": "in_stage",
+  "SI5": "in_stage",
+  "SI6": "in_stage",
+  "E11": "spine",
+  "E16": "spine",
+  "E21": "spine",
+  "E26": "spine",
+  "E31": "spine",
+  "E36": "spine",
+  "qE11SW79": "queue",
+  "qE11E16": "queue",
+  "qE16E21": "queue",
+  "qE21E26": "queue",
+  "qE26E31": "queue",
+  "qE31E36": "queue",
+  "qE36NE79": "queue",
+  "SO1": "out_stage",
+  "SO2": "out_stage",
+  "SO3": "out_stage",
+  "SO4": "out_stage",
+  "SO5": "out_stage",
+  "SO6": "out_stage",
+  "T12": "spine",
+  "T17": "spine",
+  "T22": "spine",
+  "T27": "spine",
+  "T32": "spine",
+  "T37": "spine",
+  "BL70_5": "baylane",
+  "qSW70_5T12": "queue",
+  "qT12T17": "queue",
+  "qT17T22": "queue",
+  "qT22T27": "queue",
+  "qT27T32": "queue",
+  "qT32T37": "queue",
+  "qNE70_5T37": "queue",
+  "PK1": "pack",
+  "PK2": "pack",
+  "PK3": "pack",
+  "PK4": "pack",
+  "PK5": "pack",
+  "PK6": "pack",
+  "BL42_6": "baylane",
+  "BL39_5": "baylane",
+  "BL36_7": "baylane",
+  "BL33_9": "baylane",
+  "BL31_1": "baylane",
+  "BL28_3": "baylane",
+  "BL25_5": "baylane",
+  "BL22_7": "baylane",
+  "BL19_9": "baylane",
+  "BL17_1": "baylane",
+  "BL14_3": "baylane",
+  "BL11_5": "baylane",
+  "BL68_5": "baylane",
+  "BL66_5": "baylane",
+  "BL64_5": "baylane",
+  "BL62_5": "baylane",
+  "BL60_5": "baylane",
+  "BL58_5": "baylane",
+  "BL56_5": "baylane",
+  "BL54_5": "baylane",
+  "BL52_5": "baylane",
+  "BL50_5": "baylane",
+  "BL48_5": "baylane",
+  "BL47": "baylane",
+  "CA11_5": "charger",
+  "PA14_3": "park",
+  "CA17_1": "charger",
+  "PA19_9": "park",
+  "CA22_7": "charger",
+  "PA25_5": "park",
+  "CA28_3": "charger",
+  "PA31_1": "park",
+  "PA33_9": "park",
+  "PA36_7": "park",
+  "PA39_5": "park",
+  "CT48_5": "charger",
+  "PT50_5": "park",
+  "CT52_5": "charger",
+  "PT54_5": "park",
+  "CT56_5": "charger",
+  "PT58_5": "park",
+  "CT60_5": "charger",
+  "PT62_5": "park",
+  "CT64_5": "charger",
+  "PT66_5": "park",
+  "PT68_5": "park"
+ },
+ "noStop": [
+  "BL47",
+  "NE47",
+  "NW47"
+ ],
+ "edges": {},
+ "zones": [
+  {
+   "id": "Z-IN",
+   "name": "입고 도크·스테이징",
+   "kind": "human_work",
+   "polygon": [
+    [
+     0,
+     8.0
+    ],
+    [
+     8.6,
+     8.0
+    ],
+    [
+     8.6,
+     39.0
+    ],
+    [
+     0,
+     39.0
+    ]
+   ],
+   "staticSpeed": 0.8,
+   "humanSpeed": 0.3,
+   "locked": false
+  },
+  {
+   "id": "Z-OUT",
+   "name": "출고 스테이징·도크",
+   "kind": "human_work",
+   "polygon": [
+    [
+     80.6,
+     8.0
+    ],
+    [
+     88.0,
+     8.0
+    ],
+    [
+     88.0,
+     39.0
+    ],
+    [
+     80.6,
+     39.0
+    ]
+   ],
+   "staticSpeed": 0.8,
+   "humanSpeed": 0.3,
+   "locked": false
+  },
+  {
+   "id": "Z-PACK",
+   "name": "패킹 스테이션",
+   "kind": "human_work",
+   "polygon": [
+    [
+     71.8,
+     9.0
+    ],
+    [
+     76.0,
+     9.0
+    ],
+    [
+     76.0,
+     40.0
+    ],
+    [
+     71.8,
+     40.0
+    ]
+   ],
+   "staticSpeed": null,
+   "humanSpeed": 0.3,
+   "locked": false
+  },
+  {
+   "id": "Z-RACK",
+   "name": "팔레트 랙(자율·수동 지게차)",
+   "kind": "forklift_lane",
+   "polygon": [
+    [
+     12.0,
+     8.4
+    ],
+    [
+     46.0,
+     8.4
+    ],
+    [
+     46.0,
+     41.6
+    ],
+    [
+     12.0,
+     41.6
+    ]
+   ],
+   "staticSpeed": 1.0,
+   "humanSpeed": 0.5,
+   "locked": false
+  },
+  {
+   "id": "Z-PICK",
+   "name": "협업 피킹 존",
+   "kind": "picking",
+   "polygon": [
+    [
+     48.0,
+     8.4
+    ],
+    [
+     68.0,
+     8.4
+    ],
+    [
+     68.0,
+     41.6
+    ],
+    [
+     48.0,
+     41.6
+    ]
+   ],
+   "staticSpeed": 1.0,
+   "humanSpeed": 0.3,
+   "locked": false
+  },
+  {
+   "id": "Z-CROSS-S",
+   "name": "횡단보도(남)·접근 구간",
+   "kind": "walkway",
+   "polygon": [
+    [
+     44.0,
+     2.6
+    ],
+    [
+     50.0,
+     2.6
+    ],
+    [
+     50.0,
+     7.4
+    ],
+    [
+     44.0,
+     7.4
+    ]
+   ],
+   "staticSpeed": null,
+   "humanSpeed": 0.3,
+   "locked": false
+  },
+  {
+   "id": "Z-CROSS-N",
+   "name": "횡단보도(북)·접근 구간",
+   "kind": "walkway",
+   "polygon": [
+    [
+     44.0,
+     42.6
+    ],
+    [
+     50.0,
+     42.6
+    ],
+    [
+     50.0,
+     47.2
+    ],
+    [
+     44.0,
+     47.2
+    ]
+   ],
+   "staticSpeed": null,
+   "humanSpeed": 0.3,
+   "locked": false
+  },
+  {
+   "id": "Z-WALK",
+   "name": "보행로(로봇 진입 없음)",
+   "kind": "walkway",
+   "polygon": [
+    [
+     0,
+     0
+    ],
+    [
+     88.0,
+     0
+    ],
+    [
+     88.0,
+     2.6
+    ],
+    [
+     0,
+     2.6
+    ]
+   ],
+   "staticSpeed": null,
+   "humanSpeed": null,
+   "locked": false
+  },
+  {
+   "id": "Z-BAY",
+   "name": "충전·주차",
+   "kind": "charging",
+   "polygon": [
+    [
+     10.0,
+     47.4
+    ],
+    [
+     80.0,
+     47.4
+    ],
+    [
+     80.0,
+     53.5
+    ],
+    [
+     10.0,
+     53.5
+    ]
+   ],
+   "staticSpeed": null,
+   "humanSpeed": null,
+   "locked": false
+  },
+  {
+   "id": "Z-R1",
+   "name": "랙 통로 R1",
+   "kind": "aisle",
+   "polygon": [
+    [
+     14.2,
+     8.6
+    ],
+    [
+     18.2,
+     8.6
+    ],
+    [
+     18.2,
+     41.4
+    ],
+    [
+     14.2,
+     41.4
+    ]
+   ],
+   "staticSpeed": null,
+   "humanSpeed": null,
+   "locked": false
+  },
+  {
+   "id": "Z-R2",
+   "name": "랙 통로 R2",
+   "kind": "aisle",
+   "polygon": [
+    [
+     20.8,
+     8.6
+    ],
+    [
+     24.8,
+     8.6
+    ],
+    [
+     24.8,
+     41.4
+    ],
+    [
+     20.8,
+     41.4
+    ]
+   ],
+   "staticSpeed": null,
+   "humanSpeed": null,
+   "locked": false
+  },
+  {
+   "id": "Z-R3",
+   "name": "랙 통로 R3",
+   "kind": "aisle",
+   "polygon": [
+    [
+     27.4,
+     8.6
+    ],
+    [
+     31.4,
+     8.6
+    ],
+    [
+     31.4,
+     41.4
+    ],
+    [
+     27.4,
+     41.4
+    ]
+   ],
+   "staticSpeed": null,
+   "humanSpeed": null,
+   "locked": false
+  },
+  {
+   "id": "Z-R4",
+   "name": "랙 통로 R4",
+   "kind": "aisle",
+   "polygon": [
+    [
+     34.0,
+     8.6
+    ],
+    [
+     38.0,
+     8.6
+    ],
+    [
+     38.0,
+     41.4
+    ],
+    [
+     34.0,
+     41.4
+    ]
+   ],
+   "staticSpeed": null,
+   "humanSpeed": null,
+   "locked": false
+  },
+  {
+   "id": "Z-R5",
+   "name": "랙 통로 R5",
+   "kind": "aisle",
+   "polygon": [
+    [
+     40.6,
+     8.6
+    ],
+    [
+     44.6,
+     8.6
+    ],
+    [
+     44.6,
+     41.4
+    ],
+    [
+     40.6,
+     41.4
+    ]
+   ],
+   "staticSpeed": null,
+   "humanSpeed": null,
+   "locked": false
+  },
+  {
+   "id": "Z-K1",
+   "name": "피킹 통로 K1",
+   "kind": "aisle",
+   "polygon": [
+    [
+     49.0,
+     8.6
+    ],
+    [
+     51.0,
+     8.6
+    ],
+    [
+     51.0,
+     41.4
+    ],
+    [
+     49.0,
+     41.4
+    ]
+   ],
+   "staticSpeed": null,
+   "humanSpeed": null,
+   "locked": false
+  },
+  {
+   "id": "Z-K2",
+   "name": "피킹 통로 K2",
+   "kind": "aisle",
+   "polygon": [
+    [
+     53.0,
+     8.6
+    ],
+    [
+     55.0,
+     8.6
+    ],
+    [
+     55.0,
+     41.4
+    ],
+    [
+     53.0,
+     41.4
+    ]
+   ],
+   "staticSpeed": null,
+   "humanSpeed": null,
+   "locked": false
+  },
+  {
+   "id": "Z-K3",
+   "name": "피킹 통로 K3",
+   "kind": "aisle",
+   "polygon": [
+    [
+     57.0,
+     8.6
+    ],
+    [
+     59.0,
+     8.6
+    ],
+    [
+     59.0,
+     41.4
+    ],
+    [
+     57.0,
+     41.4
+    ]
+   ],
+   "staticSpeed": null,
+   "humanSpeed": null,
+   "locked": false
+  },
+  {
+   "id": "Z-K4",
+   "name": "피킹 통로 K4",
+   "kind": "aisle",
+   "polygon": [
+    [
+     61.0,
+     8.6
+    ],
+    [
+     63.0,
+     8.6
+    ],
+    [
+     63.0,
+     41.4
+    ],
+    [
+     61.0,
+     41.4
+    ]
+   ],
+   "staticSpeed": null,
+   "humanSpeed": null,
+   "locked": false
+  },
+  {
+   "id": "Z-K5",
+   "name": "피킹 통로 K5",
+   "kind": "aisle",
+   "polygon": [
+    [
+     65.0,
+     8.6
+    ],
+    [
+     67.0,
+     8.6
+    ],
+    [
+     67.0,
+     41.4
+    ],
+    [
+     65.0,
+     41.4
+    ]
+   ],
+   "staticSpeed": null,
+   "humanSpeed": null,
+   "locked": false
+  }
+ ],
+ "racks": [
+  [
+   [
+    18.2,
+    8.6
+   ],
+   [
+    20.799999999999997,
+    8.6
+   ],
+   [
+    20.799999999999997,
+    41.4
+   ],
+   [
+    18.2,
+    41.4
+   ]
+  ],
+  [
+   [
+    24.8,
+    8.6
+   ],
+   [
+    27.4,
+    8.6
+   ],
+   [
+    27.4,
+    41.4
+   ],
+   [
+    24.8,
+    41.4
+   ]
+  ],
+  [
+   [
+    31.4,
+    8.6
+   ],
+   [
+    34.0,
+    8.6
+   ],
+   [
+    34.0,
+    41.4
+   ],
+   [
+    31.4,
+    41.4
+   ]
+  ],
+  [
+   [
+    38.0,
+    8.6
+   ],
+   [
+    40.6,
+    8.6
+   ],
+   [
+    40.6,
+    41.4
+   ],
+   [
+    38.0,
+    41.4
+   ]
+  ],
+  [
+   [
+    44.6,
+    8.6
+   ],
+   [
+    45.800000000000004,
+    8.6
+   ],
+   [
+    45.800000000000004,
+    41.4
+   ],
+   [
+    44.6,
+    41.4
+   ]
+  ],
+  [
+   [
+    13.0,
+    8.6
+   ],
+   [
+    14.2,
+    8.6
+   ],
+   [
+    14.2,
+    41.4
+   ],
+   [
+    13.0,
+    41.4
+   ]
+  ],
+  [
+   [
+    51.0,
+    9.5
+   ],
+   [
+    53.0,
+    9.5
+   ],
+   [
+    53.0,
+    40.5
+   ],
+   [
+    51.0,
+    40.5
+   ]
+  ],
+  [
+   [
+    55.0,
+    9.5
+   ],
+   [
+    57.0,
+    9.5
+   ],
+   [
+    57.0,
+    40.5
+   ],
+   [
+    55.0,
+    40.5
+   ]
+  ],
+  [
+   [
+    59.0,
+    9.5
+   ],
+   [
+    61.0,
+    9.5
+   ],
+   [
+    61.0,
+    40.5
+   ],
+   [
+    59.0,
+    40.5
+   ]
+  ],
+  [
+   [
+    63.0,
+    9.5
+   ],
+   [
+    65.0,
+    9.5
+   ],
+   [
+    65.0,
+    40.5
+   ],
+   [
+    63.0,
+    40.5
+   ]
+  ],
+  [
+   [
+    67.0,
+    9.5
+   ],
+   [
+    68.0,
+    9.5
+   ],
+   [
+    68.0,
+    40.5
+   ],
+   [
+    67.0,
+    40.5
+   ]
+  ],
+  [
+   [
+    48.0,
+    9.5
+   ],
+   [
+    49.0,
+    9.5
+   ],
+   [
+    49.0,
+    40.5
+   ],
+   [
+    48.0,
+    40.5
+   ]
+  ]
+ ],
+ "coverage": {
+  "CAM-IN": [
+   [
+    0,
+    0
+   ],
+   [
+    12.0,
+    0
+   ],
+   [
+    12.0,
+    53.5
+   ],
+   [
+    0,
+    53.5
+   ]
+  ],
+  "CAM-OUT": [
+   [
+    69.0,
+    0
+   ],
+   [
+    88.0,
+    0
+   ],
+   [
+    88.0,
+    53.5
+   ],
+   [
+    69.0,
+    53.5
+   ]
+  ],
+  "CAM-S": [
+   [
+    0,
+    0
+   ],
+   [
+    88.0,
+    0
+   ],
+   [
+    88.0,
+    8.4
+   ],
+   [
+    0,
+    8.4
+   ]
+  ],
+  "CAM-N": [
+   [
+    0,
+    41.6
+   ],
+   [
+    88.0,
+    41.6
+   ],
+   [
+    88.0,
+    53.5
+   ],
+   [
+    0,
+    53.5
+   ]
+  ],
+  "CAM-X": [
+   [
+    45.8,
+    0
+   ],
+   [
+    48.2,
+    0
+   ],
+   [
+    48.2,
+    53.5
+   ],
+   [
+    45.8,
+    53.5
+   ]
+  ]
+ },
+ "doors": [
+  {
+   "id": "D-S",
+   "name": "남측 고속문",
+   "a": [
+    46.0,
+    2.6
+   ],
+   "b": [
+    46.0,
+    7.4
+   ],
+   "lanes": [
+    "SE42_6|SE50",
+    "SW42_6|SW50"
+   ]
+  },
+  {
+   "id": "D-N",
+   "name": "북측 고속문",
+   "a": [
+    46.0,
+    42.6
+   ],
+   "b": [
+    46.0,
+    47.2
+   ],
+   "lanes": [
+    "NE42_6|NE47",
+    "NW42_6|NW47"
+   ]
+  }
+ ],
+ "walls": [
+  [
+   [
+    46.0,
+    7.4
+   ],
+   [
+    46.0,
+    42.6
+   ]
+  ],
+  [
+   [
+    46.0,
+    47.2
+   ],
+   [
+    46.0,
+    53.5
+   ]
+  ]
+ ]
+}
