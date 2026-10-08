@@ -75,26 +75,38 @@ class AisleRequestTests(unittest.TestCase):
         self.assertFalse(any(node_res(n) in self.m.blocks for n in self.nodes))
 
 
-def drive_track(manager, legs, dt: float = 0.5):
-    """Feed one truck's detections along ``legs`` ((x, y) waypoints with the speed to reach each, m/s; speed 0
-    = stand there for that many seconds), ending at the manager's clock. Returns its track."""
-    points = [legs[0][0]]
-    for (x, y), v in legs[1:]:
+def drive_track(manager, legs, dt: float = 0.5, sigma: float = 0.0, seed: int = 0, look=None):
+    """Drive one truck's detections through the control room: from ``legs[0]`` (a point) along
+    ``(point, speed m/s)`` legs; ``("wait", seconds)`` stands still. Each detection (one per ``dt``, Gaussian
+    noise ``sigma`` as from the cameras) goes to the tracker and the block update, on the manager's clock.
+    ``look(track)`` is called after each update. Returns the track."""
+    rng = random.Random(seed)
+    points = [legs[0]]
+    for target, v in legs[1:]:
         px, py = points[-1]
-        if v == 0:
-            points += [(px, py)] * int(y / dt)          # (seconds, seconds): standing still
+        if target == "wait":
+            points += [(px, py)] * int(v / dt)
             continue
-        n = max(1, round(math.hypot(x - px, y - py) / (v * dt)))
-        points += [(px + (x - px) * k / n, py + (y - py) * k / n) for k in range(1, n + 1)]
+        n = max(1, round(math.hypot(target[0] - px, target[1] - py) / (v * dt)))
+        points += [(px + (target[0] - px) * k / n, py + (target[1] - py) * k / n) for k in range(1, n + 1)]
     manager.tracker = Tracker()
-    t0 = manager.now - dt * (len(points) - 1)
-    for k, (x, y) in enumerate(points):
-        manager.tracker.update([Detection("forklift", x, y, "infra")], t0 + k * dt)
+    manager._fl_stood = {}
+    manager._fl_still_since = {}
+    for x, y in points:
+        manager.now += dt
+        manager.tracker.update([Detection("forklift", x + rng.gauss(0, sigma), y + rng.gauss(0, sigma), "infra")],
+                               manager.now)
+        manager._update_blocks()
+        if look is not None and manager.tracker.tracks:
+            look(next(iter(manager.tracker.tracks.values())))
     (track,) = manager.tracker.tracks.values()
     return track
 
 
 class StoppedTruckTests(unittest.TestCase):
+    # FL-R1's two corners: west along the south main aisle into R1, east along the north one into R2
+    CORNERS = (("SW16_2", (1, 0), "Z-R1"), ("NE22_8", (-1, 0), "Z-R2"))
+
     def setUp(self):
         self.sim = quiet_dc()
         self.m = self.sim.manager
@@ -104,41 +116,79 @@ class StoppedTruckTests(unittest.TestCase):
         n = self.L.nodes[node]
         return (n.x + dx, n.y + dy)
 
-    def blocks_for(self, track, waited: float) -> None:
-        self.m._fl_still_since = {track.id: self.m.now - waited - 3.0}
-        self.m._update_blocks()
+    def backed_off(self, node, back, metres, sigma=0.0, seed=0, then=(), look=None):
+        bx, by = back
+        return drive_track(self.m, [self.at(node, 9 * bx, 9 * by), (self.at(node), 2.0), ("wait", 12),
+                                    (self.at(node, metres * bx, metres * by), 0.5), *then, ("wait", 20)],
+                           sigma=sigma, seed=seed, look=look)
 
     def test_a_truck_that_backed_off_waits_for_the_intersection_it_backed_away_from(self):
-        # FL-R1's two corners: west along the south main aisle into R1, east along the north one into R2
-        for node, back, aisle in (("SW16_2", (1, 0), "Z-R1"), ("NE22_8", (-1, 0), "Z-R2")):
+        for node, back, aisle in self.CORNERS:
             for metres in (3.0, 4.5, 6.0):
                 with self.subTest(node=node, metres=metres):
-                    bx, by = back
-                    tr = drive_track(self.m, [(self.at(node, 8 * bx, 8 * by), 0), (self.at(node), 1.5), ((0, 4), 0),
-                                              (self.at(node, metres * bx, metres * by), 0.5), ((0, 4), 0)])
+                    tr = self.backed_off(node, back, metres)
                     self.assertEqual(self.m._turn_ahead(tr), node)
-                    self.blocks_for(tr, waited=2.0)
+                    self.m._fl_still_since = {tr.id: self.m.now - 5.0}
+                    self.m._update_blocks()
                     self.assertEqual(self.m.block_src.get(node_res(node)), "turn")
-                    # the aisle it turns into is held (6 m back it also stands at the next aisle's mouth)
-                    self.assertIn(aisle, {z for z, _t in self.m.aisle_requests.values()})
+                    # the aisle it turns into, and no other (it may stand in front of the next aisle's mouth)
+                    self.assertEqual({z for z, _t in self.m.aisle_requests.values()}, {aisle})
+
+    def test_the_judgement_holds_with_camera_noise(self):
+        # cameras: 0.25 m; while the truck stands, the control room keeps naming the right intersection
+        def held(legs, want, seed):
+            seen = []
+            drive_track(self.m, legs, sigma=0.25, seed=seed,
+                        look=lambda tr: seen.append(self.m._turn_ahead(tr)) if tr.resting else None)
+            tail = seen[-30:]                                   # the last 15 s standing
+            self.assertGreaterEqual(tail.count(want) / len(tail), 0.95, tail)
+        for seed in (1, 2, 3):
+            for node, (bx, by), _aisle in self.CORNERS:
+                for metres in (3.0, 4.5, 6.0):
+                    with self.subTest(node=node, metres=metres, seed=seed):
+                        held([self.at(node, 9 * bx, 9 * by), (self.at(node), 2.0), ("wait", 12),
+                              (self.at(node, metres * bx, metres * by), 0.5), ("wait", 20)], node, seed)
+            with self.subTest("stopped on the way, on red", seed=seed):
+                held([self.at("SW16_2", 9, 0), (self.at("qSW16_2SW22_8"), 2.0), ("wait", 20)], "SW16_2", seed)
+            with self.subTest("turned back at a corner", seed=seed):
+                held([self.at("SW16_2", 9, 0), (self.at("SW16_2"), 2.0), ("wait", 12),
+                      (self.at("SW16_2", 5.0, 0), 2.0), ("wait", 20)], "SW22_8", seed)
+
+    def test_driving_back_up_part_way_keeps_the_intersection(self):
+        bx = 1
+        tr = self.backed_off("SW16_2", (bx, 0), 4.5, then=[("wait", 4), (self.at("SW16_2", 2.5 * bx, 0), 0.8)])
+        self.assertEqual(self.m._turn_ahead(tr), "SW16_2")
+
+    def test_a_truck_that_turned_back_does_not_wait_for_the_corner_it_left(self):
+        # stood at SW16_2, turned round and drove back east 5 m: it now waits for SW22_8 ahead, if anything
+        tr = drive_track(self.m, [self.at("SW16_2", 9, 0), (self.at("SW16_2"), 2.0), ("wait", 12),
+                                  (self.at("SW16_2", 5.0, 0), 2.0), ("wait", 10)])
+        self.assertEqual(self.m._turn_ahead(tr), "SW22_8")
 
     def test_a_truck_driving_the_loop_backwards_is_judged_the_same_way(self):
         # a driver who turned back drives north out of R2 against its flow, waits at NE22_8, backs off south
-        tr = drive_track(self.m, [(self.at("R2-09", 0, -6), 0), (self.at("NE22_8"), 1.5), ((0, 4), 0),
-                                  (self.at("NE22_8", 0, -3.0), 0.5), ((0, 4), 0)])
+        tr = drive_track(self.m, [self.at("R2-09", 0, -6), (self.at("NE22_8"), 2.0), ("wait", 12),
+                                  (self.at("NE22_8", 0, -3.0), 0.5), ("wait", 10)])
         self.assertEqual(self.m._turn_ahead(tr), "NE22_8")
 
     def test_a_truck_that_passed_an_intersection_is_not_waiting_at_it(self):
-        tr = drive_track(self.m, [(self.at("SW16_2", 6, 0), 0), (self.at("SW16_2"), 1.5), ((0, 3), 0),
-                                  (self.at("R1-01"), 1.5), ((0, 4), 0)])
+        tr = drive_track(self.m, [self.at("SW16_2", 6, 0), (self.at("SW16_2"), 2.0), ("wait", 3),
+                                  (self.at("R1-01"), 2.0), ("wait", 10)])
         self.assertIsNone(self.m._turn_ahead(tr))
 
     def test_the_aisle_request_stays_while_the_truck_waits_on_red(self):
         # stopped at the queue node short of SW16_2 by the light, past the 20 s the turn request holds
-        tr = drive_track(self.m, [(self.at("SW16_2", 9, 0), 0), (self.at("qSW16_2SW22_8"), 1.5), ((0, 4), 0)])
-        self.blocks_for(tr, waited=30.0)
+        tr = drive_track(self.m, [self.at("SW16_2", 9, 0), (self.at("qSW16_2SW22_8"), 2.0), ("wait", 10)])
+        self.m._fl_still_since = {tr.id: self.m.now - 33.0}
+        self.m._update_blocks()
         self.assertNotEqual(self.m.block_src.get(node_res("SW16_2")), "turn")
         self.assertTrue(all(node_res(n) in self.m.aisle_requests for n in self.m._zone_nodes["Z-R1"]))
+
+    def test_a_standing_truck_keeps_its_swing_circle_through_velocity_noise(self):
+        seen = []
+        drive_track(self.m, [self.at("qSW16_2SW22_8"), ("wait", 60)], sigma=0.25, seed=4,
+                    look=lambda tr: seen.append(tr.resting))
+        self.assertTrue(all(seen[10:]))            # at rest from the first window on, never "moving" again
 
     def test_turning_back_on_a_node_heads_for_the_node_it_came_from(self):
         from fleet.agents import Forklift
@@ -150,18 +200,37 @@ class StoppedTruckTests(unittest.TestCase):
         f._reverse()
         self.assertEqual(f.loop[f._target()], "A1")
 
-    def test_turning_back_after_backing_off_drives_on_from_where_the_truck_stands(self):
-        from fleet.agents import Forklift
-        f = Forklift("F", ["qSW16_2SW22_8", "SW16_2", "R1-01"], self.L, random.Random(1), idx=1)
-        f.bx, f.by = self.at("SW16_2")
-        f.heading, f.back = math.pi, 4.5                    # arrived heading west, backed off 4.5 m east
+    def rack_truck(self, node: str, heading: float, back: float):
+        sim = quiet_dc(rack_forklift=1)
+        (f,) = [f for f in sim.forklifts if f.id == "FL-R1"]
+        f.idx = f.loop.index(node)
+        f.bx, f.by = self.at(node)
+        f.heading, f.back = heading, back
         f._place(f.heading)
-        x0, y0 = f.x, f.y
+        return f
+
+    def test_turning_back_after_backing_off_drives_away_from_the_corner(self):
+        # FL-R1 reached SW16_2 heading west and backed off 4.5 m east, past the queue node 3.3 m back
+        f = self.rack_truck("SW16_2", math.pi, 4.5)
+        x0 = f.x
         f._reverse()
-        self.assertEqual(f.back, 0.0)
-        self.assertAlmostEqual(f.bx, x0, places=6)
-        self.assertAlmostEqual(f.by, y0, places=6)
-        self.assertEqual(f.loop[f._target()], "qSW16_2SW22_8")
+        self.assertEqual((f.back, f.direction), (0.0, -1))
+        self.assertEqual(f.loop[f._target()], "SW22_8")
+        xs = []
+        for k in range(100):
+            f.step(self.sim.dt, 1000.0 + k * self.sim.dt, [], [])
+            xs.append(f.x)
+        self.assertGreaterEqual(min(xs), x0 - 1e-6)          # never back toward the corner it gave up
+        self.assertGreater(max(xs), x0 + 1.0)
+
+    def test_a_truck_backed_into_an_aisle_does_not_turn_round_in_it(self):
+        # FL-R1 left R1 at NE16_2 heading north and backed off 4.5 m: its body stands in the aisle
+        f = self.rack_truck("NE16_2", math.pi / 2, 4.5)
+        f._reverse()
+        self.assertEqual((f.direction, f.back), (1, 4.5))
+        gave, _answer = f.radio_yield(100.0)
+        self.assertFalse(gave)
+        self.assertEqual(f.direction, 1)
 
     def test_no_turn_on_a_straight_aisle(self):
         from fleet.agents import Forklift
@@ -205,12 +274,13 @@ class AisleLightTests(unittest.TestCase):
         L = sim.layout
         f = Forklift("F", ["qSW16_2SW22_8", "SW16_2", "R1-01", "R1-02"], L, random.Random(1), idx=0)
         f.bx, f.by = L.nodes["qSW16_2SW22_8"].pos
-        f.radio_yield(100.0)
+        self.assertEqual(f.radio_yield(100.0), (True, "되돌아감"))
         self.assertEqual(f.direction, -1)
         g = Forklift("G", ["R1-01", "R1-02", "R1-03"], L, random.Random(2), idx=1)
         g.bx, g.by = L.nodes["R1-02"].pos
-        answer = g.radio_yield(100.0)
+        gave, answer = g.radio_yield(100.0)
         self.assertEqual(g.direction, 1)                    # inside the aisle: it cannot give way
+        self.assertFalse(gave)
         self.assertIn("통로", answer)
         self.assertLess(g.yield_until, 100.0)
 
@@ -220,7 +290,8 @@ class AisleLightTests(unittest.TestCase):
         v = sim.vehicle("AGF-01")
         v.x, v.y = fl_r1.x + 2.0, fl_r1.y
         v.field_cause = f"forklift:{dock.id}"               # stuck at the dock truck, beside FL-R1
-        answer = sim.radio_yield("AGF-01")
+        gave, answer = sim.radio_yield("AGF-01")
+        self.assertTrue(gave)
         self.assertIn(dock.id, answer)
         self.assertEqual((fl_r1.radioed, fl_r1.direction), (0, 1))
         v.x, v.y = fl_r1.x + 20.0, fl_r1.y                  # stuck at FL-R1, named by the field, 20 m off
@@ -228,19 +299,20 @@ class AisleLightTests(unittest.TestCase):
         sim.radio_yield("AGF-01")
         self.assertEqual(fl_r1.radioed, 1)
 
-    def test_the_operator_radios_once_per_standoff(self):
+    def test_the_operator_radios_once_per_standoff_and_again_if_the_driver_could_not(self):
         from types import SimpleNamespace
         from fleet.autoop import AutoOperator
         sim = quiet_dc()
         op = AutoOperator(Operations(sim), random.Random(1))
+        answers = iter([False, True, True, True])            # first call: the driver is still in an aisle
         calls = []
-        op._do = lambda cmd, **a: calls.append(cmd) or {"ok": True}
+        op._do = lambda cmd, **a: calls.append(cmd) or {"ok": next(answers)}
         sim.manager.robots["AGF-01"].field_cause = "forklift:FL-R1"
         alarm = SimpleNamespace(type="STANDOFF", source="AGF-01")
         plan = {"stage": 0}
-        for now in (100.0, 160.0, 220.0):
+        for now in (100.0, 160.0, 220.0, 280.0):
             op._respond(alarm, plan, now)
-        self.assertEqual(calls.count("radio_yield"), 1)
+        self.assertEqual(calls.count("radio_yield"), 2)
 
 
 class ReleaseTests(unittest.TestCase):

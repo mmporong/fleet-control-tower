@@ -387,8 +387,8 @@ class Forklift:
     turn_decided: bool = False      # the careless-turn draw for the current blocked turn was made
     back: float = 0.0               # backed off this far behind the turning node (letting a robot pass)
     backoffs: int = 0
-    # a standing vehicle in the circle the truck sweeps: the driver backs off (up to 3 m) to let it pass; with no
-    # room to back off, after 30 s this share turns anyway (a rule violation; swept in the benchmark)
+    # a standing vehicle in the circle the truck sweeps: the driver backs off (up to 4.5 m) to let it pass; with
+    # no room to back off, after 30 s this share turns anyway (a rule violation; swept in the benchmark)
     careless_p: float = 0.1
     careless_turns: int = 0
     stall_since: float | None = None
@@ -435,10 +435,19 @@ class Forklift:
         if self._in_aisle():
             return
         if self.back > 0.0:
-            # backed off short of its node: it is on the edge it came by, so it drives on back along that edge
+            # backed off short of its node: it is on the way it came by, and may have backed past the node before
+            # (4.5 m against 3.3 m lanes); the way back starts at the node behind it
             self.bx -= math.cos(self.heading) * self.back
             self.by -= math.sin(self.heading) * self.back
             self.back = 0.0
+            n = len(self.loop)
+            for _ in range(n):
+                here = self.layout.nodes[self.loop[self.idx]]
+                prev = self.layout.nodes[self.loop[(self.idx - self.direction) % n]]
+                if math.hypot(self.bx - here.x, self.by - here.y) <= \
+                        math.hypot(prev.x - here.x, prev.y - here.y) + 1e-6:
+                    break
+                self.idx = (self.idx - self.direction) % n
         else:
             base = self.layout.nodes[self.loop[self.idx]]
             if math.hypot(self.bx - base.x, self.by - base.y) > 1e-6:
@@ -610,8 +619,9 @@ class Forklift:
 
     def _back_off(self, dt: float, now: float, inside: list, robots, humans) -> bool:
         """A robot stands in the circle the truck must sweep, and the truck in that robot's field: after 10 s
-        the driver reverses up to 3 m along the way they came (if clear behind), lets the robot go, and drives
-        back to the turning point. Returns True while that manoeuvre moves the truck."""
+        the driver reverses up to 4.5 m along the way they came (6 m for 40 s after a radio call; if clear
+        behind), lets the robot go, and drives back to the turning point. Returns True while that manoeuvre moves
+        the truck."""
         waited = self.turn_wait_since is not None and now - self.turn_wait_since >= 10.0
         limit = 6.0 if now < self.yield_until else BACK_OFF_M
         if inside and waited and not self.turn_committed and self.back < limit:
@@ -654,27 +664,29 @@ class Forklift:
             return False
         return any(z.kind == "aisle" and not self.aisle_signal(z.id) for z in self.layout.zones_at(beyond.pos))
 
-    def radio_yield(self, now: float) -> str:
+    def radio_yield(self, now: float) -> tuple[bool, str]:
         """The control room asks the driver over the radio to give way (RUNBOOK: standoff with a truck).
 
         Outside a narrow aisle the driver goes back the way they came; waiting to turn, they may back off up to
-        6 m instead of 4.5 for the next 40 s. Inside a narrow aisle there is nothing to give: the aisle is one-way
-        and the driver cannot turn round in it, so the answer is to wait until the truck is out.
+        6 m instead of 4.5 for the next 40 s. In a narrow aisle (or backed into one) there is nothing to give: the
+        driver cannot turn round in it, so the call has no effect and is made again later. Returns (gave way,
+        the driver's answer).
         """
         self.radioed += 1
         if self._in_aisle():
-            return "통로 안이라 양보할 수 없음(통로를 빠져나간 뒤 양보)"
+            return False, "통로 안이라 지금은 양보할 수 없음"
         self.yield_until = now + 40.0
         if now - self.reversed_at > 10.0:
             self.reversed_at = now
             self.turn_wait_since = None
             self.blocked_since = None
             self._reverse()
-            return "되돌아감"
-        return "후진 양보"
+            return True, "되돌아감"
+        return True, "후진 양보"
 
     def _in_aisle(self) -> bool:
-        return any(z.kind == "aisle" for z in self.layout.zones_at((self.bx, self.by)))
+        """In a narrow aisle, by its lane position or its body (backed off into an aisle from its mouth)."""
+        return any(z.kind == "aisle" for p in ((self.bx, self.by), self.pos) for z in self.layout.zones_at(p))
 
     def _stalled(self, now: float) -> None:
         """A sideways move that stays blocked even at the offset: after 30 s the driver backs out

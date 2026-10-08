@@ -597,22 +597,24 @@ class Simulation:
                 return v
         raise KeyError(serial)
 
-    def radio_yield(self, serial: str) -> str:
+    def radio_yield(self, serial: str) -> tuple[bool, str]:
         """The control room radios the driver of the manual truck a robot is stuck at to give way.
 
-        The truck is the one the robot's protective field names, else the nearest within 8 m. Dock trucks are
-        directed by the dock team on site, so the call goes there instead.
+        The truck is the one the robot's protective field names (the operator sees it on the cameras), else the
+        nearest within 8 m. Dock trucks are directed by the dock team on site, so the call goes there instead.
+        Returns (the call was answered, what happened).
         """
         v = self.vehicle(serial)
         named = v.field_cause.split(":", 1)[1] if v.field_cause.startswith("forklift:") else None
         trucks = [f for f in self.forklifts if f.id == named] or \
             [f for f in self.forklifts if math.hypot(f.x - v.x, f.y - v.y) < 8.0]
         if not trucks:
-            return "근처에 수동 지게차 없음"
+            return False, "근처에 수동 지게차 없음"
         f = min(trucks, key=lambda f: math.hypot(f.x - v.x, f.y - v.y))
         if not hasattr(f, "radio_yield"):
-            return f"{f.id}: 도크 지게차라 도크 담당에게 현장 안내 요청"
-        return f"{f.id} 운전자: {f.radio_yield(self.now)}"
+            return True, f"{f.id}: 도크 지게차라 도크 담당에게 현장 안내 요청"
+        gave, answer = f.radio_yield(self.now)
+        return gave, f"{f.id} 운전자: {answer}"
 
     def field_service(self, serial: str) -> None:
         """The field team at the vehicle: its own reset (the only way a safety fault is cleared)."""

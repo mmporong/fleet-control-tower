@@ -30,7 +30,9 @@ from .vda5050 import HeaderIds, RouteEdge, RouteNode, action, build_instant_acti
 STRATEGIES = ("none", "locks", "locks+resolve")
 SWING_RADIUS = 1.9           # half the length of a 3.6 m counterbalance truck plus margin: its turning circle
 CLEARANCE_TURN = 1.0         # beyond the circle: half a robot body plus margin, so no part of a robot is inside
-BACKED_OFF_M = 6.5           # a truck backs off up to 6 m (radioed) to let a robot out of its turning circle
+# a truck backs off up to 6 m (radioed) to let a robot out of its turning circle; plus the tracking error
+BACKED_OFF_M = 7.0
+DRIVE_PACE = 1.1             # m/s: faster than a truck backs off (0.5) or drives back up (0.8), slower than it drives
 LINK_WINDOW_S = 5.0          # window for the measured link quality shown per vehicle
 
 
@@ -282,6 +284,8 @@ class FleetManager:
                 self._zone_nodes.setdefault(zid, []).append(nid)
         self._edge_zone_cache: dict[str, list[str]] = {}
         self._fl_still_since: dict[str, float] = {}
+        # truck track -> the intersection it last stood on; dropped once it drives off at driving pace
+        self._fl_stood: dict[str, str] = {}
         # aisles a manual truck may work: the rack aisles (pick aisles are tote-AMR and picker space)
         self._aisle_zones = [z for z in layout.zones.values() if z.kind == "aisle"
                              and any(self.layout.edges[e].classes and "CARRIER" not in self.layout.edges[e].classes
@@ -1097,7 +1101,7 @@ class FleetManager:
             # within its horizon, sweeping a 1.9 m circle; robots must not be standing in that circle when it
             # arrives (a robot inside stops the truck, and the truck in its field stops the robot)
             for tr in self.tracker.tracks.values():
-                if tr.cls != "forklift" or not tr.confirmed or tr.speed < 0.3:
+                if tr.cls != "forklift" or not tr.confirmed or tr.speed < 0.3 or tr.resting and tr.speed < 0.6:
                     continue
                 ux, uy = tr.vx / tr.speed, tr.vy / tr.speed
                 reach = tr.speed * self.cfg.forklift_horizon_s + 1.0
@@ -1116,9 +1120,20 @@ class FleetManager:
             # inside finish their move); a truck and a robot meeting in a 4 m aisle cannot pass each other.
             # Only confirmed tracks: one misread person must not close an aisle
             still = {}
+            for tid in [t for t in self._fl_stood if t not in self.tracker.tracks]:
+                del self._fl_stood[tid]
             for tr in self.tracker.tracks.values():
                 if tr.cls != "forklift" or not tr.confirmed:
                     continue
+                if tr.resting:
+                    # a truck that backed off from one intersection may come to rest beside the next one: it still
+                    # waits for the first (it has not driven off since)
+                    stood, prev = self._intersection_at(tr.x, tr.y, 0.8), self._fl_stood.get(tr.id)
+                    if stood is not None and (prev is None or math.hypot(
+                            self.layout.nodes[prev].x - tr.x, self.layout.nodes[prev].y - tr.y) > BACKED_OFF_M):
+                        self._fl_stood[tr.id] = stood
+                elif tr.pace > DRIVE_PACE:
+                    self._fl_stood.pop(tr.id, None)
                 for z in self._aisle_zones:
                     if point_in_polygon((tr.x, tr.y), z.polygon):
                         for nid in self._zone_nodes.get(z.id, ()):
@@ -1126,7 +1141,7 @@ class FleetManager:
                 # aisle request: a truck stopped at an aisle mouth for 3 s is waiting to go in, and one driving
                 # up to a mouth is about to. New robots are held out of that aisle; robots already in it are not
                 # (they finish and leave), otherwise a robot inside and the truck outside would wait for each other
-                if tr.speed >= 0.3:
+                if not tr.stopped:
                     z = self._aisle_at_mouth(tr.x, tr.y, toward=(tr.vx, tr.vy))
                     if z is not None:
                         for nid in self._zone_nodes.get(z.id, ()):
@@ -1135,7 +1150,10 @@ class FleetManager:
                 still[tr.id] = self._fl_still_since.get(tr.id, self.now)
                 if self.now - still[tr.id] < 3.0:
                     continue
-                z = self._aisle_at_mouth(tr.x, tr.y)
+                turn_at = self._turn_ahead(tr)
+                # a truck known to wait at an intersection asks for the aisle that intersection leads into
+                # (below), not for one whose mouth it happens to stand in front of after backing off
+                z = self._aisle_at_mouth(tr.x, tr.y) if turn_at is None else None
                 if z is not None:
                     for nid in self._zone_nodes.get(z.id, ()):
                         requests.setdefault(node_res(nid), (z.id, tr.id))
@@ -1145,7 +1163,6 @@ class FleetManager:
                 # the FMS cannot tell a truck that waits to turn from one that just stands there: the request
                 # holds robots for 20 s at a time, then lets them through for 30 s
                 waited = self.now - still[tr.id] - 3.0
-                turn_at = self._turn_ahead(tr)
                 if turn_at is not None and waited % 50.0 < 20.0:
                     n = self.layout.nodes[turn_at]
                     zone_r = SWING_RADIUS + CLEARANCE_TURN
@@ -1195,42 +1212,58 @@ class FleetManager:
                 return z
         return None
 
+    def _intersection_at(self, x: float, y: float, r: float) -> str | None:
+        """The intersection node within ``r`` of (x, y), nearest first (ties by id), if any."""
+        best = None
+        for kind, nid in self._query(x, y, r):
+            if kind == "N" and self.layout.is_intersection(nid):
+                d = math.hypot(self.layout.nodes[nid].x - x, self.layout.nodes[nid].y - y)
+                if d <= r and (best is None or (d, nid) < best):
+                    best = (d, nid)
+        return best[1] if best else None
+
+    def _on_line_into(self, nid: str, x: float, y: float, reach: float) -> bool:
+        """(x, y) lies on a lane into intersection ``nid``, or further back along the same straight line."""
+        n = self.layout.nodes[nid]
+        for m in self.layout.neighbors[nid]:
+            mx, my = self.layout.nodes[m].x - n.x, self.layout.nodes[m].y - n.y
+            k = reach / max(1e-9, math.hypot(mx, my))
+            if seg_point_dist((x, y), n.pos, (n.x + mx * k, n.y + my * k)) <= 1.0:
+                return True
+        return False
+
     def _turn_ahead(self, tr) -> str | None:
         """The intersection a stopped truck waits to turn at: one it stands short of, on a lane into it.
 
-        A truck that stopped on its way has it ahead (within 4.5 m). A truck that backed off to let a robot out
-        of its turning circle last moved away from it: the tracker keeps the direction it travelled before it
-        reversed, and the intersection lies that way (backing off goes up to 6 m). The truck's lane direction
-        does not tell, since a driver who turned back drives the loop against it. A truck standing on an
-        intersection needs nothing more: its own swing circles cover the turn.
+        A truck that stood on an intersection and has since moved only at backing-off pace (it backs off at
+        0.5 m/s and drives back up at 0.8) still waits for that one, up to 7 m back: drivers back off to let
+        a robot out of the circle they need. Otherwise it is the intersection ahead in its last direction of
+        travel (within 4.5 m). Neither the lane direction nor the last motion alone tells: a driver who turned
+        back drives the loop against the one-way lanes, and a backed-off truck last moved away. A truck standing
+        on an intersection needs nothing more: its own swing circles cover the turn.
         """
+        stood = self._fl_stood.get(tr.id)
+        if stood is not None:
+            n = self.layout.nodes[stood]
+            if 0.6 < math.hypot(n.x - tr.x, n.y - tr.y) <= BACKED_OFF_M and \
+                    self._on_line_into(stood, tr.x, tr.y, BACKED_OFF_M + 0.5):
+                return stood                    # (6 m back it may stand on the next intersection)
+        if self._intersection_at(tr.x, tr.y, 0.6) is not None:
+            return None
         if tr.heading is None:
             return None
-        if any(kind == "N" and self.layout.is_intersection(nid) and
-               math.hypot(self.layout.nodes[nid].x - tr.x, self.layout.nodes[nid].y - tr.y) < 0.3
-               for kind, nid in self._query(tr.x, tr.y, 0.3)):
-            return None
-        heading, reach = tr.heading, 4.5
-        if tr.heading_before is not None and \
-                math.hypot(tr.x - tr.reversed_xy[0], tr.y - tr.reversed_xy[1]) <= BACKED_OFF_M:
-            heading, reach = tr.heading_before, BACKED_OFF_M + 0.5
-        hx, hy = math.cos(heading), math.sin(heading)
+        hx, hy = math.cos(tr.heading), math.sin(tr.heading)
         best = None
-        for kind, nid in self._query(tr.x, tr.y, reach):
+        for kind, nid in self._query(tr.x, tr.y, 4.5):
             if kind != "N" or not self.layout.is_intersection(nid):
                 continue
             n = self.layout.nodes[nid]
             dx, dy = n.x - tr.x, n.y - tr.y
             d = math.hypot(dx, dy)
-            if d > reach or d < 0.3 or (dx * hx + dy * hy) / d < 0.85 or best is not None and d >= best[0]:
+            if d > 4.5 or d < 0.3 or (dx * hx + dy * hy) / d < 0.85 or best is not None and (d, nid) >= best:
                 continue                        # not in line, or farther than one already found
-            for m in self.layout.neighbors[nid]:
-                # on a lane into that intersection, or further back along the same straight line
-                mx, my = self.layout.nodes[m].x - n.x, self.layout.nodes[m].y - n.y
-                k = reach / max(1e-9, math.hypot(mx, my))
-                if seg_point_dist((tr.x, tr.y), n.pos, (n.x + mx * k, n.y + my * k)) <= 1.0:
-                    best = (d, nid)
-                    break
+            if self._on_line_into(nid, tr.x, tr.y, 4.5):
+                best = (d, nid)
         return best[1] if best else None
 
     @property
@@ -1265,7 +1298,7 @@ class FleetManager:
             # us, as long as it stands still (its aisle signal and a moving truck's path still do)
             escaping = rec.purpose == "evade" and ref is not None and ref == rec.escape_from and \
                 self.block_src.get(res) in ("disc", "turn") and ref in self.tracker.tracks and \
-                self.tracker.tracks[ref].speed < 0.3
+                self.tracker.tracks[ref].stopped
             if not escaping:
                 return hit
         req = self.aisle_requests.get(res)
@@ -1820,7 +1853,8 @@ class FleetManager:
         if self.cfg.strategy == "none":
             return
         stalled_ext = {k: v for k, v in self.external.items() if self.now - v.get("moved", self.now) > 4.0}
-        stalled_fl = [tr for tr in self.tracker.tracks.values() if tr.cls == "forklift" and tr.speed < 0.2]
+        stalled_fl = [tr for tr in self.tracker.tracks.values()
+                      if tr.cls == "forklift" and (tr.resting or tr.speed < 0.2)]
         # where a stopped truck will swing: around itself, and around the intersection it waits to turn at (a
         # truck that backed off to let robots pass stands metres away from the circle it needs clear)
         circles = []

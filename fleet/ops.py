@@ -233,7 +233,10 @@ class Operations:
         radio = getattr(self.sim, "radio_yield", None)
         if radio is None:
             return f"{rec.serial} 근처 지게차 운전자에게 무전 양보 요청(기록)"
-        return f"{rec.serial} 근처 무전 양보 요청: {radio(rec.serial)}"
+        gave, answer = radio(rec.serial)
+        if not gave:
+            raise CommandError(f"{rec.serial} 근처 무전 양보 요청: {answer}")
+        return f"{rec.serial} 근처 무전 양보 요청: {answer}"
 
     def cmd_resume_area(self, a: dict) -> str:
         n = len(self.sim.manager.area_paused)

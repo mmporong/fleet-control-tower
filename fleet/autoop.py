@@ -119,11 +119,12 @@ class AutoOperator:
                 self._do("cancel_task", task=victim.task_id)
             plan["act_at"] = now + 90.0
         elif t == "STANDOFF" and rec is not None:
-            # SOP: a truck in the way is asked over the radio to give way, once per standoff (a second call would
-            # only send the driver back and forth); a person is asked on site (not modelled)
+            # SOP: a truck in the way is asked over the radio to give way, once per standoff once the driver has
+            # given way (a second call would only send them back and forth); a driver who cannot give way yet (in
+            # a narrow aisle) is called again a minute later. A person is asked on site (not modelled)
             if rec.field_cause.startswith("forklift") and stage == 0:
-                self._do("radio_yield", robot=src)
-                plan["stage"] = 1
+                if self._do("radio_yield", robot=src)["ok"]:
+                    plan["stage"] = 1
             plan["act_at"] = now + 60.0
         elif t == "FACILITY_FAULT":
             # SOP: take the door out of use, call the facility technician, retry after the fix

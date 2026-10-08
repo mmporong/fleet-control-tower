@@ -20,6 +20,16 @@ BODY_OFFSETS = {"forklift": (-1.2, -0.4, 0.4, 1.2)}
 # on a stationary person must not turn into a 2-second prediction sweep
 STILL_SPEED = 0.3
 CLEARANCE = {"human": 0.35, "forklift": 0.55}
+# association gate per class (m, before the position uncertainty): a truck starting off jumps to driving speed
+# and the filter lags it by more than a person's gate; it is also the only class that big
+GATE = {"forklift": 2.5}
+# rest, travel direction and pace come from the net displacement over a short window, not from the filter
+# velocity: on a standing track the velocity estimate wanders with the detection noise (cameras 0.25 m) and
+# often passes STILL_SPEED, the smoothed position hardly moves
+MOTION_WINDOW_S = 2.0
+MOVED_M = 0.8       # displaced this far over the window: moving (a truck backing off at 0.5 m/s does 1 m)
+RESTED_M = 0.5      # less than this: at rest
+HEADING_M = 1.5     # direction only from this much displacement (noise turns it by a few degrees at most)
 
 
 @dataclass
@@ -42,11 +52,10 @@ class Track:
     first_seen: float = 0.0
     hits: int = 1
     sources: set[str] = field(default_factory=set)
-    heading: float | None = None      # last direction of travel; a stopped truck keeps its orientation
-    # the direction of travel before the track last reversed and where it did (a truck backing off, or turning
-    # round); cleared when it turns a corner
-    heading_before: float | None = None
-    reversed_xy: tuple[float, float] | None = None
+    heading: float | None = None      # direction of the last net displacement; kept while at rest
+    pace: float = 0.0                 # net displacement over the motion window / its length while moving
+    rest_since: float | None = None   # at rest (by displacement) since then; None while moving or too new
+    trail: list = field(default_factory=list)   # (t, x, y) back to the start of the motion window
     votes: dict = field(default_factory=dict)    # class -> decayed count of detections that called it so
 
     @property
@@ -67,6 +76,15 @@ class Track:
     @property
     def speed(self) -> float:
         return math.hypot(self.vx, self.vy)
+
+    @property
+    def resting(self) -> bool:
+        return self.rest_since is not None
+
+    @property
+    def stopped(self) -> bool:
+        """Standing still: at rest by displacement, or slower than STILL_SPEED by the filter."""
+        return self.rest_since is not None or self.speed < STILL_SPEED
 
 
 class Tracker:
@@ -101,7 +119,7 @@ class Tracker:
         pairs = []
         for tid, tr in self.tracks.items():
             px, py = tr.predict(now)
-            gate = self.gate + tr.sigma(now)
+            gate = GATE.get(tr.cls, self.gate) + tr.sigma(now)
             for j, d in enumerate(dets):
                 dd = math.hypot(d.x - px, d.y - py)
                 if dd <= gate:
@@ -191,15 +209,20 @@ class Tracker:
         if sp > vmax:
             tr.vx *= vmax / sp
             tr.vy *= vmax / sp
-        if math.hypot(tr.vx, tr.vy) >= STILL_SPEED:
-            heading = math.atan2(tr.vy, tr.vx)
-            if tr.heading is not None:
-                turned = abs(math.remainder(heading - tr.heading, 2 * math.pi))
-                if turned > 2.6:
-                    tr.heading_before, tr.reversed_xy = tr.heading, (tr.x, tr.y)
-                elif turned > 1.0:
-                    tr.heading_before = tr.reversed_xy = None
-            tr.heading = heading
+        tr.trail.append((now, tr.x, tr.y))
+        while len(tr.trail) > 1 and tr.trail[1][0] <= now - MOTION_WINDOW_S:
+            tr.trail.pop(0)
+        t0, x0, y0 = tr.trail[0]
+        if now - t0 >= MOTION_WINDOW_S:
+            moved = math.hypot(tr.x - x0, tr.y - y0)
+            if moved >= MOVED_M:
+                if moved >= HEADING_M:
+                    tr.heading = math.atan2(tr.y - y0, tr.x - x0)
+                tr.pace = moved / (now - t0)
+                tr.rest_since = None
+            elif moved < RESTED_M and tr.rest_since is None:
+                tr.rest_since = now
+                tr.pace = 0.0
         tr.last_seen = now
         tr.hits += 1
         tr.sources = set(d.source.split(","))
@@ -216,9 +239,16 @@ class Tracker:
             if not tr.confirmed:
                 continue
             moving = tr.speed >= STILL_SPEED
-            h = horizon.get(tr.cls, 2.0) if moving else 0.0
             base = BODY_RADIUS.get(tr.cls, 0.3) + CLEARANCE.get(tr.cls, 0.35)
             offsets = BODY_OFFSETS.get(tr.cls, (0.0,))
+            if offsets != (0.0,) and tr.resting:
+                # a truck at rest by displacement: its velocity estimate is noise unless clearly above it, and
+                # its swept circle stays held until it has moved off
+                moving = tr.speed >= 2 * STILL_SPEED
+                out.append((tr.id, tr.cls, tr.x, tr.y, base + max(abs(o) for o in offsets) + tr.sigma(now)))
+                if not moving:
+                    continue
+            h = horizon.get(tr.cls, 2.0) if moving else 0.0
             # a moving truck is predicted along its travel; a stopped one may turn on the spot, so its
             # whole swept circle is held (half length 1.8 m + clearance)
             heading = math.atan2(tr.vy, tr.vx) if moving else None
