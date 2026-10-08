@@ -70,6 +70,7 @@ class Walker:
 
 HUMAN_KINDS = {"spine", "cross", "queue", "storage", "inbound", "outbound"}
 WALKWAY_KINDS = {"spine", "cross", "queue"}   # walkers keep to wide cross aisles and wall lanes
+NEAR_BODY_M = 4.0      # beyond this along either axis a vehicle circle cannot affect a person's step
 
 
 @dataclass
@@ -224,6 +225,9 @@ class Human:
         if tgt is None:
             self.v = 0.0
             return
+        # every rule below looks at vehicle circles within a few metres (yielding at a 1.6 m gap, contact,
+        # one step of walking), so farther ones are dropped first, keeping the list order
+        robots = [r for r in robots if abs(r[1] - self.x) <= NEAR_BODY_M and abs(r[2] - self.y) <= NEAR_BODY_M]
         heading = math.atan2(tgt[1] - self.y, tgt[0] - self.x)
         heedless = self.distracted or self.inattentive
         yield_dist = 0.0 if heedless else 1.2

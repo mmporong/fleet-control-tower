@@ -10,7 +10,7 @@ from collections import deque
 from dataclasses import dataclass, field
 import math
 
-from .geometry import Point, point_in_polygon, rect, segment_hits_polygon, segments_intersect
+from .geometry import Point, bbox, in_polygon, point_in_polygon, rect, segment_hits_polygon, segments_intersect
 
 # sight line used to judge a blind intersection: points this far back along two approaches must see each other
 BLIND_SIGHT_M = 3.0
@@ -152,14 +152,33 @@ class Layout:
         return self.is_intersection(node_id) or node_id in self.no_stop
 
     def zones_at(self, p: Point) -> list[Zone]:
-        return [z for z in self.zones.values() if point_in_polygon(p, z.polygon)]
+        """Zones containing p, in ``zones`` order. A 1 m grid of candidate zones (built on first use, rebuilt if
+        zones are added or removed) keeps this to a few polygon tests."""
+        index = self.__dict__.get("_zone_index")
+        if index is None or index[0] != len(self.zones):
+            index = self._build_zone_index()
+        cands = index[1].get((math.floor(p[0]), math.floor(p[1])))
+        if not cands:
+            return []
+        return [z for z in cands if point_in_polygon(p, z.polygon)]
+
+    def _build_zone_index(self) -> tuple:
+        cells: dict[tuple[int, int], list[Zone]] = {}
+        for z in self.zones.values():
+            x0, y0, x1, y1 = bbox(z.polygon)
+            # inclusive edges: a point on the box border may still count as inside
+            for cx in range(math.floor(x0 - 1e-9), math.floor(x1 + 1e-9) + 1):
+                for cy in range(math.floor(y0 - 1e-9), math.floor(y1 + 1e-9) + 1):
+                    cells.setdefault((cx, cy), []).append(z)
+        self.__dict__["_zone_index"] = (len(self.zones), cells)
+        return self.__dict__["_zone_index"]
 
     def static_speed_at(self, p: Point) -> float | None:
         limits = [z.static_speed for z in self.zones_at(p) if z.static_speed is not None]
         return min(limits) if limits else None
 
     def covered(self, p: Point) -> bool:
-        return any(point_in_polygon(p, poly) for poly in self.coverage.values())
+        return any(in_polygon(p, poly) for poly in self.coverage.values())
 
     def nearest_node(self, p: Point, kinds: tuple[str, ...] | None = None) -> str:
         best, best_d = "", math.inf

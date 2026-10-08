@@ -15,7 +15,7 @@ import math
 import random
 from typing import Callable
 
-from .geometry import box_gap, circle_hits_forward_box, dist, point_in_polygon, segment_hits_polygon, wrap_angle
+from .geometry import box_gap, circle_hits_forward_box, dist, in_polygon, segment_hits_polygon, wrap_angle
 from .layout import Layout
 from .clock import Clock, SimClock
 from .vda5050 import (INSTANT_ACTIONS, NODE_ACTIONS, HeaderIds, build_connection, header, topic,
@@ -37,6 +37,26 @@ FAULT_TYPES = {
 # faults of the safety-related parts (scanner, bumper): the vehicle refuses a remote reset; a person checks the
 # vehicle and the scene and resets it at the vehicle (ISO 13849-1: reset from where the hazard zone is visible)
 SAFETY_FAULTS = frozenset({"SENSOR_FAULT", "BUMPER"})
+
+
+_merge_cache: list = [None, None]
+
+
+def _merged_bodies(obstacles: list[Obstacle]) -> list[Obstacle]:
+    """One body per object (a forklift is several circles with the same id), at the circles' centre.
+
+    The simulation hands every vehicle the same obstacle list in a sensing cycle, so the merge is done once
+    per list object.
+    """
+    if _merge_cache[0] is obstacles:
+        return _merge_cache[1]
+    merged: dict[str, list[Obstacle]] = {}
+    for o in obstacles:
+        merged.setdefault(o.id, []).append(o)
+    out = [Obstacle(parts[0].id, parts[0].kind, sum(p.x for p in parts) / len(parts),
+                    sum(p.y for p in parts) / len(parts), max(p.r for p in parts)) for parts in merged.values()]
+    _merge_cache[0], _merge_cache[1] = obstacles, out
+    return out
 
 
 @dataclass
@@ -473,20 +493,13 @@ class Vehicle:
         s = self.spec
         found = []
         rng2 = s.sense_range
-        # one detection per object: a forklift body is several circles with the same id
-        merged: dict[str, list[Obstacle]] = {}
-        for o in obstacles:
-            merged.setdefault(o.id, []).append(o)
-        obstacles = [Obstacle(parts[0].id, parts[0].kind, sum(p.x for p in parts) / len(parts),
-                              sum(p.y for p in parts) / len(parts), max(p.r for p in parts))
-                     for parts in merged.values()]
-        for o in obstacles:
+        for o in _merged_bodies(obstacles):
             if o.id == self.serial or o.kind not in ("human", "forklift") or abs(o.x - self.x) > rng2 or abs(o.y - self.y) > rng2:
                 continue
             if math.hypot(o.x - self.x, o.y - self.y) > rng2:
                 continue
             if any(segment_hits_polygon(self.pos, (o.x, o.y), r) for r in racks
-                   if not point_in_polygon((o.x, o.y), r)):
+                   if not in_polygon((o.x, o.y), r)):
                 continue
             if self.rng.random() > s.detect_p:
                 continue
@@ -751,7 +764,7 @@ class Vehicle:
         self.theta = wrap_angle(self.theta + om * dt)
         nx = self.x + math.cos(self.theta) * self.v * dt
         ny = self.y + math.sin(self.theta) * self.v * dt
-        if any(point_in_polygon((nx, ny), r) for r in self.layout.racks) or not (
+        if any(in_polygon((nx, ny), r) for r in self.layout.racks) or not (
                 0.3 <= nx <= self.layout.width - 0.3 and 0.3 <= ny <= self.layout.height - 0.3):
             self.v = 0.0
             self.stop_reason = "수동 주행: 랙·벽 경계"

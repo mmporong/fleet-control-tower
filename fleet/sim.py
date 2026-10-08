@@ -61,6 +61,34 @@ class Incident:
                 "note": self.note, "truth": self.truth}
 
 
+class _ObstacleGrid:
+    """The step's obstacles bucketed in cells, so each vehicle gets only those its fields can reach.
+
+    ``Vehicle._fields`` ignores anything more than 5 m away along either axis; ``around`` returns every
+    obstacle within that box plus a margin for the vehicle's own motion in the step, in the original list
+    order (the first obstacle a field finds names its cause), so the result is the same as the full list.
+    """
+
+    REACH_M = 5.5
+    CELL_M = 5.5
+
+    def __init__(self, obstacles: list[Obstacle]) -> None:
+        self.obstacles = obstacles
+        self.cells: dict[tuple[int, int], list[int]] = {}
+        c = self.CELL_M
+        for i, o in enumerate(obstacles):
+            self.cells.setdefault((int(o.x // c), int(o.y // c)), []).append(i)
+
+    def around(self, x: float, y: float) -> list[Obstacle]:
+        c, r = self.CELL_M, self.REACH_M
+        idx: list[int] = []
+        for cx in range(int((x - r) // c), int((x + r) // c) + 1):
+            for cy in range(int((y - r) // c), int((y + r) // c) + 1):
+                idx.extend(self.cells.get((cx, cy), ()))
+        idx.sort()
+        return [self.obstacles[i] for i in idx]
+
+
 class Evaluator:
     """Ground-truth safety and awareness metrics (never fed back to the manager)."""
 
@@ -439,8 +467,9 @@ class Simulation:
             for d in self.doors.values():
                 d.step(dt, now, near)
                 obstacles += [Obstacle(d.spec.id, "door", x, y, r) for x, y, r in d.obstacles()]
+        nearby = _ObstacleGrid(obstacles)
         for v in self.vehicles:
-            v.step(dt, now, obstacles)
+            v.step(dt, now, nearby.around(v.x, v.y))
         for c in self.evaluator.check(now, self.vehicles, self.humans, self.forklifts, self.externals):
             # any touch with something in motion presses the bumper (also a truck swinging into a standing AGF)
             if c["moving"] or c["other_moving"]:

@@ -61,6 +61,7 @@ class Bus:
     def __init__(self, rng: random.Random, log_depth: int = 30) -> None:
         self._rng = rng
         self._subs: list[tuple[str, Handler]] = []
+        self._routes: dict[str, list[Handler]] = {}     # topic -> matching handlers, in subscription order
         self._queue: list[_Pending] = []
         self._seq = 0
         self.links: dict[str, LinkQuality] = {}
@@ -71,6 +72,7 @@ class Bus:
 
     def subscribe(self, pattern: str, handler: Handler) -> None:
         self._subs.append((pattern, handler))
+        self._routes.clear()
 
     def link(self, serial: str) -> LinkQuality:
         if serial not in self.links:
@@ -100,9 +102,11 @@ class Bus:
         delivered = 0
         while self._queue and self._queue[0].due <= now:
             item = heapq.heappop(self._queue)
-            for pattern, handler in self._subs:
-                if topic_matches(pattern, item.topic):
-                    handler(item.topic, item.payload)
+            handlers = self._routes.get(item.topic)
+            if handlers is None:
+                handlers = self._routes[item.topic] = [h for p, h in self._subs if topic_matches(p, item.topic)]
+            for handler in handlers:
+                handler(item.topic, item.payload)
             delivered += 1
         self.stats["delivered"] += delivered
         return delivered

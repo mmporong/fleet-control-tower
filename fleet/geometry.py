@@ -81,6 +81,36 @@ def bbox(poly: Polygon) -> tuple[float, float, float, float]:
     return min(xs), min(ys), max(xs), max(ys)
 
 
+_BBOX: dict[int, tuple] = {}
+BBOX_EPS = 1e-9
+
+
+def poly_bbox(poly: Polygon) -> tuple[float, float, float, float]:
+    """``bbox`` memoised per polygon object (layout polygons are built once and never edited).
+
+    The cache keeps the polygon itself, so its id cannot be reused by another object while cached.
+    """
+    hit = _BBOX.get(id(poly))
+    if hit is not None and hit[0] is poly:
+        return hit[1]
+    box = bbox(poly)
+    _BBOX[id(poly)] = (poly, box)
+    return box
+
+
+def in_polygon(p: Point, poly: Polygon) -> bool:
+    """``point_in_polygon`` with a bounding-box test first; the same answer, faster for far points.
+
+    >>> in_polygon((1, 1), [(0, 0), (2, 0), (2, 2), (0, 2)]), in_polygon((3, 1), [(0, 0), (2, 0), (2, 2), (0, 2)])
+    (True, False)
+    """
+    x0, y0, x1, y1 = poly_bbox(poly)
+    x, y = p
+    if x < x0 - BBOX_EPS or x > x1 + BBOX_EPS or y < y0 - BBOX_EPS or y > y1 + BBOX_EPS:
+        return False
+    return point_in_polygon(p, poly)
+
+
 def _orient(a: Point, b: Point, c: Point) -> float:
     return (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
 
@@ -117,6 +147,10 @@ def segments_intersect(p1: Point, p2: Point, q1: Point, q2: Point) -> bool:
 
 def segment_hits_polygon(a: Point, b: Point, poly: Polygon) -> bool:
     """True when segment ab crosses the polygon boundary or lies inside it."""
+    x0, y0, x1, y1 = poly_bbox(poly)
+    if max(a[0], b[0]) < x0 - BBOX_EPS or min(a[0], b[0]) > x1 + BBOX_EPS or \
+            max(a[1], b[1]) < y0 - BBOX_EPS or min(a[1], b[1]) > y1 + BBOX_EPS:
+        return False                    # the segment's box misses the polygon's box: no contact possible
     if point_in_polygon(a, poly) or point_in_polygon(b, poly):
         return True
     n = len(poly)
