@@ -39,6 +39,19 @@ class Scenario:
     # share of rack locations whose WMS record disagrees with what is there
     handling_fail_p: float = 0.01
     inventory_error_p: float = 0.01
+    # ---- people and manual trucks breaking rules (assumptions, swept): share of a person's trips with no heed
+    # of vehicles; share of blocked turns a truck driver makes anyway after waiting 10 s
+    violation_p: float = 0.02
+    careless_p: float = 0.1
+    # ---- infrastructure sensing: "none" (vehicles' own sensors only), "partial" (docks, main aisles and the
+    # crossing), "full" (every hall). Ceiling camera person detection: latency, position noise, detection and
+    # wrong-class probability, false detections per camera and cycle (assumptions, swept)
+    infra: str = "partial"
+    cam_latency_s: float = 0.3
+    cam_sigma: float = 0.25
+    cam_detect_p: float = 0.95
+    cam_misclass_p: float = 0.03
+    cam_fp_p: float = 0.01
     # ---- grid fleet and process
     robots: int = 30
     workers: int = 4

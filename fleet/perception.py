@@ -44,6 +44,11 @@ class Track:
     sources: set[str] = field(default_factory=set)
     heading: float | None = None      # last direction of travel; a stopped truck keeps its orientation
 
+    @property
+    def confirmed(self) -> bool:
+        """Two hits before a track counts: a single false detection never blocks or slows anything."""
+        return self.hits >= 2
+
     def predict(self, t: float) -> Point:
         dt = max(0.0, t - self.last_seen)
         if self.speed < STILL_SPEED:
@@ -160,6 +165,8 @@ class Tracker:
         """
         out = []
         for tr in self.tracks.values():
+            if not tr.confirmed:
+                continue
             moving = tr.speed >= STILL_SPEED
             h = horizon.get(tr.cls, 2.0) if moving else 0.0
             base = BODY_RADIUS.get(tr.cls, 0.3) + CLEARANCE.get(tr.cls, 0.35)

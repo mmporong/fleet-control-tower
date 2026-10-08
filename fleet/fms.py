@@ -147,7 +147,7 @@ class Runtime:
                 "deadlocks": m.counters["deadlocks"], "deadlocks_resolved": m.counters["deadlocks_resolved"],
                 "protective_stops": m.counters["protective_stops"], "near_miss_fms": m.counters["near_miss"],
                 # ground truth does not exist outside the simulation
-                "near_miss_truth": None, "contacts": None, "tracking_ratio": None,
+                "close_calls": None, "clearance_violations": None, "contacts": None, "tracking_ratio": None,
                 "invalid_msgs": m.counters["invalid_msgs"], "comms_lost": m.counters["comms_lost"],
                 "alarms_per_h": round(m.alarms.total_activations / hours, 1), "internal_errors": self.errors,
                 "sim_hours": round(hours, 3)}

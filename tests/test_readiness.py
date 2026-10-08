@@ -6,7 +6,9 @@ import doctest
 import unittest
 
 from fleet import auth as auth_mod
+from fleet import bench as bench_mod
 from fleet import clock as clock_mod
+from fleet import control as control_mod
 from fleet import dispatcher as dispatcher_mod
 from fleet import store as store_mod
 from fleet.dispatcher import Task
@@ -22,7 +24,7 @@ from tests.helpers import MiniWorld
 
 
 def load_tests(loader, tests, ignore):
-    for mod in (clock_mod, auth_mod, dispatcher_mod, store_mod):
+    for mod in (clock_mod, auth_mod, dispatcher_mod, store_mod, control_mod, bench_mod):
         tests.addTests(doctest.DocTestSuite(mod))
     return tests
 
@@ -381,3 +383,82 @@ class OfficialSchemaTests(unittest.TestCase):
         self.assertEqual(validate(load_vda5050_schemas()["instantActions"], msg), [])
         raw = load_vda5050_schemas(errata=False)["instantActions"]
         self.assertTrue(any("actionName" in p for p in validate(raw, msg)))   # the published file's quirk
+
+
+class RealismTests(unittest.TestCase):
+    def test_an_inattentive_person_can_walk_into_a_moving_vehicle(self):
+        from fleet.agents import Human, Walker
+        layout = warehouse_layout()
+        for inattentive, expect_contact in ((False, False), (True, True)):
+            h = Human("P1", "walker", 21.0, 2.2, random_rng(1))
+            h.inattentive = inattentive
+            h.walker = Walker([(21.0, 9.0)])                  # straight across the robot's lane
+            robot = ("AMR-01", 21.0, 3.6, 0.45, 0.8)          # a robot driving past right in the person's way
+            touched = False
+            for k in range(30):
+                h.step(0.1, k * 0.1, layout, [robot], [])
+                touched = touched or ((h.x - robot[1]) ** 2 + (h.y - robot[2]) ** 2) ** 0.5 < 0.45 + h.radius
+            self.assertEqual(touched, expect_contact, inattentive)
+
+    def test_contacts_are_all_counted_and_a_struck_vehicle_reports_its_bumper(self):
+        sim = quiet_dc(rack_forklift=0)
+        v = sim.vehicles[0]
+        from fleet.agents import Human
+        h = Human("X1", "walker", v.x + 0.6, v.y, random_rng(2))
+        h.v = 1.0
+        sim.humans.append(h)
+        found = sim.evaluator.check(sim.now, sim.vehicles, sim.humans, [], [])
+        self.assertEqual(len(found), 1)
+        self.assertFalse(found[0]["moving"])
+        self.assertTrue(found[0]["other_moving"])
+        sim.humans.remove(h)
+        k = sim.kpi()
+        self.assertEqual((k["contacts"], k["contacts_struck"], k["contacts_moving"]), (1, 1, 0))
+
+    def test_robot_leaves_the_swept_circle_of_a_stopped_truck(self):
+        from fleet.perception import Detection
+        w = MiniWorld({"AMR-01": "B5"})
+        w.run(1.0)
+        rec = w.manager.robots["AMR-01"]
+        n = w.layout.nodes["B5"]
+        w.detections = [Detection("forklift", n.x + 1.5, n.y, "infra")]   # a truck stopped right beside it
+        moved = w.run_until(lambda: w.vehicles["AMR-01"].last_node_id != "B5", 20.0)
+        self.assertTrue(moved, [e["msg"] for e in w.manager.events])
+        self.assertTrue(any(e["type"] == "yield" and "선회" in e["msg"] for e in w.manager.events))
+        self.assertIsNone(rec.wait)
+
+    def test_a_single_false_detection_does_not_block(self):
+        from fleet.perception import Detection, Tracker
+        tr = Tracker()
+        tr.update([Detection("human", 10.0, 10.0, "infra")], 0.0)
+        self.assertEqual(tr.predicted_discs(0.0, {"human": 2.0}), [])
+        tr.update([Detection("human", 10.05, 10.0, "infra")], 0.5)
+        self.assertTrue(tr.predicted_discs(0.5, {"human": 2.0}))
+
+    def test_infrastructure_levels(self):
+        none = Simulation(get("standard", infra="none", fault_mtbf_h=0.0, comms_mtbf_h=0.0), seed=1)
+        self.assertEqual(none.layout.coverage, {})
+        none.run(30)
+        self.assertIsNone(none.manager.infra_last)                       # no camera feed exists
+        self.assertTrue(none.manager.tracker.tracks)                     # the vehicles' own sensors still report
+        full = Simulation(get("standard", infra="full", fault_mtbf_h=0.0, comms_mtbf_h=0.0), seed=1)
+        self.assertTrue(all(full.layout.covered(h.pos) for h in full.humans))
+
+    def test_measurement_window_and_time_averaged_utilization(self):
+        sim = Simulation(get("standard", fault_mtbf_h=0.0, comms_mtbf_h=0.0), seed=3)
+        sim.run(300)
+        sim.reset_measurement()
+        self.assertEqual(sim.kpi()["done"], 0)
+        sim.run(600)
+        k = sim.kpi()
+        self.assertAlmostEqual(k["sim_hours"], 600 / 3600, places=3)
+        self.assertTrue(0.0 <= k["utilization"] <= 1.0)
+        prod = k["productivity"]
+        self.assertIn("moves_per_vehicle_h", prod["FORKLIFT"])
+        self.assertAlmostEqual(sum(prod["FORKLIFT"]["time_share"].values()), 1.0, places=2)
+        self.assertIn("uph", prod["pickers"])
+
+
+def random_rng(seed: int):
+    import random
+    return random.Random(seed)

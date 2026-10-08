@@ -143,7 +143,7 @@ class Runner(threading.Thread):
         self.history.append({"t": round(self.sim.now), "done": k["done"], "thr": k["throughput_h"],
                              "wait": k["traffic_wait_ratio"], "queued": k["queued"], "working": k["working"],
                              "alarms": c["p1"] + c["p2"] + c["p3"], "pstop": k["protective_stops"],
-                             "nm": k["near_miss_truth"]})
+                             "nm": k["close_calls"]})
 
     def snapshot(self) -> dict:
         now = time.monotonic()

@@ -155,7 +155,7 @@ class Operations:
             "deadlocks": [" → ".join(d["members"]) for d in m.deadlocks.values()],
             "tasks_queued": k["queued"], "tasks_active": k["active"],
             "kpi": {"throughput_h": k["throughput_h"], "traffic_wait_ratio": k["traffic_wait_ratio"],
-                    "contacts": k["contacts"], "near_miss": k["near_miss_truth"], "alarms_per_h": k["alarms_per_h"]},
+                    "contacts": k["contacts"], "close_calls": k.get("close_calls"), "alarms_per_h": k["alarms_per_h"]},
         }
 
     def cmd_handover(self, a: dict) -> str:

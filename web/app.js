@@ -263,11 +263,17 @@
     const blocked = s.robots.filter((r) => r.st === 'BLOCKED' || r.st === 'PROTECTIVE').length;
     $('traffic-sum').textContent = `${waiting} · ${blocked} · 교착 ${s.deadlocks.length}`;
     $('traffic-sum').className = `val ${s.deadlocks.length ? 'danger' : blocked > 3 ? 'warn' : ''}`;
-    const humans = s.truth.humans.length;
+    // the control room only knows its tracks; true counts and blind spots are an evaluation layer of the simulation
     const trackedH = s.tracks.filter((t) => t[1] === 'human').length;
-    const blind = s.truth.humans.filter((h) => !h[4]).length;
-    $('people-sum').textContent = `사람 ${trackedH}/${humans}` + (blind ? ` · 미추적 ${blind}` : '') + ` · 지게차 ${s.tracks.filter((t) => t[1] === 'forklift').length}/${s.truth.forklifts.length}`;
-    $('people-sum').className = `val ${blind ? 'warn' : ''}`;
+    const trackedF = s.tracks.filter((t) => t[1] === 'forklift').length;
+    if (S.layers.truth && s.truth.humans.length + s.truth.forklifts.length) {
+      const blind = s.truth.humans.filter((h) => !h[4]).length;
+      $('people-sum').textContent = `사람 ${trackedH}/${s.truth.humans.length}` + (blind ? ` · 미추적 ${blind}` : '') + ` · 지게차 ${trackedF}/${s.truth.forklifts.length} (평가)`;
+      $('people-sum').className = `val ${blind ? 'warn' : ''}`;
+    } else {
+      $('people-sum').textContent = `추적 사람 ${trackedH} · 지게차 ${trackedF}`;
+      $('people-sum').className = 'val';
+    }
     const jd = s.jdamr;
     if (!jd || jd.enabled === false) { $('jd-sum').textContent = '연동 꺼짐'; $('jd-sum').className = 'val'; }
     else if (jd.connected) { const d = jd.data || {}; $('jd-sum').textContent = `연결 · ${d.drive || '상태 미수신'}${d.blockers && d.blockers.length ? ' · 차단' : ''}`; $('jd-sum').className = `val ${d.blockers && d.blockers.length ? 'warn' : 'ok'}`; }
@@ -295,9 +301,12 @@
       ['교착', `${k.deadlocks}`, `해소 ${k.deadlocks_resolved} · 활성 ${k.deadlocks_active}`, k.deadlocks_active ? 'danger' : ''],
       ...(dc ? [] : [['우회·비켜서기', `${k.reroutes + k.evasions}`, `우회 ${k.reroutes} · 비켜서기 ${k.evasions}`, '']]),
       ['보호정지', `${k.protective_stops}`, `사람 원인 ${k.protective_human}`, ''],
-      ['근접사고', `${k.near_miss_truth}`, `관제 인지 ${k.near_miss_fms}`, k.near_miss_truth > 0 ? 'warn' : ''],
-      ['주행 중 접촉', `${k.contacts}`, `사람 ${k.contacts_human} · 정지 중 ${k.contacts_static}`, k.contacts > 0 ? 'danger' : ''],
-      ['사람 추적률', pct(k.tracking_ratio), '실제 대비(사각지대 포함)', k.tracking_ratio != null && k.tracking_ratio < 0.8 ? 'warn' : ''],
+      ['근접 감지(관제)', `${k.near_miss_fms}`, '추적 위치 기준 · ISO 여유 위반·20 cm 이내', k.near_miss_fms > 0 ? 'warn' : ''],
+      ...(S.layers.truth && k.contacts != null ? [
+        ['평가: 접촉', `${k.contacts}`, `주행 중 ${k.contacts_moving} · 정지 중 피격 ${k.contacts_struck} · 사람 ${k.contacts_human}`, k.contacts > 0 ? 'danger' : ''],
+        ['평가: 근접 20 cm', `${k.close_calls}`, `ISO 여유 위반 ${k.clearance_violations} · 최소 ${k.min_gap_moving ?? '—'} m`, k.close_calls > 0 ? 'warn' : ''],
+        ['평가: 추적률', pct(k.tracking_ratio), '실제 대비(사각지대 포함)', k.tracking_ratio != null && k.tracking_ratio < 0.8 ? 'warn' : ''],
+      ] : []),
       ['알람/시간', L.fmtNum(k.alarms_per_h, 0), `최근 10분 ${s.alarm_counts.last10min} · ${load.label}`, load.tone === 'danger' ? 'danger' : load.tone === 'warn' ? 'warn' : ''],
       ['MTTR', k.mttr_s == null ? '—' : L.fmtDuration(k.mttr_s), `개입 ${s.run.interventions}회`, ''],
     ];

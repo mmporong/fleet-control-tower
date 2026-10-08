@@ -482,6 +482,7 @@ class ForkliftTests(unittest.TestCase):
         layout = warehouse_layout()
         loop = expand_loop(layout, forklift_loops()[0][0])      # A9 south to A5, across to B5, north
         f = Forklift("FL-1", loop, layout, random.Random(1))
+        f.careless_p = 1.0                                    # this driver turns anyway after waiting
         f.heading = 0.0                                       # facing east at A9; the loop leaves heading south
         robot = [("AMR-01", layout.nodes["A9"].x + 1.6, layout.nodes["A9"].y, 0.45, 0.0)]
         t, turned_at = 0.0, None
@@ -496,14 +497,30 @@ class ForkliftTests(unittest.TestCase):
         # it waited about 10 s for the robot, then turned in one go (not 10 s per step of rotation)
         need = abs(math.remainder(target - start, 2 * math.pi)) / 0.8
         self.assertLess(turned_at, 10.0 + need + 1.0)
+        self.assertEqual(f.careless_turns, 1)
+
+    def test_most_drivers_back_out_instead_of_turning_into_a_standing_robot(self):
+        layout = warehouse_layout()
+        loop = expand_loop(layout, forklift_loops()[0][0])
+        f = Forklift("FL-1", loop, layout, random.Random(1))
+        f.careless_p = 0.0
+        f.heading = 0.0
+        robot = [("AMR-01", layout.nodes["A9"].x + 1.6, layout.nodes["A9"].y, 0.45, 0.0)]
+        t = 0.0
+        for _ in range(250):                                  # 25 s
+            f.step(0.1, t, robot, [])
+            t += 0.1
+        self.assertEqual(f.careless_turns, 0)
+        self.assertEqual(f.reversals, 1)                      # it gave up the turn and went back
+        self.assertFalse(f.turning)
 
 
 class SafetyRuleTests(unittest.TestCase):
     def test_near_miss_rule(self):
-        self.assertFalse(near_miss(0.3, 0.15))       # reduced clearance at <= 0.3 m/s is allowed
-        self.assertTrue(near_miss(0.3, 0.05))        # but under 0.1 m is always a near miss
-        self.assertTrue(near_miss(1.0, 0.25))
-        self.assertFalse(near_miss(1.0, 0.35))
+        self.assertFalse(near_miss(0.3, 0.25))       # reduced clearance at <= 0.3 m/s is allowed
+        self.assertTrue(near_miss(0.3, 0.15))        # but closer than 20 cm while moving is a close call
+        self.assertTrue(near_miss(1.0, 0.45))        # above 0.3 m/s the 0.5 m clearance applies
+        self.assertFalse(near_miss(1.0, 0.55))
 
 
 if __name__ == "__main__":

@@ -52,6 +52,7 @@ class DcHuman(Human):
 
     def plan_next(self, layout: Layout) -> None:
         self.distracted = self.rng.random() < 0.1
+        self.inattentive = self.violation_p > 0 and self.rng.random() < self.violation_p
         self.detour_until_idx = -1
         if self.role == "picker":
             robots = self.site.waiting_robots() if self.site else {}

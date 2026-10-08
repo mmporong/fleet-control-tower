@@ -18,10 +18,10 @@ from .process import GridProcess
 from .process_dc import DcProcess
 from .site_dc import AGF, AMR, PICK_AISLES, dc_layout, dock_spots
 from .bus import Bus
-from .control import FleetManager, ManagerConfig, near_miss
+from .control import FleetManager, ManagerConfig, clearance_violation, close_call
 from .dispatcher import Dispatcher
 from .facility import DoorDevice
-from .geometry import box_gap
+from .geometry import box_gap, rect
 from .layout import COLUMN_X, ROW_Y, warehouse_layout
 from .perception import Detection
 from .scenario import Scenario
@@ -64,10 +64,12 @@ class Evaluator:
 
     def __init__(self) -> None:
         self.contacts: list[dict] = []
-        self.near_misses = 0
+        self.clearance_violations = 0       # compliance: above creep speed inside the 0.5 m clearance
+        self.close_calls = 0                # outcome: moving and within 20 cm of a person
         self.near_miss_log: deque = deque(maxlen=200)
         self._pair_contact: set[tuple[str, str]] = set()
-        self._pair_nm: dict[tuple[str, str], float] = {}
+        self._pair_nm: dict[tuple[str, str, str], float] = {}
+        self.min_gap_moving = math.inf      # closest a moving vehicle came to a person
         self.min_amr_gap = math.inf
         self.tracked_samples = 0
         self.human_samples = 0
@@ -76,9 +78,10 @@ class Evaluator:
     def check(self, now: float, vehicles: list[Vehicle], humans: list[Human], forklifts: list[Forklift],
               externals: list[ExternalRobot]) -> list[dict]:
         new_contacts = []
-        others = [(h.id, "human", [(h.x, h.y, h.radius)]) for h in humans]
-        others += [(f.id, "forklift", f.circles()) for f in forklifts]
-        others += [(e.id, "external", [(e.x, e.y, e.radius)]) for e in externals]
+        others = [(h.id, "human", [(h.x, h.y, h.radius)], abs(h.v) > 0.05) for h in humans]
+        others += [(f.id, "forklift", f.circles(), abs(f.v) > 0.05 or getattr(f, "turning", False))
+                   for f in forklifts]
+        others += [(e.id, "external", [(e.x, e.y, e.radius)], abs(e.v) > 0.05) for e in externals]
         for i, v in enumerate(vehicles):
             vc = v.spec.circles(v.x, v.y, v.theta)
             for w in vehicles[i + 1:]:
@@ -88,25 +91,37 @@ class Evaluator:
                 wc = w.spec.circles(w.x, w.y, w.theta)
                 gap = min(math.hypot(a[0] - b[0], a[1] - b[1]) - a[2] - b[2] for a in vc for b in wc)
                 self.min_amr_gap = min(self.min_amr_gap, gap)
-                new_contacts += self._contact(now, v, w.serial, "amr", gap, (w.x, w.y))
-            for oid, kind, circles in others:
+                new_contacts += self._contact(now, v, w.serial, "amr", gap, (w.x, w.y),
+                                              abs(w.v) > 0.05 or abs(w.omega) > 0.05)
+            for oid, kind, circles, other_moving in others:
                 ox, oy = circles[len(circles) // 2][:2]
                 if abs(v.x - ox) > 3.5 or abs(v.y - oy) > 3.5:
                     self._pair_contact.discard((v.serial, oid))
                     continue
                 gap = min(box_gap((cx, cy), cr, (v.x, v.y), v.theta, v.spec.length / 2, v.spec.width / 2)
                           for cx, cy, cr in circles)
-                new_contacts += self._contact(now, v, oid, kind, gap, (ox, oy))
-                if kind == "human" and near_miss(abs(v.v), gap):
-                    last = self._pair_nm.get((v.serial, oid), -1e9)
-                    if now - last > 10.0:
-                        self.near_misses += 1
-                        self.near_miss_log.append({"t": round(now, 1), "robot": v.serial, "human": oid,
-                                                   "gap": round(max(gap, 0.0), 2), "v": round(v.v, 2)})
-                    self._pair_nm[(v.serial, oid)] = now
+                new_contacts += self._contact(now, v, oid, kind, gap, (ox, oy), other_moving)
+                if kind == "human":
+                    speed = abs(v.v)
+                    if speed > 0.05:
+                        self.min_gap_moving = min(self.min_gap_moving, gap)
+                    for what, hit in (("clearance", clearance_violation(speed, gap)), ("close", close_call(speed, gap))):
+                        if not hit:
+                            continue
+                        key = (v.serial, oid, what)
+                        if now - self._pair_nm.get(key, -1e9) > 10.0:     # one event per pair per 10 s
+                            if what == "clearance":
+                                self.clearance_violations += 1
+                            else:
+                                self.close_calls += 1
+                            self.near_miss_log.append({"t": round(now, 1), "robot": v.serial, "human": oid,
+                                                       "kind": what, "gap": round(max(gap, 0.0), 2),
+                                                       "v": round(v.v, 2)})
+                        self._pair_nm[key] = now
         return new_contacts
 
-    def _contact(self, now: float, v: Vehicle, other: str, kind: str, gap: float, where) -> list[dict]:
+    def _contact(self, now: float, v: Vehicle, other: str, kind: str, gap: float, where,
+                 other_moving: bool = False) -> list[dict]:
         key = (v.serial, other)
         if gap > 0.05:
             if gap > 0.2:
@@ -116,15 +131,16 @@ class Evaluator:
             return []
         self._pair_contact.add(key)
         moving = abs(v.v) > 0.05 or abs(v.omega) > 0.05
+        # "moving": our vehicle was moving; "struck": it stood still and the other party moved into it
         rec = {"t": round(now, 1), "robot": v.serial, "other": other, "kind": kind, "moving": moving,
-               "x": round(v.x, 2), "y": round(v.y, 2), "speed": round(v.v, 2)}
+               "other_moving": other_moving, "x": round(v.x, 2), "y": round(v.y, 2), "speed": round(v.v, 2)}
         self.contacts.append(rec)
         return [rec]
 
     def awareness(self, now: float, humans: list[Human], tracks) -> tuple[int, int]:
         tracked = 0
         for h in humans:
-            if any(tr.cls == "human" and math.hypot(tr.x - h.x, tr.y - h.y) < 1.0 for tr in tracks):
+            if any(tr.cls == "human" and tr.confirmed and math.hypot(tr.x - h.x, tr.y - h.y) < 1.0 for tr in tracks):
                 tracked += 1
         self.human_samples += len(humans)
         self.tracked_samples += tracked
@@ -143,6 +159,12 @@ class Simulation:
         self.now = 0.0
         self.steps = 0
         self.layout = dc_layout(scenario.pick_limit) if scenario.site == "dc" else warehouse_layout(scenario.two_way)
+        if scenario.infra == "none":
+            self.layout.coverage = {}
+        elif scenario.infra == "full":
+            self.layout.coverage = {"CAM-ALL": rect(0.0, 0.0, self.layout.width, self.layout.height)}
+        elif scenario.infra != "partial":
+            raise ValueError("infra must be none, partial or full")
         self.rng_faults = random.Random(seed * 7 + 3)
         self.rng_sense = random.Random(seed * 7 + 4)
         self.rng_doors = random.Random(seed * 7 + 8)
@@ -174,6 +196,13 @@ class Simulation:
         self._next_sense = 0.0
         self._next_tick = 0.0
         self.tick_hooks: list = []       # called after each manager tick, e.g. the simulated operator
+        self._cam_queue: deque = deque()  # camera frames on their way to the control room
+        self.window_start = 0.0           # measurement window (reset_measurement after a warm-up)
+        self.time_budget: dict[str, dict[str, float]] = {}
+        self.task_time: dict[str, float] = {}
+        self.class_time: dict[str, float] = {}
+        self._odo0: dict[str, float] = {}
+        self._forklift_careless0 = 0
         self.handovers: list[dict] = []
         self.manager.alarms.listeners.append(self._on_alarm)
         self._build(random.Random(seed * 7 + 5))
@@ -211,6 +240,12 @@ class Simulation:
             self._build_dc(rng)
         else:
             self._build_grid(rng)
+        # rule-breaking rates apply from each person's next trip on
+        for h in self.humans:
+            h.violation_p = self.scenario.violation_p
+        for f in self.forklifts:
+            if isinstance(f, Forklift):
+                f.careless_p = self.scenario.careless_p
 
     def _build_dc(self, rng: random.Random) -> None:
         sc = self.scenario
@@ -401,7 +436,8 @@ class Simulation:
         for v in self.vehicles:
             v.step(dt, now, obstacles)
         for c in self.evaluator.check(now, self.vehicles, self.humans, self.forklifts, self.externals):
-            if c["moving"] or c["kind"] == "amr" and self._either_moving(c):
+            # any touch with something in motion presses the bumper (also a truck swinging into a standing AGF)
+            if c["moving"] or c["other_moving"]:
                 for v in self.vehicles:
                     if v.serial in (c["robot"], c["other"]) and v.fault is None:
                         v.set_fault("BUMPER")
@@ -409,10 +445,16 @@ class Simulation:
             self._next_sense = now + 0.5
             for v in self.vehicles:
                 v.sense(obstacles, self.layout.racks)
-            self.manager.ingest_detections(self._infra_detections())
+            if self.scenario.infra == "none":
+                self.manager.ingest_detections([], infra=False)      # only what the vehicles saw
+            else:
+                # a camera frame is captured now and reaches the control room after the processing latency
+                self._cam_queue.append((now + self.scenario.cam_latency_s, self._infra_detections()))
             for e in self.externals:
                 self.manager.ingest_external(e.id, e.x, e.y, e.heading, e.itinerary(), e.speed)
             self.evaluator.awareness(now, self.humans, self.manager.tracker.tracks.values())
+        while self._cam_queue and self._cam_queue[0][0] <= now + 1e-9:
+            self.manager.ingest_detections(self._cam_queue.popleft()[1])
         self._inject(dt, now)
         for v in self.vehicles:
             for t, msg in v.publish_due(now):
@@ -424,6 +466,7 @@ class Simulation:
             self._next_tick = now + 0.2
             self.manager.tick(now, 0.2)
             self.dispatcher.tick(now)
+            self._account(0.2)
             for hook in self.tick_hooks:
                 hook(now)
         if now >= self._next_frame:
@@ -435,27 +478,28 @@ class Simulation:
                     inc.frames.append(frame)
                     inc.frames_after_left -= 1
 
-    def _either_moving(self, contact: dict) -> bool:
-        for v in self.vehicles:
-            if v.serial in (contact["robot"], contact["other"]) and (abs(v.v) > 0.05 or abs(v.omega) > 0.05):
-                return True
-        return False
-
     def run(self, seconds: float) -> None:
         end = self.now + seconds
         while self.now < end - 1e-9:
             self.step()
 
     def _infra_detections(self) -> list[Detection]:
+        """One frame of the ceiling cameras' person/truck detector (positions at capture time).
+
+        Missed detections, position noise, wrong classes and false detections follow the scenario's camera
+        parameters; the tracker only acts on a track seen twice.
+        """
+        sc, rng = self.scenario, self.rng_sense
         dets = []
-        for h in self.humans:
-            if self.layout.covered(h.pos) and self.rng_sense.random() > 0.03:
-                dets.append(Detection("human", h.x + self.rng_sense.gauss(0, 0.12),
-                                      h.y + self.rng_sense.gauss(0, 0.12), "infra"))
-        for f in self.forklifts:
-            if self.layout.covered(f.pos) and self.rng_sense.random() > 0.03:
-                dets.append(Detection("forklift", f.x + self.rng_sense.gauss(0, 0.15),
-                                      f.y + self.rng_sense.gauss(0, 0.15), "infra"))
+        for cls, objs, sigma in (("human", self.humans, sc.cam_sigma), ("forklift", self.forklifts, sc.cam_sigma)):
+            for o in objs:
+                if self.layout.covered(o.pos) and rng.random() < sc.cam_detect_p:
+                    seen = cls if rng.random() >= sc.cam_misclass_p else ("forklift" if cls == "human" else "human")
+                    dets.append(Detection(seen, o.x + rng.gauss(0, sigma), o.y + rng.gauss(0, sigma), "infra"))
+        for poly in self.layout.coverage.values():
+            if rng.random() < sc.cam_fp_p:
+                xs, ys = [p[0] for p in poly], [p[1] for p in poly]
+                dets.append(Detection("human", rng.uniform(min(xs), max(xs)), rng.uniform(min(ys), max(ys)), "infra"))
         return dets
 
     def _inject(self, dt: float, now: float) -> None:
@@ -535,6 +579,68 @@ class Simulation:
         return hid
 
     # ------------------------------------------------------------ views
+    # ------------------------------------------------------------ measurement
+    def _account(self, dt: float) -> None:
+        """Time budget per vehicle class from the control room's own status (what a real FMS can log)."""
+        for rec in self.manager.robots.values():
+            cls = rec.vclass or "GENERIC"
+            budget = self.time_budget.setdefault(cls, {})
+            budget[rec.status] = budget.get(rec.status, 0.0) + dt
+            if rec.task_id:
+                self.task_time[cls] = self.task_time.get(cls, 0.0) + dt
+            self.class_time[cls] = self.class_time.get(cls, 0.0) + dt
+
+    def reset_measurement(self) -> None:
+        """Start the measurement window here (after warm-up): counters restart, the world goes on unchanged."""
+        m = self.manager
+        self.window_start = self.now
+        for k in m.counters:
+            m.counters[k] = 0.0 if isinstance(m.counters[k], float) else 0
+        m.repair_times.clear()
+        m.alarms.total_activations = 0
+        m.alarms.alerts = 0
+        for rec in m.robots.values():
+            rec.busy_s = rec.wait_s = 0.0
+        self.evaluator = Evaluator()
+        self.dispatcher.reset_metrics(self.now)
+        if hasattr(self.process, "reset_metrics"):
+            self.process.reset_metrics()
+        self.process.window_start = self.now
+        self.time_budget, self.task_time, self.class_time = {}, {}, {}
+        self._odo0 = {v.serial: v.odometer for v in self.vehicles}
+        self._forklift_careless0 = sum(getattr(f, "careless_turns", 0) for f in self.forklifts)
+        self.bus.stats = {k: 0 for k in self.bus.stats}
+
+    def productivity(self, hours: float) -> dict:
+        """Per-vehicle and per-picker rates, the units practitioners compare (docs/BENCHMARK.md)."""
+        out: dict = {}
+        by_cls: dict[str, list] = {}
+        for v in self.vehicles:
+            by_cls.setdefault(v.spec.vclass, []).append(v)
+        for cls, vs in by_cls.items():
+            odo = sum(v.odometer - self._odo0.get(v.serial, 0.0) for v in vs)
+            t = self.class_time.get(cls, 0.0)
+            out[cls] = {"vehicles": len(vs), "km": round(odo / 1000.0, 2),
+                        "task_share": round(self.task_time.get(cls, 0.0) / t, 3) if t else None,
+                        "time_share": {k: round(x / t, 3) for k, x in sorted(self.time_budget.get(cls, {}).items(),
+                                                                              key=lambda kv: -kv[1])} if t else {}}
+        site = self.process.stats(self.now)
+        if self.scenario.site == "dc":
+            agf = out.get("FORKLIFT")
+            moves = site.get("putaway", 0) + site.get("shipped", 0)
+            if agf:
+                agf["moves_per_vehicle_h"] = round(moves / (agf["vehicles"] * hours), 2)
+                agf["m_per_move"] = round(agf["km"] * 1000.0 / moves, 1) if moves else None
+            amr = out.get("CARRIER")
+            if amr:
+                amr["orders_per_vehicle_h"] = round(site.get("tote_done", 0) / (amr["vehicles"] * hours), 2)
+            pickers = sum(1 for h in self.humans if h.role == "picker")
+            if pickers:
+                out["pickers"] = {"count": pickers, "lph": round(site.get("picks", 0) / (pickers * hours), 1),
+                                  "uph": round(site.get("units", 0) / (pickers * hours), 1),
+                                  "robots_per_picker": round(len(by_cls.get("CARRIER", [])) / pickers, 2)}
+        return out
+
     def kpi(self) -> dict:
         m = self.manager
         stats = self.dispatcher.stats(self.now)
@@ -543,24 +649,31 @@ class Simulation:
         online = sum(1 for r in m.robots.values() if r.connection == "ONLINE")
         working = sum(1 for r in m.robots.values() if r.task_id)
         c = m.counters
-        hours = max(self.now / 3600.0, 1e-6)
+        hours = max((self.now - self.window_start) / 3600.0, 1e-6)
+        total_t = sum(self.class_time.values())
         ev = self.evaluator
         repairs = m.repair_times
         moving_contacts = [x for x in ev.contacts if x["moving"]]
-        contacts_h = sum(1 for x in moving_contacts if x["kind"] == "human")
+        struck = [x for x in ev.contacts if not x["moving"] and x["other_moving"]]
         return {
             **stats,
             "robots": len(self.vehicles), "online": online, "working": working,
-            "utilization": round(working / max(1, len(self.vehicles)), 3),
+            # share of vehicle time with a task, averaged over the window (not a snapshot of the last instant)
+            "utilization": round(sum(self.task_time.values()) / total_t, 3) if total_t else 0.0,
             "traffic_wait_ratio": round(wait / busy, 3) if busy > 0 else 0.0,
             "deadlocks": c["deadlocks"], "deadlocks_resolved": c["deadlocks_resolved"],
             "deadlocks_active": len(m.deadlocks),
             "deadlock_avg_s": round(c["deadlock_s"] / c["deadlocks_resolved"], 1) if c["deadlocks_resolved"] else None,
             "reroutes": c["reroutes"], "evasions": c["evasions"], "nudges": c["nudges"],
             "protective_stops": c["protective_stops"], "protective_human": c["protective_human"],
-            "near_miss_fms": c["near_miss"], "near_miss_truth": ev.near_misses,
-            "contacts": len(moving_contacts), "contacts_human": contacts_h,
+            "near_miss_fms": c["near_miss"],
+            # safety outcomes (ground truth): every contact counts; what the vehicle was doing is split out
+            "contacts": len(ev.contacts), "contacts_moving": len(moving_contacts), "contacts_struck": len(struck),
             "contacts_static": len(ev.contacts) - len(moving_contacts),
+            "contacts_human": sum(1 for x in ev.contacts if x["kind"] == "human"),
+            "contacts_human_moving": sum(1 for x in moving_contacts if x["kind"] == "human"),
+            "close_calls": ev.close_calls, "clearance_violations": ev.clearance_violations,
+            "min_gap_moving": None if ev.min_gap_moving == math.inf else round(max(0.0, ev.min_gap_moving), 2),
             "min_amr_gap": None if ev.min_amr_gap == math.inf else round(ev.min_amr_gap, 2),
             "tracking_ratio": round(ev.tracked_samples / ev.human_samples, 3) if ev.human_samples else None,
             "mismatch": c["mismatch"], "comms_lost": c["comms_lost"], "order_rejects": c["order_rejects"],
@@ -569,7 +682,9 @@ class Simulation:
             "alarms_per_h": round(m.alarms.total_activations / hours, 1),
             "bus_dropped": self.bus.stats["dropped"], "bus_published": self.bus.stats["published"],
             "sim_hours": round(hours, 3),
+            "careless_turns": sum(getattr(f, "careless_turns", 0) for f in self.forklifts) - self._forklift_careless0,
             "site": self.process.stats(self.now),
+            "productivity": self.productivity(hours),
         }
 
     def snapshot(self) -> dict:

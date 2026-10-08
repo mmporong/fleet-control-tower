@@ -21,6 +21,7 @@ class Process:
         self.rng = rng
         self.rate_per_h = rate_per_h
         self.next_arrival = 0.0
+        self.window_start = 0.0          # rates are per hour of the measurement window
 
     def set_rate(self, rate: float, now: float) -> None:
         self.rate_per_h = rate

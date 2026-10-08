@@ -26,12 +26,15 @@ from .ops import Operations
 from .scenario import PRESETS, get
 from .sim import Simulation
 
-KEY_METRICS = ("done", "throughput_h", "cycle_avg", "cycle_p90", "wait_avg", "traffic_wait_ratio", "utilization",
-               "deadlocks", "deadlocks_resolved", "reroutes", "evasions", "protective_stops", "protective_human",
-               "near_miss_truth", "near_miss_fms", "contacts", "contacts_human", "contacts_static", "min_amr_gap",
-               "tracking_ratio", "mismatch", "alarms_per_h", "mttr_s", "mtta_s", "interventions", "queued",
-               "site_putaway_h", "site_shipped_h", "site_tote_h", "site_picks", "site_dock_to_stock_avg",
-               "site_dock_to_stock_p90", "site_picker_wait_s", "site_staged_in")
+KEY_METRICS = ("done", "throughput_h", "cycle_avg", "cycle_p90", "wait_avg", "exec_avg", "traffic_wait_ratio",
+               "utilization", "deadlocks", "deadlocks_resolved", "reroutes", "evasions", "protective_stops",
+               "protective_human", "near_miss_fms", "contacts", "contacts_moving", "contacts_struck",
+               "contacts_static", "contacts_human", "contacts_human_moving", "close_calls", "clearance_violations",
+               "min_gap_moving", "min_amr_gap", "careless_turns", "tracking_ratio", "mismatch", "alarms_per_h",
+               "mttr_s", "mtta_s", "interventions", "queued", "site_putaway_h", "site_shipped_h", "site_tote_h",
+               "site_picks", "site_units", "site_dock_to_stock_avg", "site_dock_to_stock_p90", "site_picker_wait_s",
+               "site_staged_in", "site_tote_backlog", "site_exceptions", "site_rack_fill", "agf_moves_per_vehicle_h",
+               "agf_m_per_move", "amr_orders_per_vehicle_h", "picker_lph", "picker_uph")
 
 
 def run_one(job: dict) -> dict:
@@ -45,15 +48,46 @@ def run_one(job: dict) -> dict:
     auto = AutoOperator(ops, random.Random(job["seed"] + 99))
     if job.get("operator", True):
         sim.tick_hooks.append(auto.tick)
+    warmup = float(job.get("warmup", 0.0))
+    if warmup > 0:
+        sim.run(warmup)
+        sim.reset_measurement()
+        auto.ack_times.clear()
+        ops.counts = {k: 0 for k in ops.counts}
     sim.run(job["duration"])
     kpi = sim.kpi()
     for key, value in (kpi.pop("site", {}) or {}).items():
         kpi[f"site_{key}"] = value
+    prod = kpi.pop("productivity", {}) or {}
+    agf, amr, pick = prod.get("FORKLIFT") or {}, prod.get("CARRIER") or {}, prod.get("pickers") or {}
+    kpi.update(agf_moves_per_vehicle_h=agf.get("moves_per_vehicle_h"), agf_m_per_move=agf.get("m_per_move"),
+               amr_orders_per_vehicle_h=amr.get("orders_per_vehicle_h"), picker_lph=pick.get("lph"),
+               picker_uph=pick.get("uph"))
+    kpi["time_share"] = {cls: v.get("time_share") for cls, v in prod.items() if isinstance(v, dict) and "time_share" in v}
     kpi["interventions"] = ops.counts["interventions"]
     kpi["mtta_s"] = round(statistics.mean(auto.ack_times), 1) if auto.ack_times else None
     kpi["lock_problems"] = len(sim.manager.locks.check())
     return {"job": job, "kpi": kpi, "wall_s": round(time.time() - t0, 1),
             "forklift_reversals": [getattr(f, "reversals", 0) for f in sim.forklifts]}
+
+
+# two-sided 95 % Student t quantiles by degrees of freedom (n - 1)
+T95 = {1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571, 6: 2.447, 7: 2.365, 8: 2.306, 9: 2.262, 10: 2.228,
+       11: 2.201, 12: 2.179, 13: 2.160, 14: 2.145, 15: 2.131, 19: 2.093, 24: 2.064, 29: 2.045}
+
+
+def ci95(values: list[float]) -> float:
+    """Half-width of the 95 % confidence interval of the mean (Student t).
+
+    >>> round(ci95([10.0, 12.0, 14.0]), 2)
+    4.97
+    """
+    n = len(values)
+    if n < 2:
+        return 0.0
+    df = n - 1
+    t = T95.get(df) or T95[max(k for k in T95 if k <= df)] if df <= 29 else 1.96
+    return t * statistics.stdev(values) / n ** 0.5
 
 
 def summarize(results: list[dict], group_key: str) -> dict:
@@ -68,7 +102,7 @@ def summarize(results: list[dict], group_key: str) -> dict:
             if vals:
                 row[k] = {"mean": round(statistics.mean(vals), 3),
                           "sd": round(statistics.stdev(vals), 3) if len(vals) > 1 else 0.0,
-                          "min": min(vals), "max": max(vals)}
+                          "ci95": round(ci95(vals), 3), "min": min(vals), "max": max(vals)}
         out[g] = row
     return out
 
@@ -91,7 +125,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--scenario", default="standard", choices=sorted(PRESETS))
     ap.add_argument("--strategies", default="locks+resolve")
     ap.add_argument("--seeds", default="1,2,3")
-    ap.add_argument("--duration", type=float, default=3600.0)
+    ap.add_argument("--duration", type=float, default=3600.0, help="measured seconds (after the warm-up)")
+    ap.add_argument("--warmup", type=float, default=1800.0, help="seconds run before measuring starts")
     ap.add_argument("--robots", default="", help="comma list: fleet-size sweep (overrides scenario)")
     ap.add_argument("--variants", default="", help="JSON list of {label, manager, vehicle, scenario_overrides}")
     ap.add_argument("--no-operator", action="store_true", help="run without the simulated operator")
@@ -113,7 +148,7 @@ def main(argv: list[str] | None = None) -> int:
                     label = "/".join(x for x in (strategy, var.get("label", "default"),
                                                  f"{n} robots" if n else "") if x)
                     jobs.append({"scenario": args.scenario, "strategy": strategy, "seed": seed,
-                                 "duration": args.duration, "manager": var.get("manager", {}),
+                                 "duration": args.duration, "warmup": args.warmup, "manager": var.get("manager", {}),
                                  "vehicle": var.get("vehicle", {}), "scenario_overrides": overrides,
                                  "operator": not args.no_operator, "label": label})
     rev = git_rev()
@@ -122,7 +157,8 @@ def main(argv: list[str] | None = None) -> int:
         results = list(pool.map(run_one, jobs))
     summary = summarize(results, "label")
     doc = {"created": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "git": rev, "python": platform.python_version(),
-           "scenario": PRESETS[args.scenario].to_json(), "duration_s": args.duration, "seeds": seeds,
+           "scenario": PRESETS[args.scenario].to_json(), "duration_s": args.duration, "warmup_s": args.warmup,
+           "seeds": seeds,
            "wall_s": round(time.time() - t0, 1), "summary": summary, "runs": results}
     for label, row in summary.items():
         def m(k):
@@ -132,7 +168,7 @@ def main(argv: list[str] | None = None) -> int:
                 f"d2s {m('site_dock_to_stock_avg')}") if "site_putaway_h" in row else ""
         print(f"{label:40s} thr/h {m('throughput_h'):>14} wait {m('traffic_wait_ratio'):>11} "
               f"deadlock {m('deadlocks'):>11} resolved {m('deadlocks_resolved'):>11} "
-              f"contact {m('contacts'):>9} nearmiss {m('near_miss_truth'):>11}{site}")
+              f"contact {m('contacts'):>9} close {m('close_calls'):>11}{site}")
     if args.out:
         Path(args.out).parent.mkdir(parents=True, exist_ok=True)
         Path(args.out).write_text(json.dumps(doc, ensure_ascii=False, indent=1))

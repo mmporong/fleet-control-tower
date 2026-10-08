@@ -496,7 +496,7 @@ class DcProcess(Process):
     # ------------------------------------------------------------ views
     def stats(self, now: float) -> dict:
         m = self.metrics
-        hours = max(now / 3600.0, 1e-6)
+        hours = max((now - self.window_start) / 3600.0, 1e-6)
         d2s = sorted(m["d2s"])
         known = [v for v in self.slots.values()]
         return {

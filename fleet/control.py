@@ -28,18 +28,38 @@ from .traffic import LockTable, WaitInfo, find_cycles, lane_res, node_res, res_n
 from .vda5050 import HeaderIds, RouteEdge, RouteNode, action, build_instant_actions, build_order, header, topic
 
 STRATEGIES = ("none", "locks", "locks+resolve")
+SWING_RADIUS = 1.9           # half the length of a 3.6 m counterbalance truck plus margin: its turning circle
 LINK_WINDOW_S = 5.0          # window for the measured link quality shown per vehicle
 
 
-def near_miss(speed: float, gap: float, margin: float = 0.0) -> bool:
-    """Close pass faster than the reduced speed allowed near people.
+CLEARANCE_M = 0.5        # ISO 3691-4 Annex A (via TUV whitepaper): clearance a vehicle above 0.3 m/s must keep
+CREEP_SPEED = 0.3        # at or below this speed reduced clearance is allowed (operating hazard zone)
+CLOSE_CALL_M = 0.2       # outcome measure: a moving vehicle came this close to a person
 
-    ISO 3691-4 lets a driverless vehicle pass people with reduced clearance
-    only at or below 0.3 m/s; above that a gap under 0.3 m is a near miss.
-    Any gap under 0.1 m while moving counts too. ``margin`` tightens the gap
-    threshold when positions are noisy estimates (tracks, not ground truth).
+
+def clearance_violation(speed: float, gap: float, margin: float = 0.0) -> bool:
+    """A compliance check, not an outcome: faster than creep speed with less than the required clearance.
+
+    ``margin`` tightens the gap threshold when positions are noisy estimates (tracks, not ground truth).
+
+    >>> clearance_violation(1.0, 0.45), clearance_violation(0.3, 0.15), clearance_violation(1.0, 0.6)
+    (True, False, False)
     """
-    return (speed > 0.35 and gap < 0.3 - margin) or (speed > 0.1 and gap < 0.1 - margin / 2)
+    return speed > CREEP_SPEED + 1e-6 and gap < CLEARANCE_M - margin
+
+
+def close_call(speed: float, gap: float) -> bool:
+    """An outcome, independent of any speed rule: the vehicle was moving and within 20 cm of a person.
+
+    >>> close_call(0.2, 0.15), close_call(0.0, 0.05), close_call(1.0, 0.3)
+    (True, False, False)
+    """
+    return speed > 0.05 and gap < CLOSE_CALL_M
+
+
+def near_miss(speed: float, gap: float, margin: float = 0.0) -> bool:
+    """What the control room flags from its tracks: a clearance violation or a close call."""
+    return clearance_violation(speed, gap, margin) or (speed > 0.05 and gap < CLOSE_CALL_M - margin / 2)
 STATUS_LABEL = {
     "MOVING": "주행", "WAITING": "교통 대기", "BLOCKED": "차단 대기", "ACTION": "작업 동작",
     "CHARGING": "충전", "IDLE": "대기", "PARKED": "주차", "PAUSED": "일시정지", "ESTOP": "비상정지",
@@ -105,6 +125,8 @@ class RobotRecord:
     has_state: bool = False
     action_results: dict = field(default_factory=dict)   # actionId -> resultDescription of failed actions
     factsheet_asked: float = -1e9
+    swing_since: float | None = None      # standing inside a stopped forklift's swept circle since
+    escape_from: str | None = None        # track id of the truck whose circle this vehicle is leaving
     state_nodes: list = field(default_factory=list)      # (nodeId, sequenceId, released) still ahead
     # ---- plan
     route: list = field(default_factory=list)
@@ -429,8 +451,13 @@ class FleetManager:
         rec.order_pending = True
 
     # ================================================================ infra inputs
-    def ingest_detections(self, detections: list[Detection]) -> None:
-        self.infra_last = self.now
+    def ingest_detections(self, detections: list[Detection], infra: bool = True) -> None:
+        """One sensing cycle: infrastructure detections (camera/RTLS) plus what the vehicles reported.
+
+        ``infra`` False: no infrastructure feed exists on this site, only the vehicles' own sensors.
+        """
+        if infra:
+            self.infra_last = self.now
         dets = list(detections)
         for rec in self.robots.values():
             for d in rec.detections:
@@ -670,6 +697,7 @@ class FleetManager:
         if path is None:
             return False
         self._order_seq += 1
+        rec.escape_from = None
         rec.route = path
         rec.rot_zone = {}
         rec.order_id = f"{rec.serial}-{self.run_id}O{self._order_seq}"
@@ -692,6 +720,7 @@ class FleetManager:
         return True
 
     def clear_route(self, rec: RobotRecord) -> None:
+        rec.escape_from = None
         rec.route = []
         rec.goal_actions = {}
         rec.purpose = ""
@@ -1099,6 +1128,8 @@ class FleetManager:
             for r in resources:
                 if r in self.blocks and self.locks.holder_of(r) != rec.serial:
                     kind, ref = self.blocks[r]
+                    if rec.purpose == "evade" and ref is not None and ref == rec.escape_from:
+                        continue          # leaving a stopped truck's swept circle: its own block does not hold us
                     blocked = self._wait(rec, kind, r, ref)
                     break
             if blocked:
@@ -1474,10 +1505,28 @@ class FleetManager:
                         forbidden.update(n for n in self.layout.nodes
                                          if dist(self.layout.nodes[n].pos, (tr.x, tr.y)) < 4.5)
                         reason = f"지게차 {tr.id} 대치"
+            # standing inside the circle a stopped truck sweeps when it turns: the driver either waits or swings
+            # into us, so we leave after 5 s whatever we are waiting for
+            swing = [tr for tr in stalled_fl if tr.confirmed and
+                     dist((tr.x, tr.y), (rec.x, rec.y)) < SWING_RADIUS + rec.length / 2 + 0.2]
+            impassable: set[str] = set()
+            escape = None
+            if swing and not rec.driving:
+                rec.swing_since = rec.swing_since if rec.swing_since is not None else self.now
+                if self.now - rec.swing_since >= 5.0:
+                    tr = swing[0]
+                    near = {n: dist(self.layout.nodes[n].pos, (tr.x, tr.y)) for n in self.layout.nodes}
+                    # not through the circle itself, and no stopping close enough to be inside it again
+                    impassable = {n for n, d in near.items() if d < SWING_RADIUS + 0.3 and n != here}
+                    forbidden.update(n for n, d in near.items() if d < SWING_RADIUS + 2.0)
+                    reason = f"지게차 {tr.id} 선회 반경 안"
+                    escape = tr.id
+            else:
+                rec.swing_since = None
             if not forbidden:
                 continue
             rec.yield_next = self.now + 8.0
-            spot = self._evasion_spot(rec, forbidden, impassable=forbidden)
+            spot = self._evasion_spot(rec, forbidden, impassable=impassable if impassable else forbidden)
             if spot is None:
                 continue
             resume = None
@@ -1485,6 +1534,7 @@ class FleetManager:
                 resume = (rec.goal, rec.purpose, rec.goal_actions.get(len(rec.route) - 1, []), rec.task_id)
             if self.assign_route(rec, spot, "evade", task_id=rec.task_id):
                 rec.resume = resume
+                rec.escape_from = escape
                 self.counters["evasions"] += 1
                 self.event("yield", rec.serial, f"양보 회피: {reason} → {spot}", "info")
 
@@ -1540,7 +1590,7 @@ class FleetManager:
             if abs(rec.v) < 0.1 or rec.connection != "ONLINE":
                 continue
             for tr in self.tracker.tracks.values():
-                if tr.cls != "human":
+                if tr.cls != "human" or not tr.confirmed:
                     continue
                 if abs(tr.x - rec.x) > 3 or abs(tr.y - rec.y) > 3:
                     continue
@@ -1631,7 +1681,7 @@ class FleetManager:
     def _zone_speeds(self) -> None:
         if not self.cfg.human_zones:
             return
-        humans = [tr for tr in self.tracker.tracks.values() if tr.cls == "human"]
+        humans = [tr for tr in self.tracker.tracks.values() if tr.cls == "human" and tr.confirmed]
         desired: dict[str, float | None] = {}
         for z in self.layout.zones.values():
             limit = self.zone_speed_override.get(z.id)

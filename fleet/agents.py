@@ -85,6 +85,10 @@ class Human:
     v: float = 0.0
     dwell_until: float = 0.0
     distracted: bool = False
+    # this trip the person does not heed vehicles at all: no yielding and no avoiding a vehicle that is moving
+    # (a standing one is still walked round). The share of such trips is a swept assumption (docs/SITE.md).
+    inattentive: bool = False
+    violation_p: float = 0.0
     walker: Walker = field(default_factory=Walker)
     spots: list[Point] = field(default_factory=list)
     aisle_col: int | None = None
@@ -104,6 +108,7 @@ class Human:
 
     def plan_next(self, layout: Layout) -> None:
         self.distracted = self.rng.random() < 0.15
+        self.inattentive = self.violation_p > 0 and self.rng.random() < self.violation_p
         self.detour_until_idx = -1
         if self.role == "worker":
             target = self.rng.choice(self.spots)
@@ -220,13 +225,14 @@ class Human:
             self.v = 0.0
             return
         heading = math.atan2(tgt[1] - self.y, tgt[0] - self.x)
-        yield_dist = 0.0 if self.distracted else 1.2
+        heedless = self.distracted or self.inattentive
+        yield_dist = 0.0 if heedless else 1.2
         blocked = False
         for rid, rx, ry, rr, rv in robots:
             gap = math.hypot(rx - self.x, ry - self.y) - rr - self.radius
-            if gap > 1.6:
+            if gap > 1.6 or self.inattentive and abs(rv) > 0.05:
                 continue
-            if abs(rv) > 0.05 and not self.distracted and gap < 1.2 and now > self.impatient_until and \
+            if abs(rv) > 0.05 and not heedless and gap < 1.2 and now > self.impatient_until and \
                     not self._at_shelf_face() and circle_hits_forward_box((rx, ry), rr, self.pos, heading, 1.8, 1.2):
                 blocked = True          # a moving robot nearby, in front or crossing: wait for it
                 if self.yield_since is None:
@@ -281,8 +287,9 @@ class Human:
         self.yield_since = None if not blocked else self.yield_since
         bodies = [(rx, ry, rr, rv) for _rid, rx, ry, rr, rv in robots] + \
             [(cx, cy, cr, f.v) for f in forklifts for cx, cy, cr in f.circles()]
-        overlap = [(bx, by, br) for bx, by, br, _bv in bodies
-                   if math.hypot(bx - self.x, by - self.y) < br + self.radius]
+        overlap = [(bx, by, br) for bx, by, br, bv in bodies
+                   if math.hypot(bx - self.x, by - self.y) < br + self.radius
+                   and not (self.inattentive and abs(bv) > 0.05)]
         if overlap:
             # already touching a vehicle body: step straight away from it first
             bx, by, _ = overlap[0]
@@ -295,6 +302,8 @@ class Human:
         trial = Walker(self.walker.points, self.walker.idx)
         new_pos, heading2 = trial.advance(self.pos, self.speed * dt)
         for bx, by, br, bv in bodies:
+            if self.inattentive and abs(bv) > 0.05:
+                continue            # does not look: walks on into a moving vehicle's way
             d_new = math.hypot(bx - new_pos[0], by - new_pos[1]) - br - self.radius
             d_old = math.hypot(bx - self.x, by - self.y) - br - self.radius
             if d_new < 0.06 and d_new < d_old:
@@ -365,6 +374,11 @@ class Forklift:
     keep_offset_until: float = 0.0   # gave up returning to the lane centre: drive on at the offset
     turn_wait_since: float | None = None
     turn_committed: bool = False
+    turning: bool = False
+    # a standing vehicle in the circle the truck sweeps: after 10 s most drivers back out the way they came,
+    # this share turns anyway (a rule violation; swept in the benchmark)
+    careless_p: float = 0.1
+    careless_turns: int = 0
     stall_since: float | None = None
     bx: float = 0.0             # position on the lane centre line
     by: float = 0.0
@@ -480,15 +494,26 @@ class Forklift:
             inside = [rv for _i, rx, ry, rr, rv in robots if math.hypot(rx - self.bx, ry - self.by) < 1.9 + rr + 0.2]
             if not self.turn_committed:
                 # a vehicle driving through the circle is always let past; one standing in it is waited for
-                # 10 s, then the driver turns anyway (its protective field stops it if the truck comes close)
                 if any(abs(v) > 0.05 for v in inside) or inside and (
                         self.turn_wait_since is None or now - self.turn_wait_since < 10.0):
-                    # something inside the circle the truck sweeps: the driver waits before turning
                     self.turn_wait_since = self.turn_wait_since if self.turn_wait_since is not None else now
                     self.v = 0.0
+                    self.turning = False
                     return
+                if inside:
+                    # waited 10 s for a vehicle that does not move: most drivers back out, some turn anyway
+                    if self.rng.random() >= self.careless_p:
+                        if now - self.reversed_at > 30.0:
+                            self.reversed_at = now
+                            self._reverse()
+                        self.turn_wait_since = now
+                        self.v = 0.0
+                        self.turning = False
+                        return
+                    self.careless_turns += 1
                 self.turn_committed = True       # once started, the turn is finished in one go
             self.turn_wait_since = None
+            self.turning = True
             # the truck turns at walking pace on the spot: its 3.6 m body sweeps the next lane gradually,
             # so the vehicles there see it coming instead of it appearing across their lane
             self.heading += max(-TURN_RATE * dt, min(TURN_RATE * dt, turn))
@@ -497,6 +522,7 @@ class Forklift:
             self.stall_since = None
             return
         self.turn_committed = False
+        self.turning = False
         self.blocked_since = None
         self.stall_since = None
         speed = self.speed
