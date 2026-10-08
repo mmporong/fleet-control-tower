@@ -462,3 +462,56 @@ class RealismTests(unittest.TestCase):
 def random_rng(seed: int):
     import random
     return random.Random(seed)
+
+
+class FacilityAndTruckSignalTests(unittest.TestCase):
+    def test_fire_alarm_closes_doors_and_stops_releasing(self):
+        sim = quiet_dc()
+        ops = Operations(sim)
+        rec = sim.manager.robots["AGF-01"]
+        self.assertTrue(sim.manager.assign_route(rec, "SO1", "test"))      # a trip through a fire door
+        sim.run(20)
+        sim.drill_fire(True)
+        sim.run(1.0)
+        self.assertEqual(sim.manager.mode, "FIRE")
+        self.assertTrue(sim.manager.alarms.is_active("FIRE_ALARM:facility"))
+        base_end = rec.base_end
+        sim.run(60)
+        self.assertEqual(rec.base_end, base_end)                  # nothing new was released
+        v = sim.vehicles[0]
+        self.assertFalse(v.driving())
+        self.assertNotIn(v.last_node_id, sim.layout.no_stop)      # it did not stop in a door threshold
+        self.assertTrue(all(d.progress == 0.0 for d in sim.doors.values()))   # fire doors shut
+        self.assertFalse(ops.execute({"cmd": "fleet_resume", "confirm": True})["ok"])
+        sim.drill_fire(False)
+        sim.run(1.0)
+        self.assertEqual(sim.manager.mode, "HOLD")                # all clear: resume after a site check
+        self.assertTrue(ops.execute({"cmd": "fleet_resume", "confirm": True})["ok"])
+
+    def test_a_truck_waiting_at_an_aisle_mouth_gets_the_aisle(self):
+        from fleet.perception import Detection
+        sim = quiet_dc()
+        m = sim.manager
+        mouth = sim.layout.nodes["SW16_2"]
+        for k in range(30):                                       # the truck stands at the R1 mouth for 6 s
+            m.now = sim.now + 0.2 * k
+            m.ingest_detections([Detection("forklift", mouth.x - 1.0, mouth.y, "infra")])
+            m._update_blocks()
+        r1 = [n for n, zs in sim.layout.node_zones.items() if "Z-R1" in zs]
+        self.assertTrue(r1)
+        self.assertTrue(all(f"N:{n}" in m.blocks for n in r1 if m.locks.holder_of(f"N:{n}") is None))
+
+    def test_turn_zone_ahead_of_a_moving_truck_is_kept_clear(self):
+        from fleet.perception import Detection
+        sim = quiet_dc()
+        m = sim.manager
+        node = sim.layout.nodes["SW22_8"]
+        t0 = sim.now
+        for k in range(8):                                        # a truck driving west at 1.5 m/s toward SW22_8
+            m.now = t0 + 0.5 * k
+            m.ingest_detections([Detection("forklift", node.x + 6.0 - 0.75 * k, node.y, "infra")])
+        m._update_blocks()
+        near = [n.id for n in sim.layout.nodes.values()
+                if ((n.x - node.x) ** 2 + (n.y - node.y) ** 2) ** 0.5 <= 2.8]
+        self.assertTrue(near)
+        self.assertTrue(all(f"N:{n}" in m.blocks for n in near), [n for n in near if f"N:{n}" not in m.blocks])
