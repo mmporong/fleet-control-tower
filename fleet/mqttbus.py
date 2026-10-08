@@ -52,7 +52,9 @@ def qos_retain(topic: str) -> tuple[int, bool]:
     if topic.endswith("/connection"):
         return 1, True
     if topic.startswith("facility/") and topic.endswith("/state"):
-        return 0, True                    # the latest door state is there for anyone who subscribes later
+        return 0, True                    # the latest door / fire panel state is there for later subscribers
+    if topic == "fleet/v1/fms/state":
+        return 1, True                    # the manager's own ONLINE / OFFLINE, like a vehicle's connection
     return 0, False
 
 
@@ -93,7 +95,7 @@ class MqttBus:
         delivered = 0
         while True:
             try:
-                topic, raw = self._inbox.get_nowait()
+                topic, raw, retained = self._inbox.get_nowait()
             except queue.Empty:
                 break
             try:
@@ -103,6 +105,10 @@ class MqttBus:
             if not isinstance(payload, dict):
                 self.stats["invalid_json"] += 1
                 continue
+            if retained and topic.startswith("facility/v1/door/"):
+                # the broker's copy of an old door state, not the controller speaking now: the door supervisor
+                # must not treat it as a live answer (a dead controller's last OPEN would let traffic in)
+                payload["_retained"] = True
             self._record(topic, payload, now, dropped=False, inbound=True)
             for pattern, handler in self._subs:
                 if topic_matches(pattern, topic):
@@ -119,7 +125,7 @@ class MqttBus:
 
     # ------------------------------------------------------------ internals
     def _on_message(self, topic: str, payload: bytes, retain: bool) -> None:
-        self._inbox.put((topic, payload))
+        self._inbox.put((topic, payload, retain))
 
     def _record(self, topic: str, payload: dict, now: float, dropped: bool, inbound: bool = False) -> None:
         parsed = split_topic(topic)

@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 from concurrent.futures import ProcessPoolExecutor
 import json
+import math
 import os
 from pathlib import Path
 import platform
@@ -55,7 +56,7 @@ def run_one(job: dict) -> dict:
         auto.ack_times.clear()
         ops.counts = {k: 0 for k in ops.counts}
     sim.run(job["duration"])
-    kpi = sim.kpi()
+    kpi = sim.kpi(window=math.inf)          # the whole measurement window, not the control room's rolling hour
     for key, value in (kpi.pop("site", {}) or {}).items():
         kpi[f"site_{key}"] = value
     prod = kpi.pop("productivity", {}) or {}
@@ -108,13 +109,17 @@ def summarize(results: list[dict], group_key: str) -> dict:
 
 
 def git_rev() -> str:
-    """Short commit id, with ``+dirty`` when tracked files differ from it (numbers then are not reproducible)."""
+    """Short commit id, with ``+dirty`` when tracked files differ from it (numbers then are not reproducible).
+
+    Result files under results/ do not count: a benchmark writing its JSON must not mark the next one dirty.
+    """
     root = Path(__file__).resolve().parents[1]
     try:
         rev = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True,
                              cwd=root, timeout=5).stdout.strip() or "unknown"
-        dirty = subprocess.run(["git", "status", "--porcelain", "--untracked-files=no"], capture_output=True,
-                               text=True, cwd=root, timeout=5).stdout.strip()
+        dirty = subprocess.run(["git", "status", "--porcelain", "--untracked-files=no", "--", ".",
+                                ":(exclude)results"], capture_output=True, text=True, cwd=root,
+                               timeout=5).stdout.strip()
         return rev + ("+dirty" if dirty else "")
     except (OSError, subprocess.SubprocessError):
         return "unknown"

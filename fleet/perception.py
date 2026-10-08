@@ -130,9 +130,13 @@ class Tracker:
         self._merge_duplicates()
         return events
 
-    def _merge_duplicates(self, radius: float = 0.8) -> None:
-        """Two tracks on one object (one started from a misread class): fold the younger into the older and
-        let the summed class votes decide what it is."""
+    def _merge_duplicates(self, radius: float = 0.8, same_class_radius: float = 0.4) -> None:
+        """Two tracks on one object: fold the younger into the older and let the summed class votes decide.
+
+        A misread class starts a second track of the other class on the same body (a truck read as a person), so
+        tracks of different classes within ``radius`` are merged. Two people side by side are two tracks of
+        the same class; those merge only when closer than ``same_class_radius`` (detections closer than 0.7 m
+        are already one cluster, so two real people are never that close as tracks)."""
         ids = sorted(self.tracks, key=lambda t: self.tracks[t].first_seen)
         gone: set[str] = set()
         for i, a in enumerate(ids):
@@ -143,7 +147,8 @@ class Tracker:
                 if b in gone:
                     continue
                 tb = self.tracks[b]
-                if math.hypot(ta.x - tb.x, ta.y - tb.y) > radius:
+                limit = same_class_radius if ta.cls == tb.cls else radius
+                if math.hypot(ta.x - tb.x, ta.y - tb.y) > limit:
                     continue
                 for k, v in tb.votes.items():
                     ta.votes[k] = ta.votes.get(k, 0.0) + v

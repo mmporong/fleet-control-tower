@@ -30,6 +30,7 @@ import logging
 from pathlib import Path
 import random
 import secrets
+import signal
 import threading
 import time
 import traceback
@@ -41,6 +42,7 @@ from .dispatcher import Dispatcher, task_to_json
 from .layout import Layout
 from .mqtt import MqttClient, Will
 from .mqttbus import MqttBus, add_broker_args, broker_options
+from .vda5050 import HeaderIds
 from .ops import Operations
 from .process import TransportProcess
 from .schema import validate_message
@@ -61,7 +63,14 @@ class Runtime:
                  resync_s: float = 15.0, username: str | None = None, password: str | None = None) -> None:
         self.layout = layout
         self.store = store
-        self.clock = clock or WallClock()
+        if clock is None:
+            # one time base for the life of the database: times saved before a restart stay comparable
+            base = store.get_meta("clock_base")
+            if base is None:
+                base = repr(time.time())
+                store.set_meta("clock_base", base)
+            clock = WallClock(base_epoch=float(base))
+        self.clock = clock
         self.run_id = run_id or secrets.token_hex(3)
         self.scenario = SimpleNamespace(name="runtime", title="실운영(MQTT)")
         self.seed = 0
@@ -72,6 +81,9 @@ class Runtime:
         self.manager = FleetManager(layout, self.bus, config or ManagerConfig(), clock=self.clock,
                                     validator=validate_message)
         self.manager.run_id = f"{self.run_id}-"
+        # headerIds continue above any id an earlier run can have sent (one per 0.1 s of clock time at most)
+        self.manager.ids = HeaderIds(start=int(self.clock.now() * 10))
+        self.manager.on_order = self._save_robot
         self.dispatcher = Dispatcher(self.manager, random.Random(), run_id=f"{self.run_id}-")
         self.process = TransportProcess(self.dispatcher, random.Random())
         self.dispatcher.process = self.process
@@ -104,17 +116,37 @@ class Runtime:
             self.manager.tick(now, dt or TICK_S)
             self.dispatcher.tick(now)
         except Exception as exc:                      # a bug must not stop the control room
-            self.errors += 1
-            log.error("control cycle failed:\n%s", traceback.format_exc())
-            self.manager.event("internal_error", "fms", f"관제 주기 오류: {type(exc).__name__}: {exc}", "crit")
-            self.manager.mode = "HOLD"
-            self.manager.alarms.set("FMS_INTERNAL_ERROR", "fms", True, now, f"{type(exc).__name__}: {exc}"[:200])
+            self._fail("관제 주기 오류", exc)
         if now >= self._next_save:
             self._next_save = now + 0.5
-            self._save_snapshots()
+            try:
+                self._save_snapshots()
+            except Exception as exc:                  # disk full, database locked: stop the fleet, keep running
+                self._fail("상태 저장 실패", exc)
+
+    def _fail(self, what: str, exc: BaseException) -> None:
+        """An internal fault: alarm and hold the fleet (vehicles stop at their base ends), never weaker.
+
+        A fleet stop, a fire alarm or a restart resync in force stays as it is; only normal running becomes
+        HOLD, and the pause goes out at once instead of waiting for the next (possibly failing) cycle.
+        """
+        self.errors += 1
+        log.error("%s:\n%s", what, traceback.format_exc())
+        m = self.manager
+        try:
+            m.event("internal_error", "fms", f"{what}: {type(exc).__name__}: {exc}", "crit")
+            if m.mode == "RUNNING":
+                m.mode = "HOLD"
+            m.alarms.set("FMS_INTERNAL_ERROR", "fms", True, self.now, f"{what}: {type(exc).__name__}: {exc}"[:200])
+            m._enforce_fleet_mode()
+        except Exception:                               # noqa: BLE001 - the loop goes on regardless
+            log.error("holding the fleet after an internal fault failed:\n%s", traceback.format_exc())
 
     def stop(self) -> None:
-        self._save_snapshots()
+        try:
+            self._save_snapshots()
+        except Exception:                             # noqa: BLE001 - still say OFFLINE and close cleanly
+            log.error("saving snapshots at shutdown failed:\n%s", traceback.format_exc())
         if self.client.connected:
             self.bus.publish(FMS_TOPIC, {"state": "OFFLINE", "run": self.run_id}, self.clock.now())
             self.client.disconnect()
@@ -122,16 +154,34 @@ class Runtime:
 
     # ------------------------------------------------------------ persistence
     def _persist_event(self, ev: dict, task) -> None:
-        self.store.append_event(ev)
-        self.store.save_task(task_to_json(task))
+        try:
+            self.store.append_event(ev)
+            self.store.save_task(task_to_json(task))
+        except Exception as exc:                      # the task goes on; the outbox gap is alarmed and logged
+            self._fail("WMS 이벤트 저장 실패", exc)
+
+    def _save_robot(self, rec) -> None:
+        """Before an order is published: the vehicle's snapshot with the reservations that order needs."""
+        try:
+            snap = self.manager.robot_snapshot(rec)
+            self.store.save_robots({rec.serial: snap})
+            self._snap_hash[rec.serial] = json.dumps({k: v for k, v in snap.items() if k != "saved_at"},
+                                                     sort_keys=True)
+        except Exception as exc:
+            self._fail("주문 전 상태 저장 실패", exc)
 
     def _save_snapshots(self) -> None:
+        """Every changed vehicle snapshot in one transaction, so a restart sees one moment of the lock table."""
+        changed = {}
         for rec in self.manager.robots.values():
             snap = self.manager.robot_snapshot(rec)
-            text = json.dumps(snap, sort_keys=True)
+            text = json.dumps({k: v for k, v in snap.items() if k != "saved_at"}, sort_keys=True)
             if self._snap_hash.get(rec.serial) != text:
-                self._snap_hash[rec.serial] = text
-                self.store.save_robot(rec.serial, snap)
+                changed[rec.serial] = (snap, text)
+        if changed:
+            self.store.save_robots({s: snap for s, (snap, _t) in changed.items()})
+            for s, (_snap, text) in changed.items():
+                self._snap_hash[s] = text
 
     # ------------------------------------------------------------ the Simulation surface used elsewhere
     def kpi(self) -> dict:
@@ -218,7 +268,10 @@ class RuntimeRunner(threading.Thread):
         self.sim.start()
         while not self._halt.wait(TICK_S / max(1e-6, self.sim.clock.scale)):
             with self.lock:
-                self.sim.step()
+                try:
+                    self.sim.step()
+                except Exception as exc:              # noqa: BLE001 - the control room never stops by itself
+                    self.sim._fail("관제 루프 오류", exc)
 
     def stop(self) -> None:
         self._halt.set()
@@ -256,9 +309,8 @@ def load_site(site: str, extras: str | None) -> Layout:
 
 
 def main(argv: list[str] | None = None) -> int:
-    from http.server import ThreadingHTTPServer
     from .auth import Auth
-    from .server import account_commands, is_loopback, make_handler
+    from .server import ControlRoomServer, account_commands, is_loopback, make_handler
     ap = argparse.ArgumentParser(description="AMR 관제 서비스(MQTT·VDA 5050)")
     add_broker_args(ap)
     ap.add_argument("--site", required=True, help="VDMA LIF 파일 (예: sites/dc.lif.json)")
@@ -296,9 +348,10 @@ def main(argv: list[str] | None = None) -> int:
                       password=b["password"])
     runner = RuntimeRunner(runtime, store, read_only=args.read_only)
     runner.start()
-    server = ThreadingHTTPServer((args.host, args.port), make_handler(runner, None, auth, args.secure_cookie))
-    server.daemon_threads = True
+    server = ControlRoomServer((args.host, args.port), make_handler(runner, None, auth, args.secure_cookie))
     print(f"관제 서비스: http://{args.host}:{args.port} · 브로커 {args.broker} · 실행 ID {runtime.run_id}", flush=True)
+    # SIGTERM (systemctl stop, docker stop) ends like Ctrl+C: snapshots saved, OFFLINE published, no Will
+    signal.signal(signal.SIGTERM, lambda *_: threading.Thread(target=server.shutdown, daemon=True).start())
     try:
         server.serve_forever()
     except KeyboardInterrupt:

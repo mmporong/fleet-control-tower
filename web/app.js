@@ -30,6 +30,8 @@
     zone_speed: '구역 속도(구역 탭)', set_task_rate: '투입률(작업 탭)', reprioritize_task: '우선순위(작업 탭)',
     door_disable: '문 사용 중지', door_retry: '문 재시도', door_field_fix: '[현장 모의] 문 수리',
   };
+  // commands only a supervisor may give (fleet/server.py SUPERVISOR_COMMANDS): not offered to other roles
+  const SUPERVISOR_ONLY = new Set(['set_task_rate', 'door_field_fix', 'drill_fault', 'drill_comms', 'drill_intruder', 'drill_door', 'drill_fire']);
   const CONFIRM = new Set(['fleet_estop', 'fleet_estop_release', 'fleet_hold', 'fleet_resume', 'zone_evacuate', 'zone_lock', 'set_mode_manual']);
 
   // ------------------------------------------------------------------ network
@@ -337,7 +339,7 @@
       let body = '';
       if (open) {
         const checks = S.checked[a.key] || {};
-        const cmds = a.commands.map((c) => `<button class="btn sm" type="button" data-cmd="${esc(c)}" data-key="${esc(a.key)}">${esc(CMD_LABEL[c] || c)}</button>`).join('');
+        const cmds = a.commands.filter((c) => ME.role === 'supervisor' || !SUPERVISOR_ONLY.has(c)).map((c) => `<button class="btn sm" type="button" data-cmd="${esc(c)}" data-key="${esc(a.key)}">${esc(CMD_LABEL[c] || c)}</button>`).join('');
         body = `<div class="sop"><h4>자동 조치</h4><div>${esc(a.auto)}</div><h4>대응 절차 · 응답 ${esc(a.response)}</h4><ol>${a.steps.map((st, i) => `<li><label><input type="checkbox" data-key="${esc(a.key)}" data-i="${i}" ${checks[i] ? 'checked' : ''}> ${esc(st)}</label></li>`).join('')}</ol>
           <div class="row">${cmds}</div>
           <div class="row"><button class="btn primary sm" type="button" data-ack="${esc(a.key)}" ${a.state === 'ACKED' ? 'disabled' : ''}>확인(ACK)</button>

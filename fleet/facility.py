@@ -182,8 +182,10 @@ class DoorSupervisor:
 
     def _on_state(self, topic: str, msg: dict) -> None:
         v = self.view.get(topic.split("/")[3])
-        if v is None:
-            return
+        if v is None or msg.get("_retained"):
+            return                  # a retained copy says nothing about the controller now
+        if msg.get("currentMode") not in ("CLOSED", "MOVING", "OPEN") or not isinstance(msg.get("fault", ""), str):
+            return                  # malformed: the door stays as last known and goes stale if nothing valid comes
         if v.mode != "OPEN" and msg["currentMode"] == "OPEN":
             v.opens += 1
         v.mode = msg["currentMode"]

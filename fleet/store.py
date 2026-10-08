@@ -7,8 +7,15 @@ What must survive a restart of the fleet manager:
 - the WMS event outbox, read by the upper system with a cursor;
 - per-vehicle order snapshots (route, released base, last order message), from
   which the manager rebuilds its reservations before it releases anything new;
-- the audit log, hash-chained: every entry carries the SHA-256 of the previous
-  one, so a deleted or edited entry breaks the chain (``verify_audit``);
+- the audit log, chained: every entry carries an HMAC-SHA256 over the previous
+  entry's MAC and its own content, keyed outside the database (environment
+  variable FCT_AUDIT_KEY, or a key file beside the database created on first
+  use), so an edited, inserted or deleted entry breaks the chain and the chain
+  cannot be recomputed without the key. The newest entry's sequence number and
+  MAC are also written to a head file beside the database, which catches
+  entries cut off the end (``verify_audit``). Both files sit on the same disk:
+  for evidence that survives a compromised host, ship the head to an external
+  log (syslog, WORM storage);
 - operator accounts and sessions (``fleet.auth``).
 
 WAL mode, one connection shared under a lock (the HTTP threads and the control
@@ -17,8 +24,11 @@ loop both write). Standard library only.
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
+import os
 from pathlib import Path
+import secrets
 import sqlite3
 import threading
 import time
@@ -54,6 +64,30 @@ def chain_hash(prev: str, body: str) -> str:
     return hashlib.sha256((prev + body).encode("utf-8")).hexdigest()
 
 
+def entry_mac(key: bytes, prev: str, body: str) -> str:
+    """MAC of one audit entry: HMAC-SHA256 over the previous entry's MAC and the canonical entry.
+
+    >>> entry_mac(b"k" * 32, GENESIS, "{}")[:12]
+    'e01ce7d31481'
+    """
+    return hmac.new(key, (prev + body).encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def _audit_key(path: str) -> bytes:
+    """FCT_AUDIT_KEY (hex), else ``<db>.auditkey`` (created with mode 0600), else a key for this process."""
+    env = os.environ.get("FCT_AUDIT_KEY")
+    if env:
+        return bytes.fromhex(env)
+    if path == ":memory:":
+        return secrets.token_bytes(32)
+    key_file = Path(path + ".auditkey")
+    if not key_file.exists():
+        fd = os.open(key_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "w") as f:
+            f.write(secrets.token_hex(32))
+    return bytes.fromhex(key_file.read_text().strip())
+
+
 class Store:
     def __init__(self, path: str | Path = ":memory:") -> None:
         if str(path) != ":memory:":
@@ -61,11 +95,18 @@ class Store:
         self.path = str(path)
         self.lock = threading.RLock()
         self.db = sqlite3.connect(self.path, check_same_thread=False, isolation_level=None)
+        self._audit_key = _audit_key(self.path)
+        self._head_mem: tuple[int, str] | None = None        # head record of an in-memory database
         with self.lock:
             if self.path != ":memory:":
                 self.db.execute("PRAGMA journal_mode=WAL")
                 self.db.execute("PRAGMA synchronous=NORMAL")
             self.db.executescript(SCHEMA)
+            # entries written before the keyed chain (plain SHA-256) are checked the old way
+            if self.get_meta("audit_mac_from") is None:
+                row = self.db.execute("SELECT MAX(seq) FROM audit").fetchone()
+                self.set_meta("audit_mac_from", str((row[0] or 0) + 1))
+            self._mac_from = int(self.get_meta("audit_mac_from"))
 
     def close(self) -> None:
         with self.lock:
@@ -91,6 +132,13 @@ class Store:
         with self.lock:
             rows = self.db.execute("SELECT body FROM tasks WHERE state IN ('QUEUED', 'ACTIVE') ORDER BY id").fetchall()
         return [json.loads(r[0]) for r in rows]
+
+    def task_by_ref(self, ref: str) -> str | None:
+        """Id of a stored task created for the upper system's order ``ref`` (idempotency after a crash)."""
+        with self.lock:
+            row = self.db.execute("SELECT id FROM tasks WHERE json_extract(body, '$.meta.ref') = ? ORDER BY id "
+                                  "LIMIT 1", (ref,)).fetchone()
+        return row[0] if row else None
 
     def task(self, task_id: str) -> dict | None:
         with self.lock:
@@ -120,13 +168,25 @@ class Store:
 
     def idem_put(self, order_id: str, body: dict, task_id: str) -> None:
         with self.lock:
-            self.db.execute("INSERT INTO idem(order_id, body, task) VALUES (?, ?, ?)", (order_id, _dump(body), task_id))
+            self.db.execute("INSERT OR REPLACE INTO idem(order_id, body, task) VALUES (?, ?, ?)",
+                            (order_id, _dump(body), task_id))
 
     # ------------------------------------------------------------ vehicle snapshots
     def save_robot(self, serial: str, snapshot: dict) -> None:
+        self.save_robots({serial: snapshot})
+
+    def save_robots(self, snapshots: dict[str, dict]) -> None:
+        """Several vehicle snapshots in one transaction (one moment of the reservation table)."""
+        now = time.time()
         with self.lock:
-            self.db.execute("INSERT OR REPLACE INTO robots(serial, body, updated) VALUES (?, ?, ?)",
-                            (serial, _dump(snapshot), time.time()))
+            self.db.execute("BEGIN")
+            try:
+                self.db.executemany("INSERT OR REPLACE INTO robots(serial, body, updated) VALUES (?, ?, ?)",
+                                    [(s, _dump(snap), now) for s, snap in snapshots.items()])
+                self.db.execute("COMMIT")
+            except BaseException:
+                self.db.execute("ROLLBACK")
+                raise
 
     def robots(self) -> dict[str, dict]:
         with self.lock:
@@ -139,9 +199,32 @@ class Store:
             row = self.db.execute("SELECT hash FROM audit ORDER BY seq DESC LIMIT 1").fetchone()
             prev = row[0] if row else GENESIS
             body = _dump(entry)
-            digest = chain_hash(prev, body)
-            self.db.execute("INSERT INTO audit(body, prev, hash) VALUES (?, ?, ?)", (body, prev, digest))
+            digest = entry_mac(self._audit_key, prev, body)
+            seq = self.db.execute("INSERT INTO audit(body, prev, hash) VALUES (?, ?, ?)",
+                                  (body, prev, digest)).lastrowid
+            self._write_head(seq, digest)
         return {**entry, "hash": digest[:12]}
+
+    def _head_path(self) -> Path | None:
+        return None if self.path == ":memory:" else Path(self.path + ".audithead")
+
+    def _write_head(self, seq: int, digest: str) -> None:
+        path = self._head_path()
+        if path is None:
+            self._head_mem = (seq, digest)
+            return
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(f"{seq} {digest}\n")
+        os.replace(tmp, path)
+
+    def _read_head(self) -> tuple[int, str] | None:
+        path = self._head_path()
+        if path is None:
+            return self._head_mem
+        if not path.exists():
+            return None
+        seq, digest = path.read_text().split()
+        return int(seq), digest
 
     def audit_tail(self, limit: int = 200) -> list[dict]:
         with self.lock:
@@ -154,10 +237,19 @@ class Store:
         prev = GENESIS
         with self.lock:
             rows = self.db.execute("SELECT seq, body, prev, hash FROM audit ORDER BY seq").fetchall()
+            head = self._read_head()
         for seq, body, stored_prev, digest in rows:
             if stored_prev != prev:
                 problems.append(f"entry {seq}: chain broken before it (previous hash does not match)")
-            if chain_hash(stored_prev, body) != digest:
-                problems.append(f"entry {seq}: content does not match its hash")
+            expected = entry_mac(self._audit_key, stored_prev, body) if seq >= self._mac_from \
+                else chain_hash(stored_prev, body)
+            if not hmac.compare_digest(expected, digest):
+                problems.append(f"entry {seq}: content does not match its MAC")
             prev = digest
+        if head is not None:
+            last = rows[-1] if rows else None
+            if last is None or last[0] < head[0]:
+                problems.append(f"entries up to {head[0]} were written, the log ends at {last[0] if last else 0}")
+            elif last[0] == head[0] and not hmac.compare_digest(last[3], head[1]):
+                problems.append(f"entry {head[0]}: differs from the recorded head")
         return problems

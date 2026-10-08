@@ -21,7 +21,7 @@ from .bus import Bus
 from .control import FleetManager, ManagerConfig, clearance_violation, close_call, envelope_intrusion
 from .dispatcher import Dispatcher
 from .facility import DoorDevice
-from .geometry import box_gap, rect
+from .geometry import box_gap, path_gap, rect
 from .layout import COLUMN_X, ROW_Y, warehouse_layout
 from .perception import Detection
 from .scenario import Scenario
@@ -136,8 +136,10 @@ class Evaluator:
                     speed = abs(v.v)
                     if speed > 0.05:
                         self.min_gap_moving = min(self.min_gap_moving, gap)
+                    ahead = path_gap((ox, oy), circles[0][2], (v.x, v.y), v.theta if v.v >= 0 else v.theta + math.pi,
+                                     v.spec.length / 2, v.spec.width / 2)
                     for what, hit in (("clearance", clearance_violation(speed, gap)), ("close", close_call(speed, gap)),
-                                      ("envelope", envelope_intrusion(speed, gap, v.spec.stop_decel))):
+                                      ("envelope", envelope_intrusion(speed, ahead, v.spec.stop_decel))):
                         if not hit:
                             continue
                         key = (v.serial, oid, what)
@@ -165,6 +167,8 @@ class Evaluator:
             return []
         self._pair_contact.add(key)
         moving = abs(v.v) > 0.05 or abs(v.omega) > 0.05
+        if kind == "amr":
+            moving = moving or other_moving      # two of our vehicles: moving if either was, whatever the order
         # "moving": our vehicle was moving; "struck": it stood still and the other party moved into it
         rec = {"t": round(now, 1), "robot": v.serial, "other": other, "kind": kind, "moving": moving,
                "other_moving": other_moving, "x": round(v.x, 2), "y": round(v.y, 2), "speed": round(v.v, 2)}
@@ -572,6 +576,10 @@ class Simulation:
                 return v
         raise KeyError(serial)
 
+    def field_service(self, serial: str) -> None:
+        """The field team at the vehicle: its own reset (the only way a safety fault is cleared)."""
+        self.vehicle(serial).local_reset()
+
     def drill_fault(self, serial: str, fault: str, recoverable: bool = True) -> None:
         if fault not in FAULT_TYPES:
             raise ValueError(f"fault must be one of {', '.join(FAULT_TYPES)}")
@@ -635,6 +643,8 @@ class Simulation:
         self.window_start = self.now
         for k in m.counters:
             m.counters[k] = 0.0 if isinstance(m.counters[k], float) else 0
+        for info in m.deadlocks.values():           # live deadlocks belong to the warm-up that saw them start
+            info["before_window"] = True
         m.repair_times.clear()
         m.alarms.total_activations = 0
         m.alarms.alerts = 0
@@ -682,9 +692,11 @@ class Simulation:
                                   "robots_per_picker": round(len(by_cls.get("CARRIER", [])) / pickers, 2)}
         return out
 
-    def kpi(self) -> dict:
+    def kpi(self, window: float = 3600.0) -> dict:
+        """Indicators of the measurement window. Task throughput and cycle times cover the last ``window``
+        seconds of it (the control room's rolling hour); benchmarks pass ``math.inf`` for the whole window."""
         m = self.manager
-        stats = self.dispatcher.stats(self.now)
+        stats = self.dispatcher.stats(self.now, window)
         busy = sum(r.busy_s for r in m.robots.values())
         wait = sum(r.wait_s for r in m.robots.values())
         online = sum(1 for r in m.robots.values() if r.connection == "ONLINE")
@@ -710,7 +722,8 @@ class Simulation:
             "near_miss_fms": c["near_miss"],
             # safety outcomes (ground truth): every contact counts; what the vehicle was doing is split out
             "contacts": len(ev.contacts), "contacts_moving": len(moving_contacts), "contacts_struck": len(struck),
-            "contacts_static": len(ev.contacts) - len(moving_contacts),
+            # neither party moving: two units resting against each other (counted once, not again as struck)
+            "contacts_static": sum(1 for x in ev.contacts if not x["moving"] and not x["other_moving"]),
             "contacts_human": sum(1 for x in ev.contacts if x["kind"] == "human"),
             "contacts_human_moving": sum(1 for x in moving_contacts if x["kind"] == "human"),
             "near_misses": ev.near_misses, "close_calls": ev.close_calls,

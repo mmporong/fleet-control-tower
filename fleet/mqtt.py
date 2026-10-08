@@ -35,6 +35,7 @@ PROTOCOL_LEVEL = 4                 # MQTT 3.1.1
 MAX_PACKET = 1024 * 1024           # bytes per packet, header included; larger ones are refused both ways
 MAX_REMAINING = 268_435_455        # largest value the 4-byte remaining length can carry
 IO_TIMEOUT_S = 10.0                # a blocked socket write longer than this counts as a lost connection
+TLS_READ_SLICE_S = 0.05            # longest a TLS read waits for the rest of a record while holding the lock
 
 CONNECT, CONNACK, PUBLISH, PUBACK, PUBREC, PUBREL, PUBCOMP = 1, 2, 3, 4, 5, 6, 7
 SUBSCRIBE, SUBACK, UNSUBSCRIBE, UNSUBACK, PINGREQ, PINGRESP, DISCONNECT = 8, 9, 10, 11, 12, 13, 14
@@ -655,7 +656,21 @@ class MqttClient:
             pending = self._pending(sock)
         if pending or wait_readable(sock, self._tick):
             with self._tls_guard():
-                data = sock.recv(65536)
+                if self.tls is not None:
+                    # a readable TCP socket may hold only part of a TLS record; waiting for the rest under the
+                    # write lock would stall every publish, so the read gives up after a short slice and retries
+                    sock.settimeout(TLS_READ_SLICE_S)
+                    try:
+                        data = sock.recv(65536)
+                    except (TimeoutError, ssl.SSLWantReadError):
+                        data = None
+                    finally:
+                        sock.settimeout(IO_TIMEOUT_S)
+                else:
+                    data = sock.recv(65536)
+            if data is None:
+                self._keepalive()
+                return
             if not data:
                 raise MqttError("connection closed by broker")
             if self._sock is not sock:

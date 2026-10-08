@@ -524,7 +524,8 @@ class FacilityAndTruckSignalTests(unittest.TestCase):
             m._update_blocks()
         r1 = [n for n, zs in sim.layout.node_zones.items() if "Z-R1" in zs]
         self.assertTrue(r1)
-        self.assertTrue(all(f"N:{n}" in m.blocks for n in r1 if m.locks.holder_of(f"N:{n}") is None))
+        # an aisle request (kept apart from blocks: robots already in the aisle may still leave it)
+        self.assertTrue(all(f"N:{n}" in m.aisle_requests for n in r1))
 
     def test_turn_zone_ahead_of_a_moving_truck_is_kept_clear(self):
         from fleet.perception import Detection

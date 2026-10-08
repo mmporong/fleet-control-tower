@@ -165,8 +165,10 @@ class AisleSignalTests(unittest.TestCase):
         from fleet.perception import Detection
         sim = lone_agf()
         m = sim.manager
-        m.ingest_detections([Detection("forklift", 16.2, 20.0, "infra")])   # reach truck inside rack aisle R1
-        m.tick(sim.now, 0.2)
+        for k in range(2):                                    # two sightings: a confirmed track
+            m.now = sim.now + 0.5 * k
+            m.ingest_detections([Detection("forklift", 16.2, 20.0, "infra")])   # reach truck inside rack aisle R1
+        m.tick(m.now, 0.2)
         self.assertEqual(m.blocks["N:R1-01"][0], "forklift")                 # the whole aisle, not just nearby
         self.assertNotIn("N:R2-01", m.blocks)
 
@@ -437,7 +439,9 @@ class OperationsTests(unittest.TestCase):
     def test_shift_handover_is_audited_with_live_summary(self):
         self.assertFalse(self.ops.execute({"cmd": "handover", "note": " "})["ok"])
         self.ops.execute({"cmd": "pause_robot", "robot": "AMR-02"})
-        self.assertTrue(self.ops.execute({"cmd": "handover", "note": "AMR-02 점검 대기", "by": "A조"})["ok"])
+        # the author is the signed-in account; a name sent along ("by") is ignored
+        self.assertTrue(self.ops.execute({"cmd": "handover", "note": "AMR-02 점검 대기", "by": "누군가"},
+                                         operator="A조")["ok"])
         rec = self.sim.handovers[-1]
         self.assertEqual(rec["by"], "A조")
         self.assertIn("AMR-02", rec["summary"]["paused"])

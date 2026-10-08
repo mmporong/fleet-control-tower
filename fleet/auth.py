@@ -3,8 +3,12 @@
 - Roles: ``viewer`` (read only), ``operator`` (operational commands),
   ``supervisor`` (also simulation control and accounts). Upper systems (WMS)
   use API keys with the ``wms`` role, only for the WMS endpoints.
-- Passwords: PBKDF2-HMAC-SHA256 with a random salt (stdlib ``hashlib``).
-  Five wrong passwords lock the account for five minutes.
+- Passwords: PBKDF2-HMAC-SHA256 with a random salt (stdlib ``hashlib``),
+  computed outside the store lock and at most two at a time, so a burst of
+  logins cannot stall the control room. Five wrong passwords for one account
+  from one address lock that pair for five minutes, and one address gets 20
+  wrong passwords per five minutes in all. Unknown and known accounts answer
+  alike, and nobody can lock an operator out from another address.
 - Sessions: a random token in an HttpOnly, SameSite=Strict cookie; only its
   SHA-256 is stored. Absolute lifetime and an idle timeout.
 - State-changing requests need the session's CSRF token in ``X-CSRF-Token``, a
@@ -18,6 +22,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import secrets
+import threading
 import time
 from dataclasses import dataclass
 
@@ -28,6 +33,9 @@ RANK = {"viewer": 0, "operator": 1, "supervisor": 2}
 ITERATIONS = 200_000
 LOCK_AFTER = 5
 LOCK_S = 300.0
+ADDRESS_FAILS = 20              # wrong passwords per address and LOCK_S, over all accounts
+HASH_SLOTS = 2                  # password hashes computed at the same time
+HASH_WAIT_S = 5.0
 SESSION_S = 8 * 3600.0          # one shift
 IDLE_S = 30 * 60.0
 COOKIE = "fct_session"
@@ -66,6 +74,10 @@ class Auth:
     def __init__(self, store: Store, clock=time.time) -> None:
         self.store = store
         self.clock = clock
+        self._slots = threading.BoundedSemaphore(HASH_SLOTS)
+        self._fail_lock = threading.Lock()
+        self._fails: dict[tuple[str, str], list[float]] = {}     # (account, address) -> failure times
+        self._addr_fails: dict[str, list[float]] = {}
 
     # ------------------------------------------------------------ accounts
     def has_users(self) -> bool:
@@ -80,11 +92,19 @@ class Auth:
         if len(password) < 10:
             raise ValueError("password: at least 10 characters")
         salt = secrets.token_bytes(16)
+        digest = _hash_password(password, salt, ITERATIONS)
         with self.store.lock:
             self.store.db.execute(
                 "INSERT OR REPLACE INTO users(name, role, salt, hash, iterations, failed, locked_until) "
-                "VALUES (?, ?, ?, ?, ?, 0, 0)", (name, role, salt, _hash_password(password, salt, ITERATIONS),
-                                                  ITERATIONS))
+                "VALUES (?, ?, ?, ?, ?, 0, 0)", (name, role, salt, digest, ITERATIONS))
+            # a new password or role ends the sessions opened with the old one
+            self.store.db.execute("DELETE FROM sessions WHERE name=?", (name,))
+
+    def remove_user(self, name: str) -> bool:
+        with self.store.lock:
+            gone = self.store.db.execute("DELETE FROM users WHERE name=?", (name,)).rowcount > 0
+            self.store.db.execute("DELETE FROM sessions WHERE name=?", (name,))
+        return gone
 
     def bootstrap(self, password: str | None = None) -> str | None:
         """First start: create the supervisor account ``admin``. Returns the generated password, if one was."""
@@ -98,30 +118,58 @@ class Auth:
 
     def users(self) -> list[dict]:
         with self.store.lock:
-            rows = self.store.db.execute("SELECT name, role, locked_until FROM users ORDER BY name").fetchall()
-        return [{"name": n, "role": r, "locked": lu > self.clock()} for n, r, lu in rows]
+            rows = self.store.db.execute("SELECT name, role FROM users ORDER BY name").fetchall()
+        return [{"name": n, "role": r} for n, r in rows]
 
     # ------------------------------------------------------------ sessions
-    def login(self, name: str, password: str) -> tuple[str, Session]:
+    def _recent(self, times: list[float], now: float) -> list[float]:
+        return [t for t in times if now - t < LOCK_S]
+
+    def _locked(self, name: str, address: str, now: float) -> float:
+        """Seconds until this account may be tried again from this address (0: not locked)."""
+        with self._fail_lock:
+            pair = self._fails[(name, address)] = self._recent(self._fails.get((name, address), []), now)
+            addr = self._addr_fails[address] = self._recent(self._addr_fails.get(address, []), now)
+            waits = []
+            if len(pair) >= LOCK_AFTER:
+                waits.append(pair[-LOCK_AFTER] + LOCK_S - now)
+            if len(addr) >= ADDRESS_FAILS:
+                waits.append(addr[-ADDRESS_FAILS] + LOCK_S - now)
+            return max(waits, default=0.0)
+
+    def _failed(self, name: str, address: str, now: float) -> None:
+        with self._fail_lock:
+            self._fails.setdefault((name, address), []).append(now)
+            self._addr_fails.setdefault(address, []).append(now)
+
+    def login(self, name: str, password: str, address: str = "") -> tuple[str, Session]:
         now = self.clock()
+        wait = self._locked(name, address, now)
+        if wait > 0:
+            raise AuthError(f"로그인 잠김: {int(wait) + 1}초 뒤 다시 시도", 429)
         with self.store.lock:
-            row = self.store.db.execute("SELECT role, salt, hash, iterations, failed, locked_until FROM users "
-                                        "WHERE name=?", (name,)).fetchone()
+            row = self.store.db.execute("SELECT role, salt, hash, iterations FROM users WHERE name=?",
+                                        (name,)).fetchone()
+        # the hash runs outside the store lock (the control loop and every request use that lock) and only a
+        # couple at a time; an unknown account costs the same, so timing does not tell which names exist
+        if not self._slots.acquire(timeout=HASH_WAIT_S):
+            raise AuthError("로그인 요청이 많습니다. 잠시 뒤 다시 시도하세요", 503)
+        try:
             if row is None:
-                _hash_password(password, b"0" * 16, ITERATIONS)       # same cost: no user enumeration by timing
-                raise AuthError("계정 또는 비밀번호가 맞지 않습니다")
-            role, salt, digest, iterations, failed, locked_until = row
-            if locked_until > now:
-                raise AuthError(f"로그인 잠김: {int(locked_until - now)}초 뒤 다시 시도", 429)
-            if not hmac.compare_digest(_hash_password(password, salt, iterations), digest):
-                failed += 1
-                lock = now + LOCK_S if failed >= LOCK_AFTER else 0.0
-                self.store.db.execute("UPDATE users SET failed=?, locked_until=? WHERE name=?",
-                                      (0 if lock else failed, lock, name))
-                raise AuthError("계정 또는 비밀번호가 맞지 않습니다" +
-                                (f" · {LOCK_AFTER}회 실패로 {int(LOCK_S / 60)}분 잠김" if lock else ""))
-            self.store.db.execute("UPDATE users SET failed=0, locked_until=0 WHERE name=?", (name,))
-            token, csrf = secrets.token_urlsafe(32), secrets.token_urlsafe(24)
+                _hash_password(password, b"0" * 16, ITERATIONS)
+                ok, role = False, ""
+            else:
+                role, salt, digest, iterations = row
+                ok = hmac.compare_digest(_hash_password(password, salt, iterations), digest)
+        finally:
+            self._slots.release()
+        if not ok:
+            self._failed(name, address, now)
+            raise AuthError("계정 또는 비밀번호가 맞지 않습니다")
+        with self._fail_lock:
+            self._fails.pop((name, address), None)
+        token, csrf = secrets.token_urlsafe(32), secrets.token_urlsafe(24)
+        with self.store.lock:
             self.store.db.execute("INSERT INTO sessions(token_hash, name, csrf, created, last) VALUES (?, ?, ?, ?, ?)",
                                   (_digest(token), name, csrf, now, now))
         return token, Session(name, role, csrf)
@@ -156,6 +204,10 @@ class Auth:
                                   (_digest(key), name, role))
         return key
 
+    def revoke_api_keys(self, name: str) -> int:
+        with self.store.lock:
+            return self.store.db.execute("DELETE FROM api_keys WHERE name=?", (name,)).rowcount
+
     def api_key(self, key: str | None) -> Session | None:
         if not key:
             return None
@@ -185,8 +237,27 @@ def session_cookie(token: str, secure: bool = False, clear: bool = False) -> str
     return "; ".join(attrs)
 
 
-def check_state_change(headers, session: Session, host_header: str | None) -> None:
-    """CSRF defences for a state-changing request from a browser session."""
+LOOPBACK_NAMES = {"127.0.0.1", "localhost", "[::1]", "::1"}
+
+
+def is_loopback_host(host_header: str | None) -> bool:
+    """Host header names this machine (development mode answers nothing else: no DNS rebinding).
+
+    >>> is_loopback_host("127.0.0.1:8095"), is_loopback_host("[::1]:8095"), is_loopback_host("evil.example:8095")
+    (True, True, False)
+    """
+    if not host_header:
+        return False
+    name = host_header.rsplit(":", 1)[0] if not host_header.endswith("]") else host_header
+    return name in LOOPBACK_NAMES
+
+
+def check_origin(headers, host_header: str | None) -> None:
+    """A browser request that changes state: JSON body and, when the browser names its origin, this host.
+
+    A form on another site can only send text/plain or form bodies, and every cross-site fetch carries an
+    Origin, so these two checks keep other sites out even before the CSRF token is looked at.
+    """
     ctype = (headers.get("Content-Type") or "").split(";")[0].strip().lower()
     if ctype != "application/json":
         raise AuthError("Content-Type은 application/json이어야 합니다", 415)
@@ -195,5 +266,10 @@ def check_state_change(headers, session: Session, host_header: str | None) -> No
         host = origin.split("://", 1)[-1].rstrip("/")
         if host_header is None or host != host_header:
             raise AuthError("다른 출처(Origin)에서 온 요청은 거부합니다", 403)
+
+
+def check_state_change(headers, session: Session, host_header: str | None) -> None:
+    """CSRF defences for a state-changing request from a browser session."""
+    check_origin(headers, host_header)
     if not hmac.compare_digest(headers.get("X-CSRF-Token") or "", session.csrf):
         raise AuthError("CSRF 토큰이 없거나 맞지 않습니다", 403)

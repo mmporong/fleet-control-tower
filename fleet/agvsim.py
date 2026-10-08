@@ -29,6 +29,7 @@ from pathlib import Path
 import random
 import signal
 import threading
+import traceback
 
 from .clock import WallClock
 from .facility import DoorDevice
@@ -37,6 +38,8 @@ from .mqtt import MqttClient, Will
 from .mqttbus import MqttBus, add_broker_args, broker_options
 from .vda5050 import topic
 from .vehicle import SPEC_GRID, Obstacle, Vehicle, VehicleSpec, agf_spec, tote_amr_spec
+
+log = logging.getLogger(__name__)
 
 
 def spec_for(vclass: str) -> VehicleSpec:
@@ -132,20 +135,26 @@ class AgvSim:
             now = self.clock.now()
             dt = min(0.5, max(0.0, now - last))
             last = now
-            bodies = {s: c.v.spec.circles(c.v.x, c.v.y, c.v.theta) for s, c in self.clients.items()}
-            curtains = []
-            if self.door_bus is not None:
-                self.door_bus.deliver_due(now)
-                all_bodies = [b for circles in bodies.values() for b in circles]
-                for d in self.doors:
-                    d.step(dt, now, all_bodies)
-                    if self.door_client.connected:
-                        d.publish_due(now)
-                    curtains += [Obstacle(d.spec.id, "door", x, y, r) for x, y, r in d.obstacles()]
-            for serial, c in list(self.clients.items()):
-                obstacles = [Obstacle(o, "amr", x, y, r) for o, circles in bodies.items() if o != serial
-                             for x, y, r in circles]
-                c.step(dt, now, obstacles + curtains)
+            try:
+                self._step(dt, now)
+            except Exception:                 # noqa: BLE001 - one bad message must not freeze every vehicle
+                log.error("vehicle simulator step failed:\n%s", traceback.format_exc())
+
+    def _step(self, dt: float, now: float) -> None:
+        bodies = {s: c.v.spec.circles(c.v.x, c.v.y, c.v.theta) for s, c in self.clients.items()}
+        curtains = []
+        if self.door_bus is not None:
+            self.door_bus.deliver_due(now)
+            all_bodies = [b for circles in bodies.values() for b in circles]
+            for d in self.doors:
+                d.step(dt, now, all_bodies)
+                if self.door_client.connected:
+                    d.publish_due(now)
+                curtains += [Obstacle(d.spec.id, "door", x, y, r) for x, y, r in d.obstacles()]
+        for serial, c in list(self.clients.items()):
+            obstacles = [Obstacle(o, "amr", x, y, r) for o, circles in bodies.items() if o != serial
+                         for x, y, r in circles]
+            c.step(dt, now, obstacles + curtains)
 
     def crash(self, serial: str) -> None:
         """Test hook: the vehicle disappears without a clean disconnect."""

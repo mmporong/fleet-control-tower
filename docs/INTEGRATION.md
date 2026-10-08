@@ -77,8 +77,9 @@ docker rm -f fct-agv fct-fms fct-mqtt && docker network rm fct
 |---|---|
 | 지원 | CONNECT(Last Will, 사용자 이름·비밀번호, TLS), PUBLISH·SUBSCRIBE QoS 0·1, keepalive, 지수 백오프 재접속, 재접속 뒤 구독 복원과 미확인 QoS 1 재전송(DUP) |
 | 미지원 | QoS 2, MQTT 5 |
-| 토픽별 QoS | `connection` QoS 1·retained(Last Will이 CONNECTIONBROKEN을 남김). 고속문 state는 QoS 0·retained. 나머지는 QoS 0(VDA 5050 2.0 §6) |
-| 관제 자신의 상태 | `fleet/v1/fms/state`에 ONLINE·OFFLINE(retained, Last Will) |
+| 토픽별 QoS | `connection` QoS 1·retained(Last Will이 CONNECTIONBROKEN을 남김). 고속문·화재 수신기 state는 QoS 0·retained. 나머지는 QoS 0(VDA 5050 2.0 §6) |
+| retained 문 상태 | 브로커가 보관한 옛 문 상태는 제어기의 현재 응답으로 치지 않습니다. 죽은 제어기의 마지막 OPEN으로 차량이 문을 예약하지 않게 하려는 것입니다. 형식이 틀린 문 메시지는 버립니다 |
+| 관제 자신의 상태 | `fleet/v1/fms/state`에 ONLINE·OFFLINE(QoS 1·retained, Last Will도 같음) |
 | 스레드 | 네트워크 스레드는 받은 메시지를 큐에 넣기만 하고, 관제 주기가 꺼내 처리합니다. 관제 코어는 시뮬레이션과 같이 단일 스레드로 돕니다 |
 
 브로커 인증과 TLS는 두 서비스가 같은 옵션을 씁니다. 비밀번호는 프로세스 목록에 남지 않도록 환경변수로만 받습니다.
@@ -139,7 +140,7 @@ python3 tools/export_lif.py --site dc --out sites/dc.lif.json      # sites/dc.si
 | 주문 | `POST /api/wms/orders`, 헤더 `Authorization: Bearer <키>` |
 | 이벤트 | `GET /api/wms/events?after=<마지막 seq>`로 커서를 넘기며 읽음(한 번에 200건) |
 
-주문 본문은 다음과 같습니다. `order_id`가 멱등 키입니다. 같은 id·같은 내용이면 기존 작업을 돌려주고(200), 새 주문이면 201, 같은 id에 다른 내용이면 409입니다. 멱등 키는 SQLite에 있어 재기동 뒤에도 유지됩니다.
+주문 본문은 다음과 같습니다. `order_id`가 멱등 키입니다. 같은 id·같은 내용이면 기존 작업을 돌려주고(200), 새 주문이면 201, 같은 id에 다른 내용이면 409입니다. 멱등 키는 SQLite에 있어 재기동 뒤에도 유지됩니다. 작업과 키는 따로 저장되므로 그 사이에 프로세스가 죽는 경우도 다룹니다. 작업만 남았으면 작업의 `ref`로 찾아 같은 작업을 돌려주고, 키만 남고 작업이 없으면 주문을 다시 받습니다.
 
 ```json
 {"order_id": "W-20261009-0001", "kind": "TRANSPORT", "source": "R1-03", "dest": "SO2", "priority": 0}
@@ -160,16 +161,19 @@ python3 tools/export_lif.py --site dc --out sites/dc.lif.json      # sites/dc.si
 |---|---|
 | viewer | 화면·상태·감사 로그 조회 |
 | operator | 운영 명령(알람 확인, 일시정지, 재할당, 구역 봉쇄, 일괄 정지 등) |
-| supervisor | 위에 더해 훈련 주입, 시뮬레이션 제어, 화면에서 WMS 주문 |
+| supervisor | 위에 더해 훈련 주입(`drill_*`), 투입률 조정(`set_task_rate`), 문 현장 수리 모의(`door_field_fix`), 시뮬레이션 제어, 화면에서 WMS 주문. 다른 역할에게는 이 명령 버튼을 보이지 않습니다 |
 | wms(API 키) | WMS 주문과 이벤트 조회만 |
 
 | 항목 | 값 |
 |---|---|
 | 비밀번호 | 10자 이상, PBKDF2-HMAC-SHA256 20만 회, 임의 salt |
-| 잠금 | 5회 실패 시 5분 |
+| 잠금 | 같은 계정을 같은 주소에서 5회 틀리면 그 조합만 5분 잠금, 한 주소는 계정을 가리지 않고 5분에 20회까지. 다른 주소의 운영자는 잠기지 않고, 없는 계정과 있는 계정의 응답이 같음 |
+| 로그인 처리 | 비밀번호 해시는 저장소 잠금 밖에서 동시에 2건까지 계산(로그인 폭주가 관제 주기를 막지 않음) |
+| HTTP | 본문 64 KiB 이하(음수 길이 거부), 연결당 15 s 타임아웃, 동시 연결 64개, 잘못된 입력은 400 |
 | 세션 | HttpOnly·SameSite=Strict 쿠키 `fct_session`, 토큰은 SHA-256만 저장, 최대 8시간(한 교대), 30분 무활동 시 만료 |
 | 상태 변경 요청 | `X-CSRF-Token`(세션 토큰), JSON 본문, Origin이 있으면 Host와 같아야 함 |
-| 감사 로그 | 인증된 계정 이름으로 기록(클라이언트가 보낸 이름을 믿지 않음). SQLite에 해시 체인으로 저장, `GET /api/audit/verify`로 변조 검사 |
+| 감사 로그 | 인증된 계정 이름으로 기록(알람 확인·보류·인수인계 작성자도 세션 이름, 클라이언트가 보낸 이름은 무시). 항목마다 이전 항목을 잇는 HMAC-SHA256(키는 `FCT_AUDIT_KEY` 또는 DB 옆 `.auditkey` 파일, 권한 0600)과 마지막 항목 기록 파일(`.audithead`)로 수정·삽입·삭제·끝부분 잘림·키 없는 재계산을 `GET /api/audit/verify`가 찾음. 두 파일이 같은 디스크에 있으므로, 호스트 침해까지 견디려면 마지막 항목 기록을 외부 로그로 보내야 함. 명령 인자는 1,000자까지 기록 |
+| 계정 관리 | 비밀번호·역할을 바꾸면 그 계정의 기존 세션이 끝남 |
 | 계정 추가 | `FCT_NEW_PASSWORD=... python3 -m fleet.fms --site sites/dc.lif.json --add-user kim:operator` |
 | 개발용 | `--no-auth`는 루프백 주소에 묶을 때만 허용 |
 
@@ -191,7 +195,16 @@ python3 tools/export_lif.py --site dc --out sites/dc.lif.json      # sites/dc.si
 3. state를 받으면 대조합니다. 차량이 이전 order를 계속 달리면 이어받고, 보내지 못한 order는 다시 보내고, 관제가 모르는 order는 취소한 뒤 작업을 대기열로 돌립니다. 적재물을 실은 채 끊긴 작업은 FAILED로 두고 현장 확인을 요청합니다.
 4. 모든 차량이 대조되거나 시간이 지나면 정상 운영으로 돌아갑니다.
 
-관제 주기 안에서 예외가 나면 `FMS_INTERNAL_ERROR`(1순위) 알람을 올리고 전체를 일시정지(HOLD)로 둔 채 주기를 계속 돕니다. 차량은 받은 base 끝에서 멈춥니다. 원인을 확인한 뒤 운영자가 재개합니다.
+재기동 복원의 세부 규칙은 다음과 같습니다.
+
+- 스냅숏에는 그 순간 잠금 테이블에 있던 예약과 저장 시각이 들어갑니다. 변한 차량의 스냅숏은 0.5초마다 한 트랜잭션으로 저장하고, order를 보내기 직전에도 그 차량 것을 저장합니다.
+- 복원할 때 두 스냅숏이 같은 자원을 주장하면 더 늦게 저장된 쪽이 가집니다. 자원은 앞 차량이 놓은 뒤에만 다음 차량이 잡으므로, 최신 기록이 실제 보유자입니다.
+- 관제가 모르는 order를 달리는 차량은 보고한 released 노드를 먼저 예약한 뒤 cancelOrder를 보냅니다. 그 노드를 다른 차량이 쥐고 있으면 빼앗지 않고 그 차량을 일시정지하고 점유-예약 불일치 알람을 올립니다. cancelOrder는 QoS 0이라 차량 state가 그 order를 멈출 때까지 3초마다 다시 보냅니다.
+- 재동기화가 끝났는데 어느 차량도 진행하지 않는 ACTIVE 작업은 대기열로 돌리거나(적재 전), 현장 확인을 요청하며 실패로 둡니다(적재 후).
+- 관제 시계의 기준 시각은 첫 기동 때 DB에 저장해 계속 씁니다. 재기동 전에 저장한 작업 생성 시각·이벤트 시각이 재기동 뒤 시각과 같은 축에 있습니다. headerId도 이전 실행보다 큰 값에서 시작합니다.
+- SIGTERM(systemctl stop, docker stop)은 Ctrl+C와 같이 처리합니다. 스냅숏을 저장하고 OFFLINE을 보낸 뒤 끝냅니다.
+
+관제 주기 안에서 예외가 나거나 상태 저장이 실패하면(디스크 가득 참, DB 잠김) `FMS_INTERNAL_ERROR`(1순위) 알람을 올리고 주기는 계속 돕니다. 정상 운영 중이었으면 전체 일시정지(HOLD)로 바꾸고 일시정지를 바로 보냅니다. 일괄 정지·화재·재동기화 중이었으면 그 상태를 약하게 바꾸지 않습니다. 원인을 확인한 뒤 운영자가 재개하면 알람도 해제됩니다.
 
 ## 9. 한계
 

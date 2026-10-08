@@ -109,7 +109,8 @@ class Human:
 
     def plan_next(self, layout: Layout) -> None:
         self.distracted = self.rng.random() < 0.15
-        self.inattentive = self.violation_p > 0 and self.rng.random() < self.violation_p
+        # always drawn, so runs that differ only in violation_p keep the same random sequence otherwise
+        self.inattentive = self.rng.random() < self.violation_p
         self.detour_until_idx = -1
         if self.role == "worker":
             target = self.rng.choice(self.spots)
@@ -349,6 +350,7 @@ def expand_loop(layout: Layout, loop: list[str], allowed: set[str] | None = None
 
 
 TURN_RATE = 0.8        # rad/s: a counterbalance truck turning on the spot (rear end at walking pace)
+AISLE_GIVE_UP_S = 120.0  # waiting at an aisle mouth this long, the driver goes back the way they came
 
 
 @dataclass
@@ -382,11 +384,12 @@ class Forklift:
     turn_decided: bool = False      # the careless-turn draw for the current blocked turn was made
     back: float = 0.0               # backed off this far behind the turning node (letting a robot pass)
     backoffs: int = 0
-    # a standing vehicle in the circle the truck sweeps: after 10 s most drivers back out the way they came,
-    # this share turns anyway (a rule violation; swept in the benchmark)
+    # a standing vehicle in the circle the truck sweeps: the driver backs off (up to 3 m) to let it pass; with no
+    # room to back off, after 30 s this share turns anyway (a rule violation; swept in the benchmark)
     careless_p: float = 0.1
     careless_turns: int = 0
     stall_since: float | None = None
+    aisle_wait_since: float | None = None
     bx: float = 0.0             # position on the lane centre line
     by: float = 0.0
 
@@ -495,7 +498,15 @@ class Forklift:
                 return
         if self._aisle_occupied(tn, robots):
             self.v = 0.0            # aisle signal: a robot is working the narrow aisle ahead, wait at its mouth
+            # a robot that stays (a fault in the aisle) is not waited for all shift: the driver turns back
+            if self.aisle_wait_since is None:
+                self.aisle_wait_since = now
+            elif now - self.aisle_wait_since > AISLE_GIVE_UP_S and now - self.reversed_at > 30.0:
+                self.aisle_wait_since = None
+                self.reversed_at = now
+                self._reverse()
             return
+        self.aisle_wait_since = None
         turn = math.remainder(heading - self.heading, 2 * math.pi)
         if abs(turn) > 0.05 and self.lat == 0.0:
             inside = [rv for _i, rx, ry, rr, rv in robots if math.hypot(rx - self.bx, ry - self.by) < 1.9 + rr + 0.2]

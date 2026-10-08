@@ -47,7 +47,7 @@ class Scenario:
     handling_fail_p: float = 0.01
     inventory_error_p: float = 0.01
     # ---- people and manual trucks breaking rules (assumptions, swept): share of a person's trips with no heed
-    # of vehicles; share of blocked turns a truck driver makes anyway after waiting 10 s
+    # of vehicles; share of drivers who, blocked in a turn with no room to back off, turn anyway after 30 s
     violation_p: float = 0.02
     careless_p: float = 0.1
     # ---- infrastructure sensing: "none" (vehicles' own sensors only), "partial" (docks, main aisles and the

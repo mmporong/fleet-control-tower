@@ -399,21 +399,11 @@ class Vehicle:
                 else:
                     self._clear_fault()
             elif kind == "x_fieldServiceDone":
-                if self.fault in ("DRIVE_FAULT", "SENSOR_FAULT", "BUMPER"):
-                    self._clear_fault()
-                elif self.fault == "LOCALIZATION_LOST":
-                    # the technician drives it onto the nearer node of its current edge and re-localizes there
-                    if self.edges and self.progress > 0.0 and \
-                            self.progress >= self._edge_len(self.edges[0]) / 2:
-                        self._arrive()
-                    elif self.edges:
-                        start = self.layout.nodes[self.edges[0]["startNodeId"]]
-                        self.progress, self.x, self.y = 0.0, start.x, start.y
-                    self.position_initialized = True
-                    self._clear_fault()
-                elif self.fault == "BATTERY_DEPLETED":
-                    self.battery = max(self.battery, 30.0)
-                    self._clear_fault()
+                if self.fault in SAFETY_FAULTS:
+                    # safety-related: reset at the vehicle by a person who can see the hazard zone, never by radio
+                    st.status, st.result = "FAILED", "안전 관련 고장: 차량에서 현장 리셋 필요"
+                else:
+                    self.local_reset()
             elif kind == "initPosition":
                 tx, ty = float(params.get("x", self.x)), float(params.get("y", self.y))
                 if dist((tx, ty), self.pos) <= 1.0:
@@ -436,6 +426,26 @@ class Vehicle:
             self.finished_actions.append(st)
             self.finished_actions = self.finished_actions[-8:]
         self._state_dirty = True
+
+    def local_reset(self) -> None:
+        """A technician at the vehicle: fixes the cause and resets it from the vehicle's own controls.
+
+        Drive and safety faults are cleared; a lost vehicle is driven onto the nearer node of its current
+        edge and re-localized there; a depleted one is pushed to a charger and charged to 30 %.
+        """
+        if self.fault in ("DRIVE_FAULT", "SENSOR_FAULT", "BUMPER"):
+            self._clear_fault()
+        elif self.fault == "LOCALIZATION_LOST":
+            if self.edges and self.progress > 0.0 and self.progress >= self._edge_len(self.edges[0]) / 2:
+                self._arrive()
+            elif self.edges:
+                start = self.layout.nodes[self.edges[0]["startNodeId"]]
+                self.progress, self.x, self.y = 0.0, start.x, start.y
+            self.position_initialized = True
+            self._clear_fault()
+        elif self.fault == "BATTERY_DEPLETED":
+            self.battery = max(self.battery, 30.0)
+            self._clear_fault()
 
     def _clear_fault(self) -> None:
         self.fault = None
@@ -696,7 +706,7 @@ class Vehicle:
                                   "maxLoadMass": s.max_load_kg, "localizationTypes": ["NATURAL"],
                                   "navigationTypes": ["VIRTUAL_LINE_GUIDED"]},
             "physicalParameters": {"speedMin": 0.0, "speedMax": s.max_speed, "accelerationMax": s.accel,
-                                   "decelerationMax": s.decel, "heightMin": 0.0,
+                                   "decelerationMax": s.stop_decel, "heightMin": 0.0,
                                    "heightMax": s.lift_height, "width": s.width, "length": s.length},
             # what the vehicle's parser accepts: the master control must stay inside these limits
             "protocolLimits": {"maxStringLens": {"msgLen": 1_000_000, "topicSerialLen": 64, "topicElemLen": 64,

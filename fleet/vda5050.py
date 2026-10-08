@@ -48,14 +48,19 @@ def split_topic(value: str) -> tuple[str, str, str] | None:
 
 
 class HeaderIds:
-    """headerId is defined per topic and increases by one per message."""
+    """headerId is defined per topic and increases by one per message.
 
-    def __init__(self) -> None:
+    ``start``: a restarted master control continues above the ids it sent before (a vehicle that drops
+    messages whose headerId goes backwards would otherwise ignore the new orders).
+    """
+
+    def __init__(self, start: int = 0) -> None:
+        self.start = start
         self._counters: dict[str, count] = {}
 
     def next(self, topic_name: str) -> int:
         if topic_name not in self._counters:
-            self._counters[topic_name] = count(0)
+            self._counters[topic_name] = count(self.start)
         return next(self._counters[topic_name])
 
 

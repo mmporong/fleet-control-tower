@@ -28,7 +28,8 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
-from .auth import Auth, AuthError, Session, at_least, check_state_change, cookie_token, session_cookie
+from .auth import (Auth, AuthError, Session, at_least, check_origin, check_state_change, cookie_token,
+                   is_loopback_host, session_cookie)
 from .autoop import AutoOperator
 from .control import STRATEGIES
 from .jdamr import DEFAULT_URL, JdamrReadOnly
@@ -42,6 +43,8 @@ STATIC = {"/": ("index.html", "text/html; charset=utf-8"),
           "/app.js": ("app.js", "text/javascript; charset=utf-8"),
           "/logic.js": ("logic.js", "text/javascript; charset=utf-8")}
 MAX_BODY = 64 * 1024
+REQUEST_TIMEOUT_S = 15.0          # a connection that sends nothing (or reads nothing) this long is closed
+MAX_CONNECTIONS = 64              # open connections, live streams included; more are closed at once
 SPEEDS = (0.5, 1.0, 2.0, 5.0, 10.0)
 DEFAULT_DB = Path.home() / ".local" / "state" / "fleet-control-tower" / "server.sqlite3"
 # commands that only a supervisor may give: training drills inject faults into the simulation
@@ -189,12 +192,39 @@ class Runner(threading.Thread):
         self._stop.set()
 
 
+class ControlRoomServer(ThreadingHTTPServer):
+    """``ThreadingHTTPServer`` with a cap on open connections (each one is a thread)."""
+
+    daemon_threads = True
+
+    def __init__(self, address, handler, max_connections: int = MAX_CONNECTIONS) -> None:
+        super().__init__(address, handler)
+        self._slots = threading.BoundedSemaphore(max_connections)
+
+    def process_request(self, request, client_address) -> None:
+        if not self._slots.acquire(blocking=False):
+            self.shutdown_request(request)
+            return
+        try:
+            super().process_request(request, client_address)
+        except BaseException:
+            self._slots.release()
+            raise
+
+    def process_request_thread(self, request, client_address) -> None:
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self._slots.release()
+
+
 def make_handler(runner: Runner, jdamr: JdamrReadOnly | None, auth: Auth | None, secure_cookie: bool = False):
     """``auth`` None turns authentication off (``--no-auth``, loopback development only)."""
     open_session = Session("local", "supervisor", "")
 
     class Handler(BaseHTTPRequestHandler):
         server_version = "FleetControlTower/0.2"
+        timeout = REQUEST_TIMEOUT_S
 
         def log_message(self, fmt: str, *args) -> None:   # keep the console quiet
             return
@@ -213,8 +243,8 @@ def make_handler(runner: Runner, jdamr: JdamrReadOnly | None, auth: Auth | None,
 
         def _body(self) -> dict:
             length = int(self.headers.get("Content-Length") or 0)
-            if length > MAX_BODY:
-                raise ValueError("요청 본문이 너무 큽니다")
+            if length < 0 or length > MAX_BODY:
+                raise ValueError("요청 본문 길이가 잘못됐거나 너무 큽니다")
             raw = self.rfile.read(length) if length else b"{}"
             data = json.loads(raw.decode("utf-8") or "{}")
             if not isinstance(data, dict):
@@ -241,16 +271,51 @@ def make_handler(runner: Runner, jdamr: JdamrReadOnly | None, auth: Auth | None,
             if not at_least(sess.role, role):
                 self._json({"ok": False, "msg": f"권한 부족: {role} 이상 필요 (현재 {sess.role})"}, 403)
                 return None
-            if state_change and auth is not None:
+            if state_change:
                 try:
-                    check_state_change(self.headers, sess, self.headers.get("Host"))
+                    if auth is None:
+                        check_origin(self.headers, self.headers.get("Host"))
+                    else:
+                        check_state_change(self.headers, sess, self.headers.get("Host"))
                 except AuthError as exc:
                     self._json({"ok": False, "msg": str(exc)}, exc.status)
                     return None
             return sess
 
-        # ---------------------------------------------------------- GET
+        def _dev_host_ok(self) -> bool:
+            """Development mode (no accounts) answers only requests addressed to this machine."""
+            if auth is None and not is_loopback_host(self.headers.get("Host")):
+                self._json({"ok": False, "msg": "인증 꺼짐 모드는 루프백 주소로만 접속할 수 있습니다"}, 403)
+                return False
+            return True
+
+        def _guarded(self, method) -> None:
+            """Malformed input is a 400, a fault of ours a 500; a request never ends without an answer."""
+            try:
+                method()
+            except (ValueError, TypeError, KeyError, RecursionError) as exc:
+                self._try_json({"ok": False, "msg": f"잘못된 요청: {type(exc).__name__}"}, 400)
+            except (BrokenPipeError, ConnectionResetError, TimeoutError):
+                return
+            except Exception as exc:                          # noqa: BLE001 - answer, then keep serving
+                self._try_json({"ok": False, "msg": f"서버 오류: {type(exc).__name__}"}, 500)
+
+        def _try_json(self, obj, status: int) -> None:
+            try:
+                self._json(obj, status)
+            except OSError:
+                pass
+
         def do_GET(self) -> None:
+            if self._dev_host_ok():
+                self._guarded(self._get)
+
+        def do_POST(self) -> None:
+            if self._dev_host_ok():
+                self._guarded(self._post)
+
+        # ---------------------------------------------------------- GET
+        def _get(self) -> None:
             url = urlparse(self.path)
             path = url.path
             if path in STATIC:
@@ -355,13 +420,19 @@ def make_handler(runner: Runner, jdamr: JdamrReadOnly | None, auth: Auth | None,
                 return
 
         # ---------------------------------------------------------- POST
-        def do_POST(self) -> None:
+        def _post(self) -> None:
             path = urlparse(self.path).path
             try:
                 body = self._body()
             except (ValueError, json.JSONDecodeError) as exc:
                 self._json({"ok": False, "msg": f"잘못된 요청: {exc}"}, 400)
                 return
+            if path in ("/api/login", "/api/logout"):
+                try:                     # no other site may sign a browser in or out (login CSRF)
+                    check_origin(self.headers, self.headers.get("Host"))
+                except AuthError as exc:
+                    self._json({"ok": False, "msg": str(exc)}, exc.status)
+                    return
             if path == "/api/login":
                 self._login(body)
             elif path == "/api/logout":
@@ -408,7 +479,8 @@ def make_handler(runner: Runner, jdamr: JdamrReadOnly | None, auth: Auth | None,
                 self._json({"ok": True, "name": "local", "role": "supervisor", "csrf": "", "auth": False})
                 return
             try:
-                token, sess = auth.login(str(body.get("name", "")), str(body.get("password", "")))
+                token, sess = auth.login(str(body.get("name", "")), str(body.get("password", "")),
+                                         self.client_address[0])
             except AuthError as exc:
                 self._json({"ok": False, "msg": str(exc)}, exc.status)
                 return
@@ -517,8 +589,7 @@ def main(argv: list[str] | None = None) -> int:
     runner.start()
     if jdamr:
         jdamr.start()
-    server = ThreadingHTTPServer((args.host, args.port), make_handler(runner, jdamr, auth, args.secure_cookie))
-    server.daemon_threads = True
+    server = ControlRoomServer((args.host, args.port), make_handler(runner, jdamr, auth, args.secure_cookie))
     print(f"AMR 관제탑: http://{args.host}:{args.port}  (시나리오 {args.scenario}, 전략 {args.strategy}"
           f"{', 관찰 전용' if args.read_only else ''}{', 인증 꺼짐(개발용)' if auth is None else ''})", flush=True)
     try:

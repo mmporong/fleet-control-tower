@@ -20,8 +20,8 @@ from .alarms import AlarmManager
 from .bus import Bus
 from .clock import Clock, SimClock
 from .facility import DoorSupervisor
-from .geometry import box_gap, dist, point_in_polygon, seg_point_dist
-from .layout import Layout
+from .geometry import bbox, dist, path_gap, point_in_polygon, seg_point_dist
+from .layout import Layout, Zone
 from .perception import Detection, Tracker
 from .planner import STUB_KINDS, Planner
 from .traffic import LockTable, WaitInfo, find_cycles, lane_res, node_res, res_node
@@ -70,20 +70,21 @@ def stop_envelope(speed: float, decel: float, reaction_s: float = 0.2, margin: f
     return speed * reaction_s + speed * speed / (2.0 * decel) + margin
 
 
-def envelope_intrusion(speed: float, gap: float, decel: float) -> bool:
-    """The outcome measure of a near miss: a person was inside the distance the moving vehicle needed to stop,
-    so a step toward it could not have been avoided by braking. Physics, not a site speed rule, sets the line.
+def envelope_intrusion(speed: float, gap: float | None, decel: float) -> bool:
+    """The outcome measure of a near miss: a person in the vehicle's path (``gap`` from ``path_gap``, None when
+    not in it) was inside the distance the moving vehicle needed to stop, so a step toward it could not have
+    been avoided by braking. Physics, not a site speed rule, sets the line.
 
-    >>> envelope_intrusion(1.0, 0.45, 1.5), envelope_intrusion(0.3, 0.15, 1.5), envelope_intrusion(0.0, 0.0, 1.5)
+    >>> envelope_intrusion(1.0, 0.45, 1.5), envelope_intrusion(0.3, 0.15, 1.5), envelope_intrusion(1.0, None, 1.5)
     (True, False, False)
     """
-    return speed > 0.05 and gap < stop_envelope(speed, decel)
+    return speed > 0.05 and gap is not None and gap < stop_envelope(speed, decel)
 
 
-def near_miss(speed: float, gap: float, margin: float = 0.0, decel: float = 1.5) -> bool:
-    """What the control room flags from its (noisy) tracks: a person inside the stopping envelope, with
-    ``margin`` taken off the gap threshold for the track's position uncertainty."""
-    return speed > 0.05 and gap < stop_envelope(speed, decel) - margin
+def near_miss(speed: float, gap: float | None, margin: float = 0.0, decel: float = 1.5) -> bool:
+    """What the control room flags from its (noisy) tracks: a person in the path inside the stopping envelope,
+    with ``margin`` taken off the gap threshold for the track's position uncertainty."""
+    return speed > 0.05 and gap is not None and gap < stop_envelope(speed, decel) - margin
 STATUS_LABEL = {
     "MOVING": "주행", "WAITING": "교통 대기", "BLOCKED": "차단 대기", "ACTION": "작업 동작",
     "CHARGING": "충전", "IDLE": "대기", "PARKED": "주차", "PAUSED": "일시정지", "ESTOP": "일괄 정지",
@@ -130,6 +131,7 @@ class RobotRecord:
     mode: str = "AUTOMATIC"
     paused: bool = False
     estop: bool = False
+    estop_local: bool = False
     safety_field: str = "CLEAR"
     field_cause: str = ""
     last_node: str | None = None
@@ -152,6 +154,7 @@ class RobotRecord:
     action_results: dict = field(default_factory=dict)   # actionId -> resultDescription of failed actions
     factsheet_asked: float = -1e9
     swing_since: float | None = None      # standing inside a stopped forklift's swept circle since
+    head_since: float | None = None       # at the head of a queue (others wait behind it) since
     escape_from: str | None = None        # track id of the truck whose circle this vehicle is leaving
     prev_speed: float = 0.0               # speed before the latest protective stop
     state_nodes: list = field(default_factory=list)      # (nodeId, sequenceId, released) still ahead
@@ -219,6 +222,8 @@ class FleetManager:
         self.run_id = ""
         self.resync_until: float | None = None       # RESYNC mode: rebuilding the picture after a restart
         self._restored: dict[str, dict] = {}         # serial -> snapshot waiting for the vehicle's first state
+        self.on_order = None                          # callback(rec) just before an order is published
+        self.cancel_pending: dict[str, tuple[str, float]] = {}   # serial -> (canceled orderId, when sent)
         self.planner = Planner(layout)
         self.locks = LockTable()
         self.tracker = Tracker()
@@ -230,13 +235,18 @@ class FleetManager:
         self._action_seq = 0
         self.events: deque = deque(maxlen=600)
         self.blocks: dict[str, tuple[str, str]] = {}
+        self.block_src: dict[str, str] = {}
+        self.aisle_requests: dict[str, tuple[str, str]] = {}
         self.external: dict[str, dict] = {}
         self.mode = "RUNNING"           # RUNNING | HOLD | ESTOP | FIRE | RESYNC
+        # the fire panel's alarm, kept apart from the mode: a fleet stop (ESTOP) stays in force through it and
+        # a restart finishes its resync under it; FIRE is the mode only when nothing stronger is active
+        self.fire_alarm = False
         self.area_paused: set[str] = set()
         self.robot_paused: set[str] = set()
         self.repair_times: list[float] = []
         self._nm_last: dict[str, float] = {}
-        self._nm_pending: set[tuple[str, str]] = set()
+        self._nm_pending: dict[tuple[str, str], float] = {}     # person in an envelope -> the observation time
         self.infra_last: float | None = None    # last infrastructure detection cycle
         self.infra_lost = False
         self.zone_speed_override: dict[str, float] = {}
@@ -313,11 +323,15 @@ class FleetManager:
         """Fire panel. On alarm nothing new is released or assigned: every vehicle stops at the end of what
         it already has, which is never a door threshold or an intersection, so fire doors can close."""
         alarm = bool(msg.get("alarm"))
-        if alarm and self.mode != "FIRE":
-            self.mode = "FIRE"
+        if alarm and not self.fire_alarm:
+            self.fire_alarm = True
+            if self.mode in ("RUNNING", "HOLD"):
+                self.mode = "FIRE"
             self.event("fire", "facility", "화재 경보: 신규 해제·배정 중단, 차량은 해제 구간 끝에서 정지", "crit")
-        elif not alarm and self.mode == "FIRE":
-            self.mode = "HOLD"           # all clear: the operator resumes once the site is checked
+        elif not alarm and self.fire_alarm:
+            self.fire_alarm = False
+            if self.mode == "FIRE":
+                self.mode = "HOLD"       # all clear: the operator resumes once the site is checked
             self.event("fire_clear", "facility", "화재 경보 해제: 전체 일시정지 유지, 현장 확인 후 재개", "warn")
         self.alarms.set("FIRE_ALARM", "facility", alarm, self.now, "화재 경보 수신" if alarm else "")
 
@@ -388,17 +402,20 @@ class FleetManager:
         rec.mode = msg.get("operatingMode", rec.mode)
         rec.paused = bool(msg.get("paused", False))
         safety = msg.get("safetyState") or {}
-        rec.estop = safety.get("eStop", "NONE") != "NONE"
+        estop = safety.get("eStop", "NONE")
+        rec.estop = estop == "REMOTE"                       # the fleet's own remote stop
+        rec.estop_local = estop not in ("NONE", "REMOTE")   # pressed at the vehicle: shown, never overridden
         prev_field = rec.safety_field
         # the standard flag decides; a vendor extension may add the warning state and what caused it
-        ext = msg.get("x_safetyField") or {}
+        ext = msg.get("x_safetyField")
+        ext = ext if isinstance(ext, dict) else {}
         if safety.get("fieldViolation", False):
             rec.safety_field = "PROTECTIVE"
         elif ext.get("state") == "WARNING":
             rec.safety_field = "WARNING"
         else:
             rec.safety_field = "CLEAR"
-        rec.field_cause = ext.get("cause", "")
+        rec.field_cause = str(ext.get("cause") or "")
         driving = bool(msg.get("driving", False))
         if rec.safety_field == "PROTECTIVE" and prev_field != "PROTECTIVE" and driving:
             self.counters["protective_stops"] += 1
@@ -558,12 +575,14 @@ class FleetManager:
         t = topic(rec.manufacturer, rec.serial, "order")
         msg = build_order(header(self.ids, t, rec.manufacturer, rec.serial, self.now, self.clock), rec.order_id,
                           rec.update_id, nodes, edges, 2 * i0, rec.base_end - i0 + 1)
-        self.bus.publish(t, msg, self.now)
-        self.counters["order_updates" if not new else "orders"] += 1
         rec.last_order = msg
         rec.last_order_at = self.now
         rec.sent_base_end = rec.base_end
         rec.order_pending = False
+        if self.on_order is not None:
+            self.on_order(rec)          # the runtime saves the vehicle's snapshot before the order can be driven
+        self.bus.publish(t, msg, self.now)
+        self.counters["order_updates" if not new else "orders"] += 1
 
     def _edge_zones(self, e) -> list[str]:
         zones = self._edge_zone_cache.get(e.id)
@@ -611,7 +630,10 @@ class FleetManager:
                 "cur_idx": rec.cur_idx, "sent_base_end": rec.sent_base_end, "purpose": rec.purpose,
                 "task_id": rec.task_id, "last_node": rec.last_node, "last_order": rec.last_order,
                 "goal_actions": {str(k): v for k, v in rec.goal_actions.items()},
-                "resume": list(rec.resume) if rec.resume else None}
+                "resume": list(rec.resume) if rec.resume else None,
+                # the reservations exactly as the lock table held them, and when: on a restart the newest
+                # snapshot that claims a resource wins (it can only have been taken after the other released it)
+                "held": sorted(self.locks.resources_of(rec.serial)), "saved_at": round(self.now, 3)}
 
     def restore(self, snapshots: dict[str, dict], resync_s: float = 15.0) -> None:
         """Start in RESYNC: hold every reservation the vehicles may still be driving on, assign nothing new.
@@ -636,25 +658,65 @@ class FleetManager:
             rec.goal_actions = {int(k): v for k, v in (snap.get("goal_actions") or {}).items()}
             rec.resume = tuple(snap["resume"]) if snap.get("resume") else None
             rec.order_pending = False
-            held = []
-            if rec.route:
-                for i in range(rec.cur_idx, min(rec.base_end, len(rec.route) - 1) + 1):
-                    held.append(node_res(rec.route[i]))
-                    if i < rec.base_end:
-                        held.append(lane_res(self.layout.edge_between(rec.route[i], rec.route[i + 1]).lane))
-            elif rec.last_node:
-                held.append(node_res(rec.last_node))
-            for r in held:
-                self.locks.force(serial, r)
             self._restored[serial] = snap
+        # reservations: each resource goes to the newest snapshot that claims it
+        claims: dict[str, tuple[float, str]] = {}
+        for serial, snap in snapshots.items():
+            for r in self._snapshot_held(snap):
+                at = float(snap.get("saved_at", 0.0))
+                if r not in claims or at > claims[r][0]:
+                    claims[r] = (at, serial)
+        for r, (_at, serial) in sorted(claims.items()):
+            self.locks.force(serial, r)
+        lost = sorted({s for serial, snap in snapshots.items() for r in self._snapshot_held(snap)
+                       for s in [serial] if claims[r][1] != serial})
+        if lost:
+            self.event("resync", "fleet", f"재기동: 스냅숏 예약 충돌은 최신 기록 기준으로 정리({', '.join(lost)})",
+                       "warn")
         self.mode = "RESYNC"
         self.resync_until = self.now + resync_s
         self.event("resync", "fleet", f"재기동: 차량 {len(snapshots)}대 상태 재동기화 중(신규 배정 보류)", "warn")
 
+    def _snapshot_held(self, snap: dict) -> list[str]:
+        """Reservations a snapshot claims (older snapshots without ``held``: the released part of the route)."""
+        if snap.get("held") is not None:
+            return list(snap["held"])
+        route, held = list(snap.get("route") or []), []
+        cur, end = int(snap.get("cur_idx", 0)), int(snap.get("base_end", 0))
+        if route:
+            for i in range(cur, min(end, len(route) - 1) + 1):
+                held.append(node_res(route[i]))
+                if i < end:
+                    held.append(lane_res(self.layout.edge_between(route[i], route[i + 1]).lane))
+        elif snap.get("last_node"):
+            held.append(node_res(snap["last_node"]))
+        return held
+
+    def _hold_reported(self, rec: RobotRecord) -> list[str]:
+        """Reserve what the vehicle says it may still drive (its released nodes); returns what another holds."""
+        taken = []
+        nodes = [n for n, _seq, released in rec.state_nodes if released]
+        for n in ([rec.last_node] if rec.last_node else []) + nodes:
+            if n not in self.layout.nodes:
+                continue
+            r = node_res(n)
+            holder = self.locks.holder_of(r)
+            if holder in (None, rec.serial):
+                self.locks.force(rec.serial, r)
+            else:
+                taken.append(f"{n}({holder})")
+        return taken
+
     def _reconcile(self, rec: RobotRecord) -> None:
         """First state after a restart: keep the restored order if the vehicle is still on it."""
         snap = self._restored.pop(rec.serial, None)
-        if snap is None or not snap.get("route") and not rec.task_id:
+        if snap is None:
+            return
+        if not snap.get("route") and not rec.task_id:
+            if rec.state_order_id and rec.state_remaining > 0:
+                # driving an order the snapshot never saw (sent, then the manager stopped before saving):
+                # hold what the vehicle reports it may drive, then stop it there and start over
+                self._cancel_unknown(rec, "기록에 없는 주문 진행 중: 보고된 구간 예약 후 취소")
             return                          # nothing was in progress: the vehicle's own state is all there is
         if rec.route and rec.state_order_id == rec.order_id:
             self.event("resync_ok", rec.serial, f"재동기화: 주문 {rec.order_id} 이어서 진행", "info")
@@ -673,7 +735,7 @@ class FleetManager:
             why = "재기동 사이 주문 종료"
         else:
             # an order the snapshot does not know: stop it at its next node and start from there
-            self.instant(rec.serial, "cancelOrder")
+            self._cancel_unknown(rec, "")
             rec.route = rec.route[: rec.base_end + 1] if rec.route else []
             rec.purpose = "recover"
             rec.task_id = None
@@ -682,8 +744,42 @@ class FleetManager:
             self.dispatcher.reconcile_task(task, rec, why)
         self.event("resync_mismatch", rec.serial, why, "warn")
 
+    def _cancel_unknown(self, rec: RobotRecord, why: str) -> None:
+        """Cancel an order the manager does not know, after reserving what the vehicle may still drive."""
+        taken = self._hold_reported(rec)
+        if taken:
+            # never take a reservation from another vehicle: stop this one and let the operator look
+            self.robot_paused.add(rec.serial)
+            self.alarms.set("RESERVATION_MISMATCH", rec.serial, True, self.now,
+                            f"{rec.serial} 재기동 뒤 보고 구간이 다른 차량 예약과 겹침: {', '.join(taken)}")
+        self.instant(rec.serial, "cancelOrder")
+        self.cancel_pending[rec.serial] = (rec.state_order_id, self.now)
+        if why:
+            self.event("resync_mismatch", rec.serial, why, "warn")
+
+    def _confirm_cancels(self) -> None:
+        """cancelOrder goes out at QoS 0: resend until the vehicle's state no longer runs that order."""
+        for serial, (order_id, sent) in list(self.cancel_pending.items()):
+            rec = self.robots.get(serial)
+            if rec is None or rec.state_order_id != order_id or rec.state_remaining == 0:
+                del self.cancel_pending[serial]
+            elif self.now - sent > 3.0 and rec.connection == "ONLINE":
+                self.instant(serial, "cancelOrder")
+                self.cancel_pending[serial] = (order_id, self.now)
+
+    def _orphan_tasks(self) -> None:
+        """Tasks restored as ACTIVE whose vehicle no longer runs them: requeue (or fail if loaded)."""
+        if self.dispatcher is None:
+            return
+        running = {rec.task_id for rec in self.robots.values() if rec.task_id}
+        for task in list(self.dispatcher.tasks.values()):
+            if task.state == "ACTIVE" and task.id not in running:
+                self.dispatcher.reconcile_task(task.id, self.robots.get(task.robot or ""),
+                                               "재기동 뒤 이 작업을 진행하는 차량 없음")
+
     def _check_resync(self) -> None:
-        if self.mode != "RESYNC":
+        self._confirm_cancels()
+        if self.resync_until is None:      # not restarting (a fleet stop during the resync does not end it)
             return
         for rec in self.robots.values():
             if rec.serial in self._restored and rec.has_state:
@@ -691,7 +787,9 @@ class FleetManager:
         if not self._restored or self.now >= (self.resync_until or 0.0):
             silent = sorted(self._restored)
             self._restored.clear()
-            self.mode = "RUNNING"
+            self._orphan_tasks()
+            if self.mode == "RESYNC":
+                self.mode = "FIRE" if self.fire_alarm else "RUNNING"
             self.resync_until = None
             self.event("resync_done", "fleet", "재동기화 완료" + (f" · 무응답 {', '.join(silent)}(예약 유지)"
                                                                if silent else ""), "warn" if silent else "info")
@@ -960,6 +1058,13 @@ class FleetManager:
 
     def _update_blocks(self) -> None:
         blocks: dict[str, tuple[str, str]] = {}
+        src: dict[str, str] = {}               # what made each block: disc | turn | aisle | zone
+        requests: dict[str, tuple[str, str]] = {}   # aisle requests: resource -> (aisle zone, truck)
+
+        def put(res: str, kind: str, ref: str, why: str) -> None:
+            if res not in blocks:
+                blocks[res] = (kind, ref)
+                src[res] = why
         horizon = {"human": self.cfg.human_horizon_s, "forklift": self.cfg.forklift_horizon_s}
         collab = [z.polygon for z in self.layout.zones.values() if z.collaborative]
         if self.cfg.strategy != "none":
@@ -971,17 +1076,17 @@ class FleetManager:
                     for kind, ident in self._query(x, y, COLLAB_HOLD_M):
                         if kind == "N" and math.hypot(self.layout.nodes[ident].x - x,
                                                       self.layout.nodes[ident].y - y) <= COLLAB_HOLD_M:
-                            blocks.setdefault(node_res(ident), (cls, tid))
+                            put(node_res(ident), cls, tid, "disc")
                     continue
                 for kind, ident in self._query(x, y, r):
                     if kind == "N":
                         n = self.layout.nodes[ident]
                         if math.hypot(n.x - x, n.y - y) <= r:
-                            blocks.setdefault(node_res(ident), (cls, tid))
+                            put(node_res(ident), cls, tid, "disc")
                     else:
                         a, b = self._lane_points(ident)
                         if seg_point_dist((x, y), a, b) <= r - 0.25:
-                            blocks.setdefault(lane_res(ident), (cls, tid))
+                            put(lane_res(ident), cls, tid, "disc")
             # turn zones ahead of a moving truck: a counterbalance truck may turn at any intersection it reaches
             # within its horizon, sweeping a 1.9 m circle; robots must not be standing in that circle when it
             # arrives (a robot inside stops the truck, and the truck in its field stops the robot)
@@ -1000,39 +1105,82 @@ class FleetManager:
                     zone_r = SWING_RADIUS + CLEARANCE_TURN
                     for k2, i2 in self._query(n.x, n.y, zone_r):
                         if k2 == "N" and math.hypot(self.layout.nodes[i2].x - n.x, self.layout.nodes[i2].y - n.y) <= zone_r:
-                            blocks.setdefault(node_res(i2), ("forklift", tr.id))
-            # aisle signal: while a manual truck works a narrow aisle no robot enters it (robots already
-            # inside finish their move); a truck and a robot meeting in a 4 m aisle cannot pass each other
+                            put(node_res(i2), "forklift", tr.id, "turn")
+            # aisle signal: while a manual truck works a rack aisle no robot enters it (robots already
+            # inside finish their move); a truck and a robot meeting in a 4 m aisle cannot pass each other.
+            # Only confirmed tracks: one misread person must not close an aisle
             still = {}
             for tr in self.tracker.tracks.values():
-                if tr.cls != "forklift":
+                if tr.cls != "forklift" or not tr.confirmed:
                     continue
-                for z in self.layout.zones_at((tr.x, tr.y)):
-                    if z.kind == "aisle":
+                for z in self._aisle_zones:
+                    if point_in_polygon((tr.x, tr.y), z.polygon):
                         for nid in self._zone_nodes.get(z.id, ()):
-                            blocks.setdefault(node_res(nid), ("forklift", tr.id))
+                            put(node_res(nid), "forklift", tr.id, "aisle")
                 # aisle request: a truck stopped at an aisle mouth for 3 s is waiting to go in. New robots are
-                # held out (those inside finish and leave), otherwise a busy aisle never gets free for the truck
-                if not tr.confirmed or tr.speed >= 0.3:
+                # held out of that aisle; robots already in it are not (they finish and leave), otherwise a
+                # robot inside and the truck outside would wait for each other
+                if tr.speed >= 0.3:
                     continue
                 still[tr.id] = self._fl_still_since.get(tr.id, self.now)
                 if self.now - still[tr.id] < 3.0:
                     continue
-                for z in self._aisle_zones:
-                    xs, ys = [p[0] for p in z.polygon], [p[1] for p in z.polygon]
-                    dx = max(min(xs) - tr.x, 0.0, tr.x - max(xs))
-                    dy = max(min(ys) - tr.y, 0.0, tr.y - max(ys))
-                    if 0.0 < math.hypot(dx, dy) <= 4.5:
-                        for nid in self._zone_nodes.get(z.id, ()):
-                            if self.locks.holder_of(node_res(nid)) is None:
-                                blocks.setdefault(node_res(nid), ("forklift", tr.id))
+                z = self._aisle_at_mouth(tr.x, tr.y)
+                if z is not None:
+                    for nid in self._zone_nodes.get(z.id, ()):
+                        requests.setdefault(node_res(nid), (z.id, tr.id))
             self._fl_still_since = still
         for z in self.layout.zones.values():
             if z.locked:
                 for nid, zones in self.layout.node_zones.items():
                     if z.id in zones:
                         blocks[node_res(nid)] = ("zone", z.id)
+                        src[node_res(nid)] = "zone"
         self.blocks = blocks
+        self.block_src = src
+        self.aisle_requests = requests
+
+    def _aisle_at_mouth(self, x: float, y: float) -> Zone | None:
+        """The rack aisle whose end (short side) a truck at (x, y) stands in front of, within 4.5 m.
+
+        A truck that stops on the cross aisle beside an aisle, or between two aisles, is not at a mouth.
+        """
+        for z in self._aisle_zones:
+            x0, y0, x1, y1 = bbox(z.polygon)
+            if (y1 - y0) >= (x1 - x0):          # aisle runs north-south: its mouths face y
+                lateral_ok = x0 - 0.5 <= x <= x1 + 0.5
+                gap = (y0 - y) if y < y0 else (y - y1) if y > y1 else -1.0
+            else:
+                lateral_ok = y0 - 0.5 <= y <= y1 + 0.5
+                gap = (x0 - x) if x < x0 else (x - x1) if x > x1 else -1.0
+            if lateral_ok and 0.0 < gap <= 4.5:
+                return z
+        return None
+
+    def _inside_aisle(self, rec: RobotRecord, zone_id: str) -> bool:
+        zone = self.layout.zones[zone_id]
+        if point_in_polygon((rec.x, rec.y), zone.polygon):
+            return True
+        return any(self.locks.holder_of(node_res(nid)) == rec.serial for nid in self._zone_nodes.get(zone_id, ()))
+
+    def _block_for(self, rec: RobotRecord, res: str) -> tuple[str, str] | None:
+        """What keeps ``rec`` out of ``res`` right now, if anything (its own reservations never do)."""
+        if self.locks.holder_of(res) == rec.serial:
+            return None
+        hit = self.blocks.get(res)
+        if hit is not None:
+            kind, ref = hit
+            # leaving a stopped truck's swept circle: that truck's own occupancy disc does not hold us, as long
+            # as it stands still (its turn zones, aisle signal and a moving truck's path still do)
+            escaping = rec.purpose == "evade" and ref is not None and ref == rec.escape_from and \
+                self.block_src.get(res) == "disc" and ref in self.tracker.tracks and \
+                self.tracker.tracks[ref].speed < 0.3
+            if not escaping:
+                return hit
+        req = self.aisle_requests.get(res)
+        if req is not None and not self._inside_aisle(rec, req[0]):
+            return ("forklift", req[1])
+        return None
 
     def _door_demand(self) -> tuple[dict[str, set[str]], dict[str, set[str]]]:
         """(vehicles that will pass each door soon, vehicles already holding a lane through it).
@@ -1187,8 +1335,8 @@ class FleetManager:
     def _extend(self, rec: RobotRecord) -> None:
         if not rec.route or rec.mode != "AUTOMATIC" or rec.connection != "ONLINE" or rec.fatal:
             return
-        if self.mode == "FIRE":
-            return                    # fire alarm: release nothing beyond what each vehicle already has
+        if self.fire_alarm or self.mode in ("HOLD", "ESTOP", "FIRE"):
+            return                    # fire alarm or fleet stop: release nothing beyond what vehicles already have
         if rec.last_order is None or rec.last_order["orderId"] != rec.order_id:
             if not rec.order_pending or not self.can_take_route_now(rec):
                 return
@@ -1216,11 +1364,9 @@ class FleetManager:
                 resources.append(lane_res(self.layout.edge_between(rec.route[k - 1], rec.route[k]).lane))
                 resources.append(node_res(rec.route[k]))
             for r in resources:
-                if r in self.blocks and self.locks.holder_of(r) != rec.serial:
-                    kind, ref = self.blocks[r]
-                    if rec.purpose == "evade" and ref is not None and ref == rec.escape_from:
-                        continue          # leaving a stopped truck's swept circle: its own block does not hold us
-                    blocked = self._wait(rec, kind, r, ref)
+                hit = self._block_for(rec, r)
+                if hit is not None:
+                    blocked = self._wait(rec, hit[0], r, hit[1])
                     break
             if blocked:
                 break
@@ -1355,6 +1501,8 @@ class FleetManager:
             st, why = "FAULT", rec.fatal
         elif rec.mode == "MANUAL":
             st, why = "MANUAL", "원격 조종 인계"
+        elif rec.estop_local:
+            st, why = "ESTOP", "차량 비상정지(현장 조작)"
         elif rec.estop:
             st, why = "ESTOP", "관제 일괄 정지(비안전)"
         elif rec.paused:
@@ -1433,9 +1581,12 @@ class FleetManager:
             if key not in live:
                 info = self.deadlocks.pop(key)
                 duration = self.now - info["start"]
-                self.counters["deadlock_s"] += duration
+                # one detected before the measurement window is neither counted nor timed in it
+                if not info.get("before_window"):
+                    self.counters["deadlock_s"] += duration
+                    if info.get("method"):
+                        self.counters["deadlocks_resolved"] += 1
                 if info.get("method"):
-                    self.counters["deadlocks_resolved"] += 1
                     self.event("deadlock_resolved", ",".join(info["members"]),
                                f"교착 해소({info['method']}) {duration:.1f}초", "info")
                 self.alarms.set("DEADLOCK_UNRESOLVED", ",".join(sorted(info["members"])), False, self.now)
@@ -1517,7 +1668,8 @@ class FleetManager:
                 if n in seen or n in blocked or not self.layout.allowed(e, rec.vclass):
                     continue
                 seen.add(n)
-                if self.locks.holder_of(node_res(n)) not in (None, rec.serial) or node_res(n) in self.blocks:
+                if self.locks.holder_of(node_res(n)) not in (None, rec.serial) or node_res(n) in self.blocks \
+                        or node_res(n) in self.aisle_requests:
                     continue
                 if self.locks.holder_of(lane_res(e.lane)) not in (None, rec.serial):
                     continue
@@ -1579,6 +1731,11 @@ class FleetManager:
         stalled_ext = {k: v for k, v in self.external.items() if self.now - v.get("moved", self.now) > 4.0}
         stalled_fl = [tr for tr in self.tracker.tracks.values() if tr.cls == "forklift" and tr.speed < 0.2]
         for rec in self.robots.values():
+            in_swing = not rec.driving and any(
+                tr.confirmed and dist((tr.x, tr.y), (rec.x, rec.y)) < SWING_RADIUS + rec.length / 2 + 0.2
+                for tr in stalled_fl)
+            if not in_swing:
+                rec.swing_since = None        # the 5 s count starts again the next time it stands in a circle
             if self.now < rec.yield_next or not self.can_take_route(rec):
                 continue
             here = rec.last_node
@@ -1683,7 +1840,7 @@ class FleetManager:
         - a confirmed person track inside the vehicle's stopping envelope on two consecutive cycles (one noisy
           camera frame is not enough).
         """
-        seen_now: set[tuple[str, str]] = set()
+        seen_now: dict[tuple[str, str], float] = {}
         for rec in self.robots.values():
             if rec.connection != "ONLINE":
                 continue
@@ -1694,21 +1851,27 @@ class FleetManager:
             rec.prev_speed = abs(rec.v) if rec.safety_field != "PROTECTIVE" else 0.0
             if abs(rec.v) < 0.1:
                 continue
+            # decelerationMax: the factsheet's maximum deceleration (the vehicle's braking for a stop)
             decel = float(((rec.factsheet or {}).get("physicalParameters") or {}).get("decelerationMax") or 1.0)
+            heading = rec.theta if rec.v >= 0 else rec.theta + math.pi
             for tr in self.tracker.tracks.values():
                 if tr.cls != "human" or not tr.confirmed:
                     continue
-                if abs(tr.x - rec.x) > 3 or abs(tr.y - rec.y) > 3:
+                if abs(tr.x - rec.x) > 4 or abs(tr.y - rec.y) > 4:
                     continue
-                gap = box_gap((tr.x, tr.y), 0.3, (rec.x, rec.y), rec.theta, rec.length / 2, rec.width / 2)
+                gap = path_gap((tr.x, tr.y), 0.3, (rec.x, rec.y), heading, rec.length / 2, rec.width / 2,
+                               side=0.3 + NM_TRACK_MARGIN)
                 # the margin is the camera track's position uncertainty (about 1.2 sigma of 0.25 m): the control
                 # room only claims a near miss its own estimate can support
                 if near_miss(abs(rec.v), gap, margin=NM_TRACK_MARGIN, decel=decel):
                     key = (rec.serial, tr.id)
-                    seen_now.add(key)
-                    if key in self._nm_pending:
+                    seen_now[key] = tr.last_seen
+                    # two separate observations, not the same camera frame seen by two control cycles
+                    if key in self._nm_pending and self._nm_pending[key] != tr.last_seen:
                         self._flag_near_miss(rec, f"{rec.serial} {abs(rec.v):.1f} m/s 주행 중 추적된 사람 "
                                                   f"{max(gap, 0):.2f} m(정지거리 안)")
+                    elif key in self._nm_pending:
+                        seen_now[key] = self._nm_pending[key]
         self._nm_pending = seen_now
 
     def _flag_near_miss(self, rec: RobotRecord, msg: str) -> None:
@@ -1750,15 +1913,20 @@ class FleetManager:
             # waiting behind a faulted, silent or hand-driven vehicle or a failed door is a consequence of
             # that unit's own alarm (ROBOT_FAULT, COMMS_LOST, operator takeover, FACILITY_FAULT): suppressed
             covered = w is not None and w.kind == "door" and self.alarms.is_active(f"FACILITY_FAULT:{w.holder}")
+            # the head of a queue that is not itself waiting: stopped, idle in the lane, or busy with an action
+            # (a tote AMR waiting for its picker) holds everyone behind it
+            head = w is None and bool(behind)
+            rec.head_since = (rec.head_since if rec.head_since is not None else self.now) if head else None
             root_stopped = w is not None and w.kind not in ("robot", "fault", "offline", "manual") and not covered or (
-                w is None and bool(behind) and rec.status in ("PROTECTIVE", "FAULT", "PAUSED", "OFFLINE", "MANUAL"))
-            since = w.since if w is not None else (rec.protective_since or rec.fault_since or self.now)
+                head and rec.status in ("PROTECTIVE", "FAULT", "PAUSED", "OFFLINE", "MANUAL", "IDLE", "ACTION"))
+            since = w.since if w is not None else max(rec.head_since or self.now,
+                                                      rec.protective_since or rec.fault_since or -1e18)
             limit = self.cfg.blocked_alarm_s
             # waiting for a person or a manual truck is expected and clears by itself; only a long one needs the
             # operator (collaborative zones wait for people by design)
+            collab_here = any(z.collaborative for z in self.layout.zones_at((rec.x, rec.y)))
             if w is not None and w.kind in ("human", "forklift") or \
-                    rec.field_cause.startswith("human") and \
-                    any(z.collaborative for z in self.layout.zones_at((rec.x, rec.y))):
+                    collab_here and (rec.field_cause.startswith("human") or rec.status == "ACTION"):
                 limit = self.cfg.collab_blocked_alarm_s
             long_block = root_stopped and self.now - since >= limit
             note = ""

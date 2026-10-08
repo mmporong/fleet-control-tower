@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from collections import deque
 from datetime import datetime, timezone
+import json
 import math
 
 from .sim import Simulation
@@ -16,6 +17,23 @@ from .traffic import node_res
 from .vehicle import SAFETY_FAULTS
 
 FAULTS_FIELD = ("DRIVE_FAULT", "SENSOR_FAULT", "BUMPER", "BATTERY_DEPLETED", "LOCALIZATION_LOST")
+
+
+AUDIT_ARGS_CHARS = 1000      # command arguments kept in the audit log (the rest is cut off)
+
+
+def _audit_args(args: dict) -> dict:
+    """Arguments as the audit log keeps them: short values, at most AUDIT_ARGS_CHARS in all.
+
+    >>> _audit_args({"robot": "AMR-01"})
+    {'robot': 'AMR-01'}
+    >>> list(_audit_args({"note": "x" * 5000}))
+    ['_truncated']
+    """
+    text = json.dumps(args, ensure_ascii=False, default=str)
+    if len(text) <= AUDIT_ARGS_CHARS:
+        return args
+    return {"_truncated": text[:AUDIT_ARGS_CHARS]}
 
 
 class CommandError(ValueError):
@@ -73,10 +91,12 @@ class Operations:
 
     # ------------------------------------------------------------ entry point
     def execute(self, cmd: dict, operator: str = "operator") -> dict:
-        name = str(cmd.get("cmd", ""))
-        args = {k: v for k, v in cmd.items() if k not in ("cmd", "confirm")}
+        name = str(cmd.get("cmd", ""))[:40]
+        # who acted is the signed-in account, never a name the client sends along ("by")
+        args = {k: v for k, v in cmd.items() if k not in ("cmd", "confirm", "by")}
         entry = {"t": round(self.sim.now, 1), "wall": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-                 "operator": operator[:40], "cmd": name, "args": args}
+                 "operator": operator[:40], "cmd": name, "args": _audit_args(args)}
+        args["by"] = operator[:40]
         try:
             if self.read_only:
                 raise CommandError("관찰 전용 모드: 명령을 보낼 수 없습니다")
@@ -103,7 +123,7 @@ class Operations:
         key = str(a.get("key", ""))
         if key not in self.sim.manager.alarms.alarms:
             raise CommandError("활성 알람이 아님")
-        self.sim.manager.alarms.ack(key, a.get("by", "operator"), self.sim.now)
+        self.sim.manager.alarms.ack(key, a["by"], self.sim.now)
         self.sim.ack_incident(key)
         return f"{key} 확인"
 
@@ -111,7 +131,7 @@ class Operations:
         n = 0
         for key, alarm in list(self.sim.manager.alarms.alarms.items()):
             if alarm.state in ("UNACK", "RTN_UNACK") and alarm.priority >= int(a.get("min_priority", 2)):
-                self.sim.manager.alarms.ack(key, a.get("by", "operator"), self.sim.now)
+                self.sim.manager.alarms.ack(key, a["by"], self.sim.now)
                 n += 1
         return f"{n}건 확인"
 
@@ -120,7 +140,7 @@ class Operations:
         minutes = float(a.get("minutes", 10))
         if not 1 <= minutes <= 120:
             raise CommandError("보류 시간은 1~120분")
-        self.sim.manager.alarms.shelve(key, a.get("by", "operator"), self.sim.now, minutes * 60,
+        self.sim.manager.alarms.shelve(key, a["by"], self.sim.now, minutes * 60,
                                        str(a.get("reason", "")))
         return f"{key} {minutes:.0f}분 보류"
 
@@ -163,7 +183,7 @@ class Operations:
         if not note:
             raise CommandError("인수인계 메모를 입력하세요(조치 중인 사항, 주의할 구역·로봇)")
         summary = self.handover_summary()
-        self.sim.handovers.append({"t": round(self.sim.now, 1), "by": a.get("by", "operator"), "note": note[:1000],
+        self.sim.handovers.append({"t": round(self.sim.now, 1), "by": a["by"], "note": note[:1000],
                                    "summary": summary})
         return f"인수인계 기록: 알람 {len(summary['alarms'])}건, 미종결 사고 {len(summary['incidents_open'])}건"
 
@@ -176,14 +196,17 @@ class Operations:
         return "전체 일시정지"
 
     def cmd_fleet_resume(self, a: dict) -> str:
-        if self.sim.manager.mode == "ESTOP":
+        m = self.sim.manager
+        if m.mode == "ESTOP":
             raise CommandError("일괄 정지 중: 해제 후 재개하세요")
-        if self.sim.manager.mode == "FIRE":
+        if m.mode == "FIRE" or m.fire_alarm:
             raise CommandError("화재 경보 중: 경보 해제와 현장 확인 뒤 재개하세요")
-        if self.sim.manager.mode == "RESYNC":
+        if m.mode == "RESYNC":
             raise CommandError("재기동 재동기화 중: 끝나면 자동으로 정상 운영")
-        self.sim.manager.mode = "RUNNING"
-        self.sim.manager.event("fleet_resume", "fleet", "전체 재개", "info")
+        m.mode = "RUNNING"
+        # resuming after an internal error is the operator's judgement that the cause is understood
+        m.alarms.set("FMS_INTERNAL_ERROR", "fms", False, self.sim.now)
+        m.event("fleet_resume", "fleet", "전체 재개", "info")
         return "전체 재개"
 
     def cmd_fleet_estop(self, a: dict) -> str:
@@ -198,7 +221,8 @@ class Operations:
     def cmd_fleet_estop_release(self, a: dict) -> str:
         if self.sim.manager.mode != "ESTOP":
             raise CommandError("일괄 정지 상태가 아님")
-        self.sim.manager.mode = "HOLD"      # release never restarts motion by itself
+        # release never restarts motion by itself; under a fire alarm the fleet goes back to the fire mode
+        self.sim.manager.mode = "FIRE" if self.sim.manager.fire_alarm else "HOLD"
         self.sim.manager.alarms.set("FLEET_ESTOP", "fleet", False, self.sim.now)
         self.sim.manager.event("fleet_estop_release", "fleet", "일괄 정지 해제 → 일시정지 유지", "warn")
         return "일괄 정지 해제(일시정지 유지, 재개는 별도 명령)"
@@ -235,6 +259,14 @@ class Operations:
         rec = self._robot(a)
         if rec.fatal not in FAULTS_FIELD:
             raise CommandError("현장 조치 대상 고장이 아님")
+        if rec.fatal in SAFETY_FAULTS:
+            # a safety fault is cleared by the technician at the vehicle; the vehicle refuses a radio release.
+            # The simulation models that local reset; a live site's vehicle reports it in its state
+            local = getattr(self.sim, "field_service", None)
+            if local is None:
+                return f"{rec.serial} 현장 조치 등록: 안전 관련 고장은 차량에서 리셋해야 해제됨(상태 메시지로 확인)"
+            local(rec.serial)
+            return f"{rec.serial} 현장 조치 완료(차량에서 리셋)"
         self.sim.manager.instant(rec.serial, "x_fieldServiceDone")
         return f"{rec.serial} 현장 조치 완료 등록"
 
@@ -427,6 +459,26 @@ class Operations:
         return f"[훈련] {zone.name}에 사람 {hid} 진입"
 
     # ------------------------------------------------------------ WMS-facing API
+    def _task_known(self, task_id: str, ref: str) -> bool:
+        """The task the key points to exists and was made for this order (ids restart with a new simulation)."""
+        d = self.sim.dispatcher
+        for t in list(d.tasks.values()) + list(d.finished):
+            if t.id == task_id:
+                return t.meta.get("ref") == ref
+        if self.store is not None and getattr(self.sim, "simulated", True) is False:
+            stored = self.store.task(task_id)
+            return stored is not None and (stored.get("meta") or {}).get("ref") == ref
+        return False
+
+    def _task_for_ref(self, ref: str) -> str | None:
+        d = self.sim.dispatcher
+        for t in list(d.tasks.values()) + list(d.finished):
+            if t.meta.get("ref") == ref:
+                return t.id
+        if self.store is not None and getattr(self.sim, "simulated", True) is False:
+            return self.store.task_by_ref(ref)
+        return None
+
     def submit_wms_order(self, order: dict, seen, operator: str = "WMS") -> dict:
         """Idempotent task intake for an upper system (WMS/WCS).
 
@@ -442,7 +494,16 @@ class Operations:
             prev = seen[oid]
             if prev["body"] != body:
                 raise CommandError(f"order_id {oid}가 다른 내용으로 이미 접수됨")
-            return {"ok": True, "duplicate": True, "task": prev["task"]}
+            if self._task_known(prev["task"], oid):
+                return {"ok": True, "duplicate": True, "task": prev["task"]}
+            # the key was written but its task is gone (a restart of the simulation, or a crash between the two
+            # writes): the order is taken again below
+        else:
+            existing = self._task_for_ref(oid)
+            if existing is not None:
+                # the task was created but the key was not written (a crash between the two): no second task
+                seen[oid] = {"body": body, "task": existing}
+                return {"ok": True, "duplicate": True, "task": existing}
         kinds = {k["kind"]: k for k in self.sim.process.task_kinds}
         if body["kind"] not in kinds:
             raise CommandError(f"kind는 {', '.join(kinds)} 중 하나")

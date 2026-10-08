@@ -94,7 +94,7 @@ class DcProcess(Process):
                                                              s[0], s[1], s[3]))
         # inventory record errors: a location the WMS believes empty holds a pallet, or the reverse
         self.metrics = {"trucks": 0, "pallets_unloaded": 0, "putaway": 0, "shipped": 0, "out_orders": 0,
-                        "out_backlog": 0, "tote_orders": 0, "tote_done": 0, "picks": 0, "units": 0,
+                        "tote_orders": 0, "tote_done": 0, "picks": 0, "units": 0,
                         "d2s": deque(maxlen=500), "picker_wait_s": 0.0, "picker_waits": 0,
                         "exceptions": 0, "retries": 0, "redirects": 0, "inventory_fixes": 0}
         for slot in sorted(self.slots):
@@ -108,6 +108,7 @@ class DcProcess(Process):
         self.out_pallets_h = out_pallets_h
         self.next_truck = rng.uniform(10.0, 60.0)
         self.next_out = rng.uniform(5.0, 30.0)
+        self.out_backlog = 0        # outbound orders waiting for a pallet or a staging spot (state, not a metric)
         self.docks_in: dict[int, int] = {}          # dock index -> pallets still on the truck
         self.docks_out: dict[int, int] = {}          # dock index -> pallets loaded on the current truck
         self.truck_queue: deque = deque()
@@ -138,13 +139,13 @@ class DcProcess(Process):
             self.docks_in[free_docks.pop(0)] = self.truck_queue.popleft()
         while self.out_pallets_h > 0 and self.next_out <= now:
             self.metrics["out_orders"] += 1
-            self.metrics["out_backlog"] += 1
+            self.out_backlog += 1
             self.next_out += self.rng.expovariate(self.out_pallets_h / 3600.0)
-        while self.metrics["out_backlog"] > 0:
+        while self.out_backlog > 0:
             task = self._make_pallet_out(priority=0)
             if task is None:
                 break
-            self.metrics["out_backlog"] -= 1
+            self.out_backlog -= 1
             self.d.submit(task)
         if self.rate_per_h <= 0:
             self.next_arrival = now + 60.0
@@ -509,7 +510,7 @@ class DcProcess(Process):
         known = [v for v in self.slots.values()]
         return {
             "trucks": m["trucks"], "pallets_unloaded": m["pallets_unloaded"], "putaway": m["putaway"],
-            "shipped": m["shipped"], "out_backlog": m["out_backlog"], "tote_done": m["tote_done"],
+            "shipped": m["shipped"], "out_backlog": self.out_backlog, "tote_done": m["tote_done"],
             "tote_orders": m["tote_orders"], "tote_backlog": len(self.tote_backlog),
             "picks": m["picks"], "units": m["units"],
             "putaway_h": round(m["putaway"] / hours, 1), "shipped_h": round(m["shipped"] / hours, 1),

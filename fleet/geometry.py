@@ -189,6 +189,24 @@ def centroid(points: Iterable[Point]) -> Point:
     return (sum(p[0] for p in pts) / len(pts), sum(p[1] for p in pts) / len(pts))
 
 
+def path_gap(center: Point, radius: float, origin: Point, heading: float, half_length: float,
+             half_width: float, side: float = 0.3) -> float | None:
+    """Distance from the front of a vehicle to a circle standing in its path, or None when it is not in it.
+
+    The path is the band ahead of the front, as wide as the body plus ``side`` on each side (someone close
+    enough to step in). Beside or behind the vehicle the circle is not in the path.
+
+    >>> path_gap((2.0, 0.0), 0.3, (0.0, 0.0), 0.0, 0.45, 0.35)
+    1.25
+    >>> path_gap((0.0, 0.8), 0.3, (0.0, 0.0), 0.0, 0.45, 0.35) is None, path_gap((-2.0, 0.0), 0.3, (0, 0), 0.0, 0.45, 0.35)
+    (True, None)
+    """
+    lx, ly = to_local(center, origin, heading)
+    if lx + radius < half_length or abs(ly) - radius > half_width + side:
+        return None
+    return lx - radius - half_length
+
+
 def box_gap(center: Point, radius: float, origin: Point, heading: float,
             half_length: float, half_width: float) -> float:
     """Clearance between a circle and an oriented rectangle (negative when overlapping).
