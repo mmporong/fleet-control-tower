@@ -209,19 +209,31 @@ class StoppedTruckTests(unittest.TestCase):
         f._place(f.heading)
         return f
 
-    def test_turning_back_after_backing_off_drives_away_from_the_corner(self):
+    def test_turning_back_after_backing_off_retreats_to_the_last_intersection_and_tries_again(self):
         # FL-R1 reached SW16_2 heading west and backed off 4.5 m east, past the queue node 3.3 m back
         f = self.rack_truck("SW16_2", math.pi, 4.5)
         x0 = f.x
-        f._reverse()
+        self.assertTrue(f._reverse())
         self.assertEqual((f.back, f.direction), (0.0, -1))
         self.assertEqual(f.loop[f._target()], "SW22_8")
-        xs = []
-        for k in range(100):
+        xs, dirs = [], []
+        for k in range(150):
             f.step(self.sim.dt, 1000.0 + k * self.sim.dt, [], [])
             xs.append(f.x)
-        self.assertGreaterEqual(min(xs), x0 - 1e-6)          # never back toward the corner it gave up
-        self.assertGreater(max(xs), x0 + 1.0)
+            dirs.append(f.direction)
+        first_back = next(i for i, x in enumerate(xs) if x < x0 - 0.05) if min(xs) < x0 - 0.05 else len(xs)
+        self.assertGreaterEqual(max(xs[:first_back]), self.at("SW22_8")[0] - 1e-6)   # first all the way to SW22_8
+        self.assertEqual(dirs[-1], 1)                                               # then its own way again
+        self.assertEqual(f.loop[f._target()] if f.loop[f.idx] != "SW16_2" else "SW16_2", "SW16_2")
+
+    def test_a_truck_does_not_turn_back_into_a_narrow_aisle(self):
+        # FL-R1 came out of R1 at NE16_2 and waits to turn east: the way it came is the one-way aisle
+        f = self.rack_truck("NE16_2", math.pi / 2, 0.0)
+        self.assertFalse(f._reverse())
+        self.assertEqual((f.direction, f.loop[f._target()]), (1, f.loop[(f.loop.index("NE16_2") + 1) % len(f.loop)]))
+        gave, answer = f.radio_yield(100.0)
+        self.assertTrue(gave)                               # it backs off further instead (6 m for 40 s)
+        self.assertEqual((answer, f.direction), ("후진 양보", 1))
 
     def test_a_truck_backed_into_an_aisle_does_not_turn_round_in_it(self):
         # FL-R1 left R1 at NE16_2 heading north and backed off 4.5 m: its body stands in the aisle
@@ -272,7 +284,7 @@ class AisleLightTests(unittest.TestCase):
         from fleet.agents import Forklift
         sim = quiet_dc()
         L = sim.layout
-        f = Forklift("F", ["qSW16_2SW22_8", "SW16_2", "R1-01", "R1-02"], L, random.Random(1), idx=0)
+        f = Forklift("F", ["SW22_8", "qSW16_2SW22_8", "SW16_2", "R1-01"], L, random.Random(1), idx=1)
         f.bx, f.by = L.nodes["qSW16_2SW22_8"].pos
         self.assertEqual(f.radio_yield(100.0), (True, "되돌아감"))
         self.assertEqual(f.direction, -1)
@@ -313,6 +325,40 @@ class AisleLightTests(unittest.TestCase):
         for now in (100.0, 160.0, 220.0, 280.0):
             op._respond(alarm, plan, now)
         self.assertEqual(calls.count("radio_yield"), 2)
+
+
+class FieldDeadlockTests(unittest.TestCase):
+    def test_a_robot_stopped_by_its_field_in_front_of_a_waiting_robot_closes_a_deadlock(self):
+        # AGF-02 holds the node AGF-01 needs to turn; AGF-01 stands in AGF-02's protective field
+        from fleet.traffic import WaitInfo
+        sim = quiet_dc(agf=2)
+        m = sim.manager
+        a, b = m.robots["AGF-01"], m.robots["AGF-02"]
+        a.x, a.y, b.x, b.y, b.theta = 10.0, 48.4, 13.3, 48.4, math.pi        # b faces west, a 3.3 m ahead
+        b.safety_field, b.driving, b.wait = "PROTECTIVE", False, None
+        a.wait = WaitInfo(m.now - 10.0, "robot", node_res("BL11_5"), "AGF-02")
+        self.assertEqual(m._field_blocker(b), "AGF-01")
+        m._deadlocks()
+        m.now += m.cfg.deadlock_confirm_s + 0.5
+        m._deadlocks()
+        self.assertIn(frozenset({"AGF-01", "AGF-02"}), m.deadlocks)
+        b.theta = 0.0                                       # facing away: not what stops it
+        self.assertIsNone(m._field_blocker(b))
+
+
+class PickerTests(unittest.TestCase):
+    def test_a_picker_leaves_a_robot_that_is_done_even_if_it_cannot_drive_off(self):
+        # the robot behind in a one-way pick aisle is done but stands still: the robot ahead waits for this picker
+        from fleet.agents import Walker
+        sim = quiet_dc(pickers=1, amr=1)
+        (picker,) = [h for h in sim.humans if h.role == "picker"]
+        picker.serving, picker.walker = "AMR-01", Walker([])
+        robots = {"AMR-01": {"x": picker.x + 0.8, "y": picker.y, "waiting": True}}
+        self.assertTrue(picker.picker_update(100.0, sim.layout, robots))
+        robots["AMR-01"]["waiting"] = False                 # picked; still standing beside the picker
+        for k in range(1, 31):                              # every simulation step for 3 s
+            picker.picker_update(100.0 + 0.1 * k, sim.layout, robots)
+        self.assertIsNone(picker.serving)
 
 
 class ReleaseTests(unittest.TestCase):

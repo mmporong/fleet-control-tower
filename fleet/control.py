@@ -286,6 +286,7 @@ class FleetManager:
         self._fl_still_since: dict[str, float] = {}
         # truck track -> the intersection it last stood on; dropped once it drives off at driving pace
         self._fl_stood: dict[str, str] = {}
+        self._field_since: dict[str, float] = {}     # robot -> protective-stopped facing another robot since
         # aisles a manual truck may work: the rack aisles (pick aisles are tote-AMR and picker space)
         self._aisle_zones = [z for z in layout.zones.values() if z.kind == "aisle"
                              and any(self.layout.edges[e].classes and "CARRIER" not in self.layout.edges[e].classes
@@ -1673,13 +1674,39 @@ class FleetManager:
         return f"{target} {label}{who} · {self.now - w.since:.0f}초"
 
     # ---------------------------------------------------------------- deadlocks
+    def _field_blocker(self, rec: RobotRecord) -> str | None:
+        """The robot a protective-stopped robot stands facing, from the poses the FMS has (the standard state
+        says only that the field is violated, not by what): another robot within 4 m in front of it."""
+        if rec.safety_field != "PROTECTIVE" or rec.driving:
+            return None
+        hx, hy = math.cos(rec.theta), math.sin(rec.theta)
+        best = None
+        for o in self.robots.values():
+            if o is rec or not o.has_state:
+                continue
+            dx, dy = o.x - rec.x, o.y - rec.y
+            d = math.hypot(dx, dy)
+            if 0.0 < d <= 4.0 and (dx * hx + dy * hy) / d >= 0.5 and (best is None or (d, o.serial) < best):
+                best = (d, o.serial)
+        return best[1] if best else None
+
     def _deadlocks(self) -> None:
         wait_for = {r.serial: r.wait.holder for r in self.robots.values()
                     if r.wait is not None and r.wait.kind == "robot" and r.wait.holder in self.robots}
+        # a robot stopped by its protective field waits for the robot in front of it just as much: a cycle through
+        # such a stop (A holds the node B needs to turn, B stands in A's field) is a deadlock too
+        for r in self.robots.values():
+            if r.serial not in wait_for:
+                blocker = self._field_blocker(r)
+                if blocker is not None:
+                    wait_for[r.serial] = blocker
+                    self._field_since.setdefault(r.serial, self.now)
+                    continue
+            self._field_since.pop(r.serial, None)
         live: set[frozenset] = set()
         for cycle in find_cycles(wait_for):
             members = [self.robots[s] for s in cycle]
-            if any(self.now - m.wait.since < self.cfg.deadlock_confirm_s for m in members):
+            if any(self.now - self._waiting_since(m) < self.cfg.deadlock_confirm_s for m in members):
                 continue
             key = frozenset(cycle)
             live.add(key)
@@ -1715,8 +1742,13 @@ class FleetManager:
                                f"교착 해소({info['method']}) {duration:.1f}초", "info")
                 self.alarms.set("DEADLOCK_UNRESOLVED", ",".join(sorted(info["members"])), False, self.now)
 
+    def _waiting_since(self, rec: RobotRecord) -> float:
+        if rec.wait is not None:
+            return rec.wait.since
+        return self._field_since.get(rec.serial, self.now)
+
     def _resolve(self, members: list[RobotRecord]) -> str | None:
-        candidates = sorted(members, key=lambda r: (self._priority(r) - (self.now - r.wait.since) / 2.0,
+        candidates = sorted(members, key=lambda r: (self._priority(r) - (self.now - self._waiting_since(r)) / 2.0,
                                                     r.loaded, r.serial))
         held_by_others = {}
         for m in members:
@@ -1724,12 +1756,12 @@ class FleetManager:
                                         for r in self.locks.resources_of(o.serial) if res_node(r)}
         for victim in candidates:
             avoid = set(held_by_others[victim.serial])
-            blocked_node = res_node(victim.wait.resource)
+            blocked_node = res_node(victim.wait.resource) if victim.wait is not None else None
             if blocked_node:
                 avoid.add(blocked_node)
             avoid.discard(victim.last_node)
-            if victim.goal in avoid:
-                continue
+            if victim.goal is None or victim.goal in avoid:
+                continue                        # (a robot without a goal, stopped in a cycle by its field)
             if self._replan(victim, avoid):
                 self.counters["reroutes"] += 1
                 self.event("reroute", victim.serial, "교착 해소: 우회 경로", "info")
@@ -1742,7 +1774,7 @@ class FleetManager:
             spot = self._evasion_spot(victim, forbidden, impassable=held_by_others[victim.serial])
             if spot:
                 resume = (victim.goal, victim.purpose, victim.goal_actions.get(len(victim.route) - 1, []),
-                          victim.task_id)
+                          victim.task_id) if victim.goal is not None else None
                 if self.assign_route(victim, spot, "evade", task_id=victim.task_id):
                     victim.resume = resume
                     self.counters["evasions"] += 1

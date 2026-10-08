@@ -148,7 +148,10 @@ class DcHuman(Human):
                 return False
             if self.walker.done() and math.hypot(r["x"] - self.x, r["y"] - self.y) < SERVE_DIST:
                 self.v = 0.0
-                self.serve_until = max(self.serve_until, now + 1.0)
+                if r["waiting"]:
+                    # only a robot still waiting keeps the picker: one that is done but cannot drive off yet (a
+                    # robot ahead in the one-way aisle waits for this very picker) must not hold them
+                    self.serve_until = max(self.serve_until, now + 1.0)
                 return True
             if self.walker.done():
                 # arrived but the robot is not there (it moved on or stopped short): go to it again

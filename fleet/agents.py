@@ -425,15 +425,18 @@ class Forklift:
     def _target(self) -> int:
         return (self.idx + self.direction) % len(self.loop)
 
-    def _reverse(self) -> None:
-        """Driver gives up on the blocked way and drives back the way they came.
+    def _reverse(self) -> bool:
+        """Driver gives up on the blocked way and drives back the way they came, as far as the last
+        intersection; there they turn round and try again (see ``step``). Returns whether they did.
 
         Between two nodes the truck turns round on that edge (the node ahead becomes the one it came from);
         standing on its node it only takes the other direction, so it never targets the node it stands on.
-        Not inside a narrow aisle: there it would meet the aisle's one-way traffic head on, so the driver waits.
+        Not in a narrow aisle, nor back into one: there it would meet the aisle's one-way traffic head on and
+        could not turn round, so the driver waits.
         """
         if self._in_aisle():
-            return
+            return False
+        undo = (self.bx, self.by, self.back, self.idx)
         if self.back > 0.0:
             # backed off short of its node: it is on the way it came by, and may have backed past the node before
             # (4.5 m against 3.3 m lanes); the way back starts at the node behind it
@@ -452,11 +455,16 @@ class Forklift:
             base = self.layout.nodes[self.loop[self.idx]]
             if math.hypot(self.bx - base.x, self.by - base.y) > 1e-6:
                 self.idx = self._target()
+        back_to = self.layout.nodes[self.loop[(self.idx - self.direction) % len(self.loop)]]
+        if any(z.kind == "aisle" for z in self.layout.zones_at(back_to.pos)):
+            self.bx, self.by, self.back, self.idx = undo
+            return False
         self.direction = -self.direction
         self.reversals += 1
         self.blocked_since = None
         # heading flips: keep the same world-side offset
         self.lat, self.lat_target = -self.lat, -self.lat_target
+        return True
 
     @property
     def pos(self) -> Point:
@@ -610,6 +618,11 @@ class Forklift:
         if d <= step + 1e-9:
             self.bx, self.by = tn.x, tn.y
             self.idx = self._target()
+            if self.direction != 1 and self.layout.is_intersection(nxt) and not self._in_aisle():
+                # turned back: at the last intersection the driver turns round and tries their way again (driving
+                # the loop backwards would take them up the one-way rack aisles against the robots)
+                self.direction = 1
+                self.lat, self.lat_target = -self.lat, -self.lat_target
             if nxt in self.dwell_nodes and self.lat == 0.0:
                 self.dwell_until = now + self.rng.uniform(20, 45)
         else:
@@ -667,8 +680,8 @@ class Forklift:
     def radio_yield(self, now: float) -> tuple[bool, str]:
         """The control room asks the driver over the radio to give way (RUNBOOK: standoff with a truck).
 
-        Outside a narrow aisle the driver goes back the way they came; waiting to turn, they may back off up to
-        6 m instead of 4.5 for the next 40 s. In a narrow aisle (or backed into one) there is nothing to give: the
+        Outside a narrow aisle the driver goes back the way they came (to the last intersection, unless that way
+        leads into a narrow aisle); waiting to turn, they may back off up to 6 m instead of 4.5 for the next 40 s. In a narrow aisle (or backed into one) there is nothing to give: the
         driver cannot turn round in it, so the call has no effect and is made again later. Returns (gave way,
         the driver's answer).
         """
@@ -676,11 +689,10 @@ class Forklift:
         if self._in_aisle():
             return False, "통로 안이라 지금은 양보할 수 없음"
         self.yield_until = now + 40.0
-        if now - self.reversed_at > 10.0:
+        if now - self.reversed_at > 10.0 and self._reverse():
             self.reversed_at = now
             self.turn_wait_since = None
             self.blocked_since = None
-            self._reverse()
             return True, "되돌아감"
         return True, "후진 양보"
 
