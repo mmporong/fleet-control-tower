@@ -222,10 +222,12 @@ class DockForklift:
         if self.state in ("to_pick", "to_drop"):
             tgt = self.walker.target()
             if tgt is None:
+                # a 53 ft trailer (26 pallets) takes 30-45 min to unload (docs/research/03 section 5.1): about
+                # 70-100 s per pallet with the travel, so 30-45 s inside the truck and 12-18 s at the lane
                 if self.state == "to_pick":
-                    self.state, self.wait_until = "picking", now + self.rng.uniform(10, 16)
+                    self.state, self.wait_until = "picking", now + self.rng.uniform(30, 45)
                 else:
-                    self.state, self.wait_until = "dropping", now + self.rng.uniform(7, 11)
+                    self.state, self.wait_until = "dropping", now + self.rng.uniform(12, 18)
                 self.v = 0.0
                 return
             heading = math.atan2(tgt[1] - self.y, tgt[0] - self.x)

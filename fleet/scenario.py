@@ -9,6 +9,11 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, replace
 
 
+# design basis of the distribution centre (assumptions, see the Scenario field comments)
+DESIGN_PEAK = {"trucks_h": 3.0, "out_pallets_h": 39.0, "tote_orders_h": 103.0}
+DESIGN_AVG = {"trucks_h": 2.4, "out_pallets_h": 31.0, "tote_orders_h": 82.0}
+
+
 @dataclass(frozen=True)
 class Scenario:
     name: str
@@ -18,12 +23,14 @@ class Scenario:
     # ---- dc fleet and process
     agf: int = 10
     amr: int = 16
-    # standard demand stays within the measured capacity of this site (docs/BENCHMARK.md): about 29 inbound
-    # (10-16 pallets per truck) + 15 outbound pallets per hour is ~70 % of what 10 AGFs move under overload;
-    # 45 totes per hour for 16 AMRs and 6 pickers is close to the tote ceiling, queues still stay flat
-    trucks_h: float = 2.2
-    out_pallets_h: float = 15.0
-    tote_orders_h: float = 45.0
+    # demand: the site's design basis (docs/SITE.md section 5), fixed before any capacity was measured.
+    # Inbound: 6 doors, one truck per door every 2 h (unloading, paperwork, swap) = 3.0 trucks/h at peak,
+    # 2.4 in an average hour (10-16 pallets each). Outbound: inventory balance, the same pallets out.
+    # Totes: 6 pickers x 100 units/h (lower end of robot-assisted cases, 98-200 UPH) / 5.83 units per order
+    # = 103 orders/h at peak, 82 in an average hour. The fleet is sized to the peak (docs/BENCHMARK.md).
+    trucks_h: float = DESIGN_AVG["trucks_h"]
+    out_pallets_h: float = DESIGN_AVG["out_pallets_h"]
+    tote_orders_h: float = DESIGN_AVG["tote_orders_h"]
     pickers: int = 6
     packers: int = 4
     dock_workers: int = 3
@@ -76,10 +83,10 @@ class Scenario:
 
 
 PRESETS: dict[str, Scenario] = {s.name: s for s in (
-    Scenario("standard", "표준 교대", "물류센터 · 자율 지게차 10 · 토트 AMR 16 · 피커 6 · 수동 지게차 4 · 측정 용량 안의 기본 수요",
+    Scenario("standard", "표준 교대", "물류센터 · 자율 지게차 10 · 토트 AMR 16 · 피커 6 · 수동 지게차 4 · 설계 평균 수요",
              fault_mtbf_h=24.0, comms_mtbf_h=6.0),
-    Scenario("peak", "피크 출고", "자율 지게차 12 · 토트 AMR 22 · 피커 9 · 출고 24팔레트/h · 토트 70건/h(용량 근처)",
-             agf=12, amr=22, pickers=9, trucks_h=2.5, out_pallets_h=24.0, tote_orders_h=70.0,
+    Scenario("peak", "피크 시간", "자율 지게차 12 · 토트 AMR 22 · 피커 9 · 설계 피크 수요(입고 3대·출고 39팔레트·토트 103건/h)",
+             agf=12, amr=22, pickers=9, **DESIGN_PEAK,
              fault_mtbf_h=24.0, comms_mtbf_h=6.0),
     Scenario("crowded", "사람 밀집", "피커 12 · 도크 작업자 6 · 보행자 6 · 타사 청소 로봇: 협업 피킹과 사람 구역 감속",
              pickers=12, dock_workers=6, walkers=6, packers=6, external=1),
