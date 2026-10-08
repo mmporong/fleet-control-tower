@@ -23,6 +23,7 @@
   "SE62": "cross",
   "SE66": "cross",
   "SE70_5": "cross",
+  "SE76_8": "cross",
   "SE79": "cross",
   "SW10": "cross",
   "SW16_2": "cross",
@@ -36,6 +37,7 @@
   "SW62": "cross",
   "SW66": "cross",
   "SW70_5": "cross",
+  "SW76_8": "cross",
   "SW79": "cross",
   "NE10": "cross",
   "NE16_2": "cross",
@@ -49,6 +51,7 @@
   "NE62": "cross",
   "NE66": "cross",
   "NE70_5": "cross",
+  "NE76_8": "cross",
   "NE79": "cross",
   "NW10": "cross",
   "NW16_2": "cross",
@@ -62,6 +65,7 @@
   "NW62": "cross",
   "NW66": "cross",
   "NW70_5": "cross",
+  "NW76_8": "cross",
   "NW79": "cross",
   "NE47": "cross",
   "NW47": "cross",
@@ -75,8 +79,8 @@
   "qSE58SE62": "queue",
   "qSE62SE66": "queue",
   "qSE66SE70_5": "queue",
-  "qSE70_5SE79": "queue",
-  "qSW70_5SW79": "queue",
+  "qSE70_5SE76_8": "queue",
+  "qSW70_5SW76_8": "queue",
   "qSW66SW70_5": "queue",
   "qSW62SW66": "queue",
   "qSW58SW62": "queue",
@@ -97,8 +101,8 @@
   "qNE58NE62": "queue",
   "qNE62NE66": "queue",
   "qNE66NE70_5": "queue",
-  "qNE70_5NE79": "queue",
-  "qNW70_5NW79": "queue",
+  "qNE70_5NE76_8": "queue",
+  "qNW70_5NW76_8": "queue",
   "qNW66NW70_5": "queue",
   "qNW62NW66": "queue",
   "qNW58NW62": "queue",
@@ -268,6 +272,7 @@
   "PK4": "pack",
   "PK5": "pack",
   "PK6": "pack",
+  "qNE76_8SW76_8": "queue",
   "BL42_6": "baylane",
   "BL39_5": "baylane",
   "BL36_7": "baylane",
@@ -449,6 +454,58 @@
     ]
    ],
    "staticSpeed": 1.0,
+   "humanSpeed": null,
+   "locked": false
+  },
+  {
+   "id": "Z-PICK-END-S",
+   "name": "피킹 통로 끝(남)",
+   "kind": "walkway",
+   "polygon": [
+    [
+     48.0,
+     8.4
+    ],
+    [
+     68.0,
+     8.4
+    ],
+    [
+     68.0,
+     9.6
+    ],
+    [
+     48.0,
+     9.6
+    ]
+   ],
+   "staticSpeed": null,
+   "humanSpeed": 0.3,
+   "locked": false
+  },
+  {
+   "id": "Z-PICK-END-N",
+   "name": "피킹 통로 끝(북)",
+   "kind": "walkway",
+   "polygon": [
+    [
+     48.0,
+     40.4
+    ],
+    [
+     68.0,
+     40.4
+    ],
+    [
+     68.0,
+     41.6
+    ],
+    [
+     48.0,
+     41.6
+    ]
+   ],
+   "staticSpeed": null,
    "humanSpeed": 0.3,
    "locked": false
   },
@@ -709,7 +766,7 @@
     ]
    ],
    "staticSpeed": null,
-   "humanSpeed": null,
+   "humanSpeed": 0.3,
    "locked": false
   },
   {
@@ -735,7 +792,7 @@
     ]
    ],
    "staticSpeed": null,
-   "humanSpeed": null,
+   "humanSpeed": 0.3,
    "locked": false
   },
   {
@@ -761,7 +818,7 @@
     ]
    ],
    "staticSpeed": null,
-   "humanSpeed": null,
+   "humanSpeed": 0.3,
    "locked": false
   },
   {
@@ -787,7 +844,7 @@
     ]
    ],
    "staticSpeed": null,
-   "humanSpeed": null,
+   "humanSpeed": 0.3,
    "locked": false
   },
   {
@@ -813,7 +870,7 @@
     ]
    ],
    "staticSpeed": null,
-   "humanSpeed": null,
+   "humanSpeed": 0.3,
    "locked": false
   }
  ],

@@ -2,14 +2,14 @@
  "metaInformation": {
   "projectIdentification": "팔레트 물류센터 88×53.5 m",
   "creator": "fleet-control-tower",
-  "exportTimestamp": "2026-09-30T03:28:38.08Z",
+  "exportTimestamp": "2026-10-08T16:23:04.35Z",
   "lifVersion": "1.0.0"
  },
  "layouts": [
   {
    "layoutId": "dc",
    "layoutName": "팔레트 물류센터 88×53.5 m",
-   "layoutVersion": "1",
+   "layoutVersion": "2",
    "nodes": [
     {
      "nodeId": "SE10",
@@ -182,6 +182,19 @@
       },
       {
        "vehicleTypeId": "AMR-TOTE"
+      }
+     ]
+    },
+    {
+     "nodeId": "SE76_8",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 76.8,
+      "y": 4.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AGF-CB15"
       }
      ]
     },
@@ -373,6 +386,19 @@
      ]
     },
     {
+     "nodeId": "SW76_8",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 76.8,
+      "y": 6.2
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AGF-CB15"
+      }
+     ]
+    },
+    {
      "nodeId": "SW79",
      "mapId": "warehouse-a",
      "nodePosition": {
@@ -560,6 +586,19 @@
      ]
     },
     {
+     "nodeId": "NE76_8",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 76.8,
+      "y": 43.8
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AGF-CB15"
+      }
+     ]
+    },
+    {
      "nodeId": "NE79",
      "mapId": "warehouse-a",
      "nodePosition": {
@@ -743,6 +782,19 @@
       },
       {
        "vehicleTypeId": "AMR-TOTE"
+      }
+     ]
+    },
+    {
+     "nodeId": "NW76_8",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 76.8,
+      "y": 46.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AGF-CB15"
       }
      ]
     },
@@ -937,10 +989,10 @@
      ]
     },
     {
-     "nodeId": "qSE70_5SE79",
+     "nodeId": "qSE70_5SE76_8",
      "mapId": "warehouse-a",
      "nodePosition": {
-      "x": 74.75,
+      "x": 73.65,
       "y": 4.0
      },
      "vehicleTypeNodeProperties": [
@@ -950,10 +1002,10 @@
      ]
     },
     {
-     "nodeId": "qSW70_5SW79",
+     "nodeId": "qSW70_5SW76_8",
      "mapId": "warehouse-a",
      "nodePosition": {
-      "x": 74.75,
+      "x": 73.65,
       "y": 6.2
      },
      "vehicleTypeNodeProperties": [
@@ -1253,10 +1305,10 @@
      ]
     },
     {
-     "nodeId": "qNE70_5NE79",
+     "nodeId": "qNE70_5NE76_8",
      "mapId": "warehouse-a",
      "nodePosition": {
-      "x": 74.75,
+      "x": 73.65,
       "y": 43.8
      },
      "vehicleTypeNodeProperties": [
@@ -1266,10 +1318,10 @@
      ]
     },
     {
-     "nodeId": "qNW70_5NW79",
+     "nodeId": "qNW70_5NW76_8",
      "mapId": "warehouse-a",
      "nodePosition": {
-      "x": 74.75,
+      "x": 73.65,
       "y": 46.0
      },
      "vehicleTypeNodeProperties": [
@@ -4572,6 +4624,19 @@
      ]
     },
     {
+     "nodeId": "qNE76_8SW76_8",
+     "mapId": "warehouse-a",
+     "nodePosition": {
+      "x": 76.8,
+      "y": 25.0
+     },
+     "vehicleTypeNodeProperties": [
+      {
+       "vehicleTypeId": "AGF-CB15"
+      }
+     ]
+    },
+    {
      "nodeId": "BL42_6",
      "mapId": "warehouse-a",
      "nodePosition": {
@@ -5582,9 +5647,9 @@
      ]
     },
     {
-     "edgeId": "SE70_5>qSE70_5SE79",
+     "edgeId": "SE70_5>qSE70_5SE76_8",
      "startNodeId": "SE70_5",
-     "endNodeId": "qSE70_5SE79",
+     "endNodeId": "qSE70_5SE76_8",
      "vehicleTypeEdgeProperties": [
       {
        "vehicleTypeId": "AGF-CB15",
@@ -5594,8 +5659,20 @@
      ]
     },
     {
-     "edgeId": "qSE70_5SE79>SE79",
-     "startNodeId": "qSE70_5SE79",
+     "edgeId": "qSE70_5SE76_8>SE76_8",
+     "startNodeId": "qSE70_5SE76_8",
+     "endNodeId": "SE76_8",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AGF-CB15",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "SE76_8>SE79",
+     "startNodeId": "SE76_8",
      "endNodeId": "SE79",
      "vehicleTypeEdgeProperties": [
       {
@@ -5606,9 +5683,9 @@
      ]
     },
     {
-     "edgeId": "SW79>qSW70_5SW79",
+     "edgeId": "SW79>SW76_8",
      "startNodeId": "SW79",
-     "endNodeId": "qSW70_5SW79",
+     "endNodeId": "SW76_8",
      "vehicleTypeEdgeProperties": [
       {
        "vehicleTypeId": "AGF-CB15",
@@ -5618,8 +5695,20 @@
      ]
     },
     {
-     "edgeId": "qSW70_5SW79>SW70_5",
-     "startNodeId": "qSW70_5SW79",
+     "edgeId": "SW76_8>qSW70_5SW76_8",
+     "startNodeId": "SW76_8",
+     "endNodeId": "qSW70_5SW76_8",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AGF-CB15",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "qSW70_5SW76_8>SW70_5",
+     "startNodeId": "qSW70_5SW76_8",
      "endNodeId": "SW70_5",
      "vehicleTypeEdgeProperties": [
       {
@@ -6251,9 +6340,9 @@
      ]
     },
     {
-     "edgeId": "NE70_5>qNE70_5NE79",
+     "edgeId": "NE70_5>qNE70_5NE76_8",
      "startNodeId": "NE70_5",
-     "endNodeId": "qNE70_5NE79",
+     "endNodeId": "qNE70_5NE76_8",
      "vehicleTypeEdgeProperties": [
       {
        "vehicleTypeId": "AGF-CB15",
@@ -6263,8 +6352,20 @@
      ]
     },
     {
-     "edgeId": "qNE70_5NE79>NE79",
-     "startNodeId": "qNE70_5NE79",
+     "edgeId": "qNE70_5NE76_8>NE76_8",
+     "startNodeId": "qNE70_5NE76_8",
+     "endNodeId": "NE76_8",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AGF-CB15",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "NE76_8>NE79",
+     "startNodeId": "NE76_8",
      "endNodeId": "NE79",
      "vehicleTypeEdgeProperties": [
       {
@@ -6275,9 +6376,9 @@
      ]
     },
     {
-     "edgeId": "NW79>qNW70_5NW79",
+     "edgeId": "NW79>NW76_8",
      "startNodeId": "NW79",
-     "endNodeId": "qNW70_5NW79",
+     "endNodeId": "NW76_8",
      "vehicleTypeEdgeProperties": [
       {
        "vehicleTypeId": "AGF-CB15",
@@ -6287,8 +6388,20 @@
      ]
     },
     {
-     "edgeId": "qNW70_5NW79>NW70_5",
-     "startNodeId": "qNW70_5NW79",
+     "edgeId": "NW76_8>qNW70_5NW76_8",
+     "startNodeId": "NW76_8",
+     "endNodeId": "qNW70_5NW76_8",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AGF-CB15",
+       "rotationAllowed": false,
+       "maxSpeed": 1.5
+      }
+     ]
+    },
+    {
+     "edgeId": "qNW70_5NW76_8>NW70_5",
+     "startNodeId": "qNW70_5NW76_8",
      "endNodeId": "NW70_5",
      "vehicleTypeEdgeProperties": [
       {
@@ -9546,6 +9659,54 @@
        "vehicleTypeId": "AMR-TOTE",
        "rotationAllowed": false,
        "maxSpeed": 0.5
+      }
+     ]
+    },
+    {
+     "edgeId": "NW76_8>NE76_8",
+     "startNodeId": "NW76_8",
+     "endNodeId": "NE76_8",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AGF-CB15",
+       "rotationAllowed": false,
+       "maxSpeed": 1.0
+      }
+     ]
+    },
+    {
+     "edgeId": "NE76_8>qNE76_8SW76_8",
+     "startNodeId": "NE76_8",
+     "endNodeId": "qNE76_8SW76_8",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AGF-CB15",
+       "rotationAllowed": false,
+       "maxSpeed": 1.0
+      }
+     ]
+    },
+    {
+     "edgeId": "qNE76_8SW76_8>SW76_8",
+     "startNodeId": "qNE76_8SW76_8",
+     "endNodeId": "SW76_8",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AGF-CB15",
+       "rotationAllowed": false,
+       "maxSpeed": 1.0
+      }
+     ]
+    },
+    {
+     "edgeId": "SW76_8>SE76_8",
+     "startNodeId": "SW76_8",
+     "endNodeId": "SE76_8",
+     "vehicleTypeEdgeProperties": [
+      {
+       "vehicleTypeId": "AGF-CB15",
+       "rotationAllowed": false,
+       "maxSpeed": 1.0
       }
      ]
     },
