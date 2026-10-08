@@ -18,14 +18,14 @@ import math
 
 from .alarms import AlarmManager
 from .bus import Bus
+from .clock import Clock, SimClock
 from .facility import DoorSupervisor
 from .geometry import box_gap, dist, point_in_polygon, seg_point_dist
 from .layout import Layout
 from .perception import Detection, Tracker
 from .planner import STUB_KINDS, Planner
 from .traffic import LockTable, WaitInfo, find_cycles, lane_res, node_res, res_node
-from .vda5050 import (HeaderIds, RouteEdge, RouteNode, action, build_instant_actions, build_order, header,
-                      parse_iso_time, topic)
+from .vda5050 import HeaderIds, RouteEdge, RouteNode, action, build_instant_actions, build_order, header, topic
 
 STRATEGIES = ("none", "locks", "locks+resolve")
 LINK_WINDOW_S = 5.0          # window for the measured link quality shown per vehicle
@@ -59,7 +59,8 @@ class ManagerConfig:
     blocked_alarm_s: float = 60.0
     # in a collaborative picking zone robots wait for people by design: alarm only when it lasts
     collab_blocked_alarm_s: float = 180.0
-    comms_timeout_s: float = 3.0
+    comms_timeout_s: float = 3.0       # silence after which the vehicle counts as CONNECTIONBROKEN (alert)
+    comms_alarm_s: float = 30.0        # silence that needs the operator (alarm); tasks are reassigned then too
     order_resend_s: float = 2.5
     human_horizon_s: float = 2.0
     forklift_horizon_s: float = 4.0
@@ -102,6 +103,8 @@ class RobotRecord:
     connection: str = "OFFLINE"
     rx: deque = field(default_factory=lambda: deque(maxlen=120))   # (received at, latency s) of state/vis
     has_state: bool = False
+    action_results: dict = field(default_factory=dict)   # actionId -> resultDescription of failed actions
+    state_nodes: list = field(default_factory=list)      # (nodeId, sequenceId, released) still ahead
     # ---- plan
     route: list = field(default_factory=list)
     order_id: str = ""
@@ -150,13 +153,18 @@ class RobotRecord:
 
 class FleetManager:
     def __init__(self, layout: Layout, bus: Bus, config: ManagerConfig | None = None,
-                 manufacturer: str = "sim") -> None:
+                 manufacturer: str = "sim", clock: Clock | None = None, validator=None) -> None:
+        """``validator(kind, msg) -> list[str]`` checks inbound VDA 5050 messages (official JSON schemas in the
+        runtime); ``clock`` turns ``now`` into message timestamps and back."""
         if config and config.strategy not in STRATEGIES:
             raise ValueError(config.strategy)
         self.layout = layout
         self.bus = bus
         self.cfg = config or ManagerConfig()
         self.manufacturer = manufacturer
+        self.clock = clock or SimClock()
+        self.validator = validator
+        self._invalid_logged: dict = {}
         self.planner = Planner(layout)
         self.locks = LockTable()
         self.tracker = Tracker()
@@ -188,7 +196,7 @@ class FleetManager:
         self.counters = {"deadlocks": 0, "deadlocks_resolved": 0, "deadlock_s": 0.0, "reroutes": 0,
                          "evasions": 0, "orders": 0, "order_updates": 0, "order_rejects": 0,
                          "resends": 0, "protective_stops": 0, "protective_human": 0, "near_miss": 0,
-                         "nudges": 0, "mismatch": 0, "comms_lost": 0}
+                         "nudges": 0, "mismatch": 0, "comms_lost": 0, "invalid_msgs": 0}
         self._grid = self._build_resource_grid()
         bus.subscribe(f"uagv/v2/{manufacturer}/+/state", self._on_state)
         bus.subscribe(f"uagv/v2/{manufacturer}/+/visualization", self._on_vis)
@@ -199,6 +207,7 @@ class FleetManager:
         for nid, zones in layout.node_zones.items():
             for zid in zones:
                 self._zone_nodes.setdefault(zid, []).append(nid)
+        self._edge_zone_cache: dict[str, list[str]] = {}
 
     # ================================================================ events
     def event(self, kind: str, source: str, msg: str, level: str = "info", **data) -> None:
@@ -214,11 +223,15 @@ class FleetManager:
         return t.split("/")[3]
 
     def _on_connection(self, t: str, msg: dict) -> None:
+        if not self._accept(t, "connection", msg):
+            return
         rec = self.register(self._serial(t))
         rec.connection = msg["connectionState"]
         rec.last_seen = self.now
 
     def _on_factsheet(self, t: str, msg: dict) -> None:
+        if not self._accept(t, "factsheet", msg):
+            return
         rec = self.register(self._serial(t))
         rec.factsheet = msg
         rec.vclass = msg["typeSpecification"]["agvClass"]
@@ -226,77 +239,123 @@ class FleetManager:
         rec.width = float(msg["physicalParameters"]["width"])
 
     def supports(self, rec: RobotRecord, action_type: str) -> bool:
+        """What the factsheet declares. Without a factsheet only the standard actions are assumed."""
         if not rec.factsheet:
-            return True
-        return any(a["actionType"] == action_type for a in rec.factsheet["protocolFeatures"]["agvActions"])
+            return not action_type.startswith("x_")
+        feats = (rec.factsheet.get("protocolFeatures") or {}).get("agvActions") or []
+        return any(a.get("actionType") == action_type for a in feats)
+
+    def _accept(self, t: str, kind: str, msg) -> bool:
+        """Inbound gate: a malformed message is logged and dropped, never allowed to break the manager."""
+        problems = self.validator(kind, msg) if self.validator is not None else []
+        if not isinstance(msg, dict):
+            problems = problems or ["not a JSON object"]
+        if problems:
+            self.counters["invalid_msgs"] += 1
+            serial = t.split("/")[3] if t.count("/") >= 4 else t
+            key = (serial, kind)
+            if self.now - self._invalid_logged.get(key, -1e9) > 30.0:
+                self._invalid_logged[key] = self.now
+                self.event("invalid_msg", serial, f"{kind} 메시지 형식 오류로 폐기: {problems[0][:80]}", "warn")
+            return False
+        return True
 
     def _on_vis(self, t: str, msg: dict) -> None:
+        if not self._accept(t, "visualization", msg):
+            return
         rec = self.register(self._serial(t))
-        p = msg["agvPosition"]
-        rec.x, rec.y, rec.theta = p["x"], p["y"], p["theta"]
-        rec.v = msg["velocity"]["vx"]
+        p = msg.get("agvPosition")            # optional in VDA 5050: without it the last pose stays
+        if p:
+            rec.x, rec.y, rec.theta = p["x"], p["y"], p["theta"]
+        vel = msg.get("velocity")
+        if vel is not None:
+            rec.v = vel.get("vx", 0.0)
         self._seen(rec, msg)
 
     def _seen(self, rec: RobotRecord, msg: dict | None = None) -> None:
         if msg is not None:
             received = max(self.now, self.bus.now)
-            rec.rx.append((received, max(0.0, received - parse_iso_time(msg["timestamp"]))))
+            sent = self.clock.parse(msg.get("timestamp", "")) if msg.get("timestamp") else None
+            rec.rx.append((received, max(0.0, received - sent) if sent is not None else 0.0))
         if rec.connection == "CONNECTIONBROKEN":
             self.event("comms_restored", rec.serial, "통신 복구", "info")
             self.alarms.set("COMMS_LOST", rec.serial, False, self.now)
+            self.alarms.set("COMMS_DEGRADED", rec.serial, False, self.now)
         rec.connection = "ONLINE"
         rec.last_seen = self.now
 
     def _on_state(self, t: str, msg: dict) -> None:
+        if not self._accept(t, "state", msg):
+            return
         rec = self.register(self._serial(t))
         self._seen(rec, msg)
         rec.has_state = True
-        p = msg["agvPosition"]
-        rec.x, rec.y, rec.theta = p["x"], p["y"], p["theta"]
-        rec.positioned = p["positionInitialized"]
-        rec.v = msg["velocity"]["vx"]
-        rec.battery = msg["batteryState"]["batteryCharge"]
-        rec.reach = msg["batteryState"].get("reach")
-        rec.charging = msg["batteryState"]["charging"]
-        rec.mode = msg["operatingMode"]
-        rec.paused = msg["paused"]
-        rec.estop = msg["safetyState"]["eStop"] != "NONE"
+        # optional fields (agvPosition, velocity, loads, paused, distanceSinceLastNode, safetyState parts) keep
+        # a safe default when a vehicle leaves them out; the schema gate already rejected malformed ones
+        p = msg.get("agvPosition")
+        if p:
+            rec.x, rec.y, rec.theta = p["x"], p["y"], p["theta"]
+            rec.positioned = bool(p.get("positionInitialized", True))
+        vel = msg.get("velocity")
+        rec.v = vel.get("vx", 0.0) if vel else 0.0
+        bat = msg.get("batteryState") or {}
+        rec.battery = bat.get("batteryCharge", rec.battery)
+        rec.reach = bat.get("reach")
+        rec.charging = bool(bat.get("charging", False))
+        rec.mode = msg.get("operatingMode", rec.mode)
+        rec.paused = bool(msg.get("paused", False))
+        safety = msg.get("safetyState") or {}
+        rec.estop = safety.get("eStop", "NONE") != "NONE"
         prev_field = rec.safety_field
-        rec.safety_field = msg.get("x_safetyField", {}).get("state", "CLEAR")
-        rec.field_cause = msg.get("x_safetyField", {}).get("cause", "")
-        if rec.safety_field == "PROTECTIVE" and prev_field != "PROTECTIVE" and msg["driving"]:
+        # the standard flag decides; a vendor extension may add the warning state and what caused it
+        ext = msg.get("x_safetyField") or {}
+        if safety.get("fieldViolation", False):
+            rec.safety_field = "PROTECTIVE"
+        elif ext.get("state") == "WARNING":
+            rec.safety_field = "WARNING"
+        else:
+            rec.safety_field = "CLEAR"
+        rec.field_cause = ext.get("cause", "")
+        driving = bool(msg.get("driving", False))
+        if rec.safety_field == "PROTECTIVE" and prev_field != "PROTECTIVE" and driving:
             self.counters["protective_stops"] += 1
             if rec.field_cause.startswith("human"):
                 self.counters["protective_human"] += 1
-        rec.last_node = msg["lastNodeId"] or None
-        rec.last_seq = msg["lastNodeSequenceId"]
-        rec.dist_since = msg["distanceSinceLastNode"]
-        rec.driving = msg["driving"]
-        rec.loaded = bool(msg["loads"])
-        rec.state_order_id = msg["orderId"]
-        rec.state_update_id = msg["orderUpdateId"]
+        rec.last_node = msg.get("lastNodeId") or None
+        rec.last_seq = msg.get("lastNodeSequenceId", 0)
+        rec.dist_since = float(msg.get("distanceSinceLastNode") or 0.0)
+        rec.driving = driving
+        rec.loaded = bool(msg.get("loads"))
+        rec.state_order_id = msg.get("orderId", "")
+        rec.state_update_id = msg.get("orderUpdateId", 0)
         rec.detections = msg.get("x_detections", [])
-        info = msg.get("information", [])
-        rec.stop_reason = info[0]["infoDescription"] if info else ""
-        for a in msg["actionStates"]:
+        info = msg.get("information") or []
+        rec.stop_reason = info[0].get("infoDescription", "") if info else ""
+        for a in msg.get("actionStates") or []:
             rec.actions[a["actionId"]] = a["actionStatus"]
+            if a["actionStatus"] == "FAILED":
+                rec.action_results[a["actionId"]] = a.get("resultDescription", "") or ""
         if len(rec.actions) > 200:
             for k in list(rec.actions)[:-100]:
                 del rec.actions[k]
-        released = [n["sequenceId"] for n in msg["nodeStates"] if n["released"]]
+                rec.action_results.pop(k, None)
+        node_states = msg.get("nodeStates") or []
+        released = [n["sequenceId"] for n in node_states if n.get("released")]
         rec.state_base_seq = released[-1] if released else rec.last_seq
-        rec.state_remaining = len(msg["nodeStates"])
-        fatal = [e for e in msg["errors"] if e["errorLevel"] == "FATAL"]
+        rec.state_remaining = len(node_states)
+        rec.state_nodes = [(n["nodeId"], n["sequenceId"], bool(n.get("released"))) for n in node_states]
+        errors = msg.get("errors") or []
+        fatal = [e for e in errors if e.get("errorLevel") == "FATAL"]
         new_fatal = fatal[0]["errorType"].upper() if fatal else None
         if new_fatal != rec.fatal:
             self._fatal_changed(rec, new_fatal)
-        for e in msg["errors"]:
-            if e["errorLevel"] == "WARNING" and e["errorType"] in (
+        for e in errors:
+            if e.get("errorLevel") == "WARNING" and e.get("errorType") in (
                     "orderError", "orderUpdateError", "noRouteError", "validationError"):
                 self.counters["order_rejects"] += 1
-                self.event("order_rejected", rec.serial, f"{e['errorType']}: {e['errorDescription']}", "warn")
+                self.event("order_rejected", rec.serial, f"{e['errorType']}: {e.get('errorDescription', '')}", "warn")
                 self._resync(rec)
-        rec.errors = msg["errors"]
+        rec.errors = errors
 
     def _fatal_changed(self, rec: RobotRecord, fatal: str | None) -> None:
         old = rec.fatal
@@ -384,7 +443,8 @@ class FleetManager:
 
     def _instant(self, rec: RobotRecord, actions: list[dict]) -> None:
         t = topic(self.manufacturer, rec.serial, "instantActions")
-        msg = build_instant_actions(header(self.ids, t, self.manufacturer, rec.serial, self.now), actions)
+        msg = build_instant_actions(header(self.ids, t, self.manufacturer, rec.serial, self.now, self.clock),
+                                    actions)
         self.bus.publish(t, msg, self.now)
 
     def instant(self, serial: str, action_type: str, params: dict | None = None) -> None:
@@ -397,15 +457,18 @@ class FleetManager:
         nodes = []
         for i in range(i0, i_end + 1):
             n = self.layout.nodes[rec.route[i]]
-            nodes.append(RouteNode(n.id, n.x, n.y, list(rec.goal_actions.get(i, []))))
+            # a station is approached along its stub: the order states that heading with a tolerance
+            theta = self._heading(rec.route[i - 1], rec.route[i]) \
+                if i > 0 and n.kind in STUB_KINDS and i == len(rec.route) - 1 else None
+            nodes.append(RouteNode(n.id, n.x, n.y, list(rec.goal_actions.get(i, [])), theta))
         edges = []
         for a, b in zip(rec.route[i0:i_end], rec.route[i0 + 1:i_end + 1]):
             e = self.layout.edge_between(a, b)
-            edges.append(RouteEdge(e.id, a, b, e.max_speed))
+            edges.append(RouteEdge(e.id, a, b, self._edge_speed(rec, e)))
         if not new:
             rec.update_id += 1
         t = topic(self.manufacturer, rec.serial, "order")
-        msg = build_order(header(self.ids, t, self.manufacturer, rec.serial, self.now), rec.order_id,
+        msg = build_order(header(self.ids, t, self.manufacturer, rec.serial, self.now, self.clock), rec.order_id,
                           rec.update_id, nodes, edges, 2 * i0, rec.base_end - i0 + 1)
         self.bus.publish(t, msg, self.now)
         self.counters["order_updates" if not new else "orders"] += 1
@@ -413,6 +476,44 @@ class FleetManager:
         rec.last_order_at = self.now
         rec.sent_base_end = rec.base_end
         rec.order_pending = False
+
+    def _edge_zones(self, e) -> list[str]:
+        zones = self._edge_zone_cache.get(e.id)
+        if zones is None:
+            a, b = self.layout.nodes[e.start], self.layout.nodes[e.end]
+            pts = [a.pos, ((a.x + b.x) / 2, (a.y + b.y) / 2), b.pos]
+            zones = sorted({z.id for p in pts for z in self.layout.zones_at(p)})
+            self._edge_zone_cache[e.id] = zones
+        return zones
+
+    def _edge_speed(self, rec: RobotRecord, e) -> float:
+        """maxSpeed of an order edge: the lane's own limit and the static zone limits along it.
+
+        Zone limits travel in the standard edge field, so a vehicle without the x_fleetSpeedLimit extension
+        still obeys them; for such a vehicle the people-in-zone limit is applied all the time (it cannot be
+        slowed later on edges it has already been given)."""
+        speed = e.max_speed
+        dynamic = not self.supports(rec, "x_fleetSpeedLimit")
+        for zid in self._edge_zones(e):
+            z = self.layout.zones[zid]
+            for lim in (z.static_speed, z.human_speed if dynamic and self.cfg.human_zones else None,
+                        self.zone_speed_override.get(zid) if dynamic else None):
+                if lim is not None:
+                    speed = min(speed, lim)
+        return speed
+
+    def capability_gaps(self, rec: RobotRecord) -> list[str]:
+        """Extensions this vehicle lacks and the standard fallback used instead (shown to the operator)."""
+        if not rec.factsheet:
+            return []
+        gaps = []
+        if not self.supports(rec, "x_remoteStop"):
+            gaps.append("일괄 정지 → startPause")
+        if not self.supports(rec, "x_fleetSpeedLimit"):
+            gaps.append("구역 감속 → 경로 maxSpeed 상시 적용")
+        if not self.supports(rec, "x_resetFault"):
+            gaps.append("원격 리셋 없음 → 현장 조치")
+        return gaps
 
     # ================================================================ routes
     def can_take_route(self, rec: RobotRecord) -> bool:
@@ -530,9 +631,12 @@ class FleetManager:
                 return False
         return True
 
-    def goal_action_failed(self, rec: RobotRecord) -> bool:
-        return any(rec.actions.get(a["actionId"]) == "FAILED"
-                   for a in rec.goal_actions.get(len(rec.route) - 1, []))
+    def goal_action_failed(self, rec: RobotRecord) -> str | None:
+        """Why the goal action failed (the vehicle's resultDescription), or None when it did not."""
+        for a in rec.goal_actions.get(len(rec.route) - 1, []):
+            if rec.actions.get(a["actionId"]) == "FAILED":
+                return rec.action_results.get(a["actionId"]) or "동작 실패"
+        return None
 
     # ================================================================ tick
     def tick(self, now: float, dt: float) -> None:
@@ -604,12 +708,16 @@ class FleetManager:
 
     def _check_connections(self) -> None:
         for rec in self.robots.values():
-            if rec.connection == "ONLINE" and self.now - rec.last_seen > self.cfg.comms_timeout_s:
+            silent = self.now - rec.last_seen
+            if rec.connection == "ONLINE" and silent > self.cfg.comms_timeout_s:
                 rec.connection = "CONNECTIONBROKEN"
                 self.counters["comms_lost"] += 1
-                self.event("comms_lost", rec.serial, "상태 수신 끊김(예약 유지)", "crit")
+                self.event("comms_lost", rec.serial, "상태 수신 끊김(예약 유지)", "warn")
+                self.alarms.set("COMMS_DEGRADED", rec.serial, True, self.now,
+                                f"{rec.serial} {self.cfg.comms_timeout_s:.0f}초 이상 무응답 · 예약 유지")
+            if rec.connection == "CONNECTIONBROKEN" and silent >= self.cfg.comms_alarm_s:
                 self.alarms.set("COMMS_LOST", rec.serial, True, self.now,
-                                f"{rec.serial} {self.cfg.comms_timeout_s:.0f}초 이상 무응답 · 예약 {len(self.locks.resources_of(rec.serial))}건 유지")
+                                f"{rec.serial} {silent:.0f}초 무응답 · 예약 {len(self.locks.resources_of(rec.serial))}건 유지")
 
     def _check_infra(self) -> None:
         """Camera/RTLS feed watchdog: without it people in blind spots are invisible."""
@@ -1426,8 +1534,9 @@ class FleetManager:
                                f"{'해제' if limit is None else f'{limit:.1f} m/s'}", "info")
                 self._zone_broadcast[zid] = limit
                 for rec in self.robots.values():
-                    self._instant(rec, [action("x_fleetSpeedLimit", self._aid("x_speed"), "NONE",
-                                               {"zoneId": zid, "limit": limit})])
+                    if self.supports(rec, "x_fleetSpeedLimit"):     # others carry it in edge maxSpeed
+                        self._instant(rec, [action("x_fleetSpeedLimit", self._aid("x_speed"), "NONE",
+                                                   {"zoneId": zid, "limit": limit})])
         if rebroadcast:
             self._last_zone_rebroadcast = self.now
 
@@ -1435,12 +1544,17 @@ class FleetManager:
         return {k: v for k, v in self._zone_broadcast.items() if v is not None}
 
     def _enforce_fleet_mode(self) -> None:
+        """Fleet-wide stop (non-safety: a software stop over the wireless link, not an ISO 13850 e-stop).
+
+        Vehicles with the x_remoteStop extension get it; the others get the standard startPause.
+        """
         for rec in self.robots.values():
             if rec.connection != "ONLINE" or not rec.has_state:
                 continue
-            want_estop = self.mode == "ESTOP"
-            want_pause = (self.mode == "HOLD" or rec.serial in self.area_paused
-                          or rec.serial in self.robot_paused)
+            remote_stop = self.supports(rec, "x_remoteStop")
+            want_estop = self.mode == "ESTOP" and remote_stop
+            want_pause = (self.mode == "HOLD" or self.mode == "ESTOP" and not remote_stop
+                          or rec.serial in self.area_paused or rec.serial in self.robot_paused)
             if rec.estop != want_estop and self.now - rec.mode_sent_at > 1.0:
                 self._instant(rec, [action("x_remoteStop", self._aid("x_estop"), "HARD", {"active": want_estop})])
                 rec.mode_sent_at = self.now

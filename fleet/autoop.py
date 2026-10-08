@@ -11,6 +11,7 @@ from __future__ import annotations
 import random
 
 from .ops import Operations
+from .vehicle import SAFETY_FAULTS
 
 
 class AutoOperator:
@@ -64,7 +65,8 @@ class AutoOperator:
         m = self.sim.manager
         rec = m.robots.get(src)
         if t == "ROBOT_FAULT" and rec is not None:
-            if stage == 0 and rec.fatal != "BATTERY_DEPLETED":
+            remote = rec.fatal not in ("BATTERY_DEPLETED", *SAFETY_FAULTS) and m.supports(rec, "x_resetFault")
+            if stage == 0 and remote:
                 self._do("reset_fault", robot=src)
                 plan.update(stage=1, act_at=now + 30.0)
             else:
@@ -95,8 +97,19 @@ class AutoOperator:
                     self._do("resume_area")
                 plan["act_at"] = now + 120.0
         elif t == "RESERVATION_MISMATCH" and rec is not None:
-            self._do("resume_robot", robot=src)
-            plan["act_at"] = now + 60.0
+            # SOP: compare the reported position with the reservations first; resume only when they agree again
+            occ = m._occupied(rec)
+            foreign = {r for r in occ if m.locks.holder_of(r) not in (None, src)}
+            if not foreign:
+                self._do("resume_robot", robot=src)
+                plan["act_at"] = now + 60.0
+            elif stage < 3:
+                plan.update(stage=stage + 1, act_at=now + 20.0)       # look again shortly
+            else:
+                # still inside someone else's reservation: take the task off it and leave it paused for the field
+                if rec.task_id:
+                    self._do("reassign_task", robot=src)
+                plan["act_at"] = now + 3600.0
         elif t == "DEADLOCK_UNRESOLVED":
             members = alarm.data.get("members", [])
             victims = [m.robots[s] for s in members if s in m.robots and m.robots[s].task_id]

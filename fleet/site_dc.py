@@ -57,9 +57,19 @@ STAGE_LANE_CAPACITY = 4        # pallets a floor staging lane holds in front of 
 
 SPEED_MAIN, SPEED_AISLE, SPEED_SPINE, SPEED_STUB = 1.5, 1.0, 1.0, 0.5
 HOLD_MIN_GAP = 4.0
+# east return lane: AGF-only, southbound, 2.2 m west of the northbound AGF spine (same pitch as the main aisle
+# lanes). Without it the outbound staging lanes are reachable only through the south door.
+EAST_RETURN = 76.8
+# how the control room slows tote AMRs for pickers (docs/BENCHMARK.md compares them):
+#   "zone"    - the whole 20 x 33 m picking hall while anyone is tracked in it (the first design)
+#   "aisle"   - only the pick aisle (and the shelf-end crossing) where a picker is tracked
+#   "vehicle" - no control-room limit; the vehicles' own speed-dependent fields and side warning slow them
+PICK_LIMITS = ("zone", "aisle", "vehicle")
 
 
-def dc_layout() -> Layout:
+def dc_layout(pick_limit: str = "aisle") -> Layout:
+    if pick_limit not in PICK_LIMITS:
+        raise ValueError(f"pick_limit must be one of {', '.join(PICK_LIMITS)}")
     nodes: dict[str, Node] = {}
     edges: dict[str, Edge] = {}
 
@@ -99,7 +109,7 @@ def dc_layout() -> Layout:
         return f"{x:g}".replace(".", "_")
 
     # ---- main aisles ------------------------------------------------------------
-    junctions = sorted({WEST_SPINE, *RACK_AISLES, *PICK_AISLES, TOTE_SPINE, AGF_SPINE})
+    junctions = sorted({WEST_SPINE, *RACK_AISLES, *PICK_AISLES, TOTE_SPINE, EAST_RETURN, AGF_SPINE})
     lanes = {"SE": S_EB, "SW": S_WB, "NE": N_EB, "NW": N_WB}
     for name, y in lanes.items():
         for x in junctions:
@@ -118,7 +128,7 @@ def dc_layout() -> Layout:
     chain([f"SW{xid(x)}" for x in reversed(junctions)], SPEED_MAIN, seg_classes=south_cls)
     chain([f"NE{xid(x)}" for x in north_x], SPEED_MAIN, seg_classes=north_cls)
     chain([f"NW{xid(x)}" for x in reversed(north_x)], SPEED_MAIN, seg_classes=north_cls)
-    spines = {WEST_SPINE, TOTE_SPINE, AGF_SPINE}
+    spines = {WEST_SPINE, TOTE_SPINE, AGF_SPINE, EAST_RETURN}
     for x in junctions:
         if x in spines:
             continue       # the one-way spine itself links its two lane nodes
@@ -156,6 +166,9 @@ def dc_layout() -> Layout:
     spine(WEST_SPINE, "W", DOCK_YS, IN_STAGE_X, "in_stage", "SI", AGF, northbound=False)
     spine(AGF_SPINE, "E", DOCK_YS, OUT_STAGE_X, "out_stage", "SO", AGF, northbound=True, bay=False)
     spine(TOTE_SPINE, "T", PACK_YS, PACK_X, "pack", "PK", AMR, northbound=True)
+    # east return lane: north main aisle down to the south main aisle, no stubs
+    x = xid(EAST_RETURN)
+    chain([f"NW{x}", f"NE{x}", f"SW{x}", f"SE{x}"], SPEED_SPINE, {AGF}, hold=True)
 
     # ---- bay lanes: parking and charging, westbound, one on each side of the fire wall ------
     # AGF side: entered from the north main aisle at the last rack aisle, leaves down the west spine.
@@ -208,8 +221,13 @@ def dc_layout() -> Layout:
     zone("Z-OUT", "출고 스테이징·도크", "human_work", rect(80.6, 8.0, WIDTH, 39.0), static=0.8, human=0.3)
     zone("Z-PACK", "패킹 스테이션", "human_work", rect(71.8, 9.0, 76.0, 40.0), human=0.3)
     zone("Z-RACK", "팔레트 랙(자율·수동 지게차)", "forklift_lane", rect(12.0, 8.4, 46.0, 41.6), static=1.0, human=0.5)
-    # people in the aisle: 0.3 m/s, the ISO 3691-4 speed that allows passing closer than the normal clearance
-    zone("Z-PICK", "협업 피킹 존", "picking", rect(48.0, 8.4, 68.0, 41.6), static=1.0, human=0.3)
+    # people in the aisle: 0.3 m/s, the ISO 3691-4 speed that allows passing closer than the normal clearance;
+    # where it applies depends on pick_limit (whole hall, the occupied aisle only, or the vehicles' own fields)
+    zone("Z-PICK", "협업 피킹 존", "picking", rect(48.0, 8.4, 68.0, 41.6), static=1.0,
+         human=0.3 if pick_limit == "zone" else None)
+    aisle_human = 0.3 if pick_limit == "aisle" else None
+    zone("Z-PICK-END-S", "피킹 통로 끝(남)", "walkway", rect(48.0, 8.4, 68.0, 9.6), human=aisle_human)
+    zone("Z-PICK-END-N", "피킹 통로 끝(북)", "walkway", rect(48.0, 40.4, 68.0, 41.6), human=aisle_human)
     # the crossings with a 2 m approach on each side: vehicles are at walking pace before they reach a
     # person on the crossing, not only once inside it (the south crossing starts right behind the door)
     zone("Z-CROSS-S", "횡단보도(남)·접근 구간", "walkway", rect(44.0, 2.6, 50.0, 7.4), human=0.3)
@@ -219,7 +237,7 @@ def dc_layout() -> Layout:
     for i, x in enumerate(RACK_AISLES):
         zone(f"Z-R{i + 1}", f"랙 통로 R{i + 1}", "aisle", rect(x - 2.0, 8.6, x + 2.0, 41.4))
     for i, x in enumerate(PICK_AISLES):
-        zone(f"Z-K{i + 1}", f"피킹 통로 K{i + 1}", "aisle", rect(x - 1.0, 8.6, x + 1.0, 41.4))
+        zone(f"Z-K{i + 1}", f"피킹 통로 K{i + 1}", "aisle", rect(x - 1.0, 8.6, x + 1.0, 41.4), human=aisle_human)
 
     coverage = {
         "CAM-IN": rect(0, 0, 12.0, HEIGHT),

@@ -6,10 +6,19 @@ decides which tasks exist and what completing a stop means (a pallet leaves the
 staging floor, a rack slot fills). The dispatcher only matches tasks to capable
 vehicles and walks each task leg by leg.
 
-Assignment is greedy by task priority then age: the idle robot of the right
-class with the lowest estimated travel time to the first stop wins, if its
-battery can finish every leg and still reach a charger with a reserve left.
-The battery model is nominal (per-metre drain), not a measured discharge curve.
+Assignment ("cost", the default) matches idle robots and ready tasks on one
+cost: empty travel time to the first stop, minus a credit for priority and
+waiting time. The cheapest pair is assigned first, so a forklift that has just
+put a pallet away takes the retrieval in the same aisle rather than the oldest
+task across the building (the classic dual-command effect). "fifo" keeps the
+older rule (oldest task first, nearest robot) as a comparison baseline. A robot
+is only eligible if its battery can finish every leg and still reach a charger
+with a reserve left; the battery model is nominal (per-metre drain), not a
+measured discharge curve.
+
+Every task state change is written to an outbox the upper system (WMS) reads
+with a cursor, so it learns about completions and exceptions without polling
+the task list.
 """
 from __future__ import annotations
 
@@ -72,12 +81,19 @@ class Task:
 
 
 class Dispatcher:
+    AGE_CREDIT_S = 0.25          # cost credit per second a task has waited (aging keeps old tasks from starving)
+    PRIORITY_CREDIT_S = 90.0     # cost credit per priority level
+
     def __init__(self, manager: FleetManager, rng: random.Random, process=None, charge_low: float = 30.0,
-                 charge_full: float = 90.0, reserve: float = 12.0, overdue_s: float = 600.0) -> None:
+                 charge_full: float = 90.0, reserve: float = 12.0, overdue_s: float = 600.0,
+                 policy: str = "cost") -> None:
+        if policy not in ("cost", "fifo"):
+            raise ValueError("policy must be cost or fifo")
         self.m = manager
         self.layout = manager.layout
         self.planner = manager.planner
         self.rng = rng
+        self.policy = policy
         self.charge_low = charge_low
         self.charge_full = charge_full
         self.reserve = reserve
@@ -91,9 +107,29 @@ class Dispatcher:
         self.charge_wait_since: dict[str, float] = {}
         self.chargers = self.layout.nodes_of_kind("charger")
         self.parks = self.layout.nodes_of_kind("park")
-        self.counts = {"created": 0, "done": 0, "failed": 0, "canceled": 0, "requeued": 0}
+        self.counts = {"created": 0, "done": 0, "failed": 0, "canceled": 0, "requeued": 0, "exceptions": 0}
         self.process = process
+        self.outbox: deque = deque(maxlen=5000)     # WMS-facing task events, read with a cursor
+        self._evseq = 0
+        self.sinks: list = []                       # e.g. the persistent store
         manager.dispatcher = self
+
+    # ------------------------------------------------------------ WMS event outbox
+    def emit(self, kind: str, task: Task, now: float, **data) -> dict:
+        self._evseq += 1
+        ev = {"seq": self._evseq, "t": round(now, 1), "type": kind, "task": task.id, "kind": task.kind,
+              "ref": task.meta.get("ref"), "robot": task.robot, **data}
+        self.outbox.append(ev)
+        if kind == "EXCEPTION":
+            self.counts["exceptions"] += 1
+            self.m.event("task_exception", task.id, f"{task.id} 예외 {data.get('code', '')}: "
+                         f"{data.get('detail', '')}", "warn")
+        for sink in self.sinks:
+            sink(ev)
+        return ev
+
+    def events_after(self, seq: int, limit: int = 200) -> list[dict]:
+        return [e for e in self.outbox if e["seq"] > seq][:limit]
 
     # ------------------------------------------------------------ helpers
     @property
@@ -122,6 +158,7 @@ class Dispatcher:
     def submit(self, task: Task) -> Task:
         self.tasks[task.id] = task
         self.counts["created"] += 1
+        self.emit("CREATED", task, self.m.now)
         return task
 
     def add_task(self, kind: str, source: str, dest: str | None = None, priority: int = 0) -> Task:
@@ -171,14 +208,12 @@ class Dispatcher:
         failed = self.m.goal_action_failed(rec)
         if task is not None and purpose in ("pickup", "stop", "dropoff"):
             if failed:
-                if task.started_at is None:
-                    self._requeue(task, f"{task.stops[task.leg].label or task.stops[task.leg].node} 동작 실패")
-                else:
-                    self._end(task, "FAILED", now, "동작 실패(적재 상태)")
-                self.m.clear_route(rec)
+                self._stop_failed(rec, task, failed, now)
                 return
             if self.process:
                 self.process.on_stop_done(task, task.leg, now, rec.serial)
+            stop = task.stops[task.leg]
+            self.emit("STOP_DONE", task, now, stop=task.leg, location=stop.label or stop.node, action=stop.action)
             if task.leg == 0:
                 task.started_at = now
             task.leg += 1
@@ -207,6 +242,25 @@ class Dispatcher:
         else:
             self.m.clear_route(rec)
 
+    def _stop_failed(self, rec: RobotRecord, task: Task, reason: str, now: float) -> None:
+        """The vehicle reported the stop's action FAILED: the site process decides what happens next."""
+        stop = task.stops[task.leg]
+        if self.process:
+            verdict, note = self.process.on_action_failed(task, task.leg, reason, now, rec.serial)
+        else:
+            verdict, note = ("requeue" if task.started_at is None else "fail"), reason
+        self.m.event("action_failed", rec.serial, f"{task.id} {stop.label or stop.node} {stop.action}: {note}", "warn")
+        self.m.clear_route(rec)
+        if verdict in ("retry", "redirect"):
+            nxt = task.stops[task.leg]
+            if self.m.assign_route(rec, nxt.node, self._purpose(task), [self._stop_action(task, task.leg)], task.id):
+                return
+            verdict, note = ("requeue" if task.started_at is None else "fail"), f"{note} · 경로 없음"
+        if verdict == "requeue" and task.started_at is None:
+            self._requeue(task, note)
+        else:
+            self._end(task, "FAILED", now, note if verdict == "fail" else f"동작 실패(적재 상태): {note}")
+
     def _end(self, task: Task, state: str, now: float, note: str = "") -> None:
         task.state = state
         task.done_at = now
@@ -215,6 +269,8 @@ class Dispatcher:
         self.counts[{"DONE": "done", "FAILED": "failed", "CANCELED": "canceled"}[state]] += 1
         if self.process:
             self.process.on_task_end(task, state, now)
+        self.emit({"DONE": "COMPLETED", "FAILED": "FAILED", "CANCELED": "CANCELED"}[state], task, now,
+                  note=task.note)
         self.finished.append(task)
         self.tasks.pop(task.id, None)
 
@@ -239,44 +295,69 @@ class Dispatcher:
         floor = 60.0 if rec.charging else self.charge_low
         return rec.battery >= floor
 
+    def _eligible(self, rec: RobotRecord, task: Task) -> bool:
+        if task.vclass is not None and rec.vclass not in (task.vclass, None):
+            return False
+        if not all(self.m.supports(rec, s.action) for s in task.stops):
+            return False
+        return self._feasible(rec, task)
+
+    def _pair_cost(self, rec: RobotRecord, task: Task, now: float) -> float:
+        cost = self.planner.travel_time(rec.last_node, task.source, rec.vclass)
+        cost += max(0.0, 80.0 - rec.battery) * 1.5
+        if self.policy == "cost":
+            cost -= self.PRIORITY_CREDIT_S * task.priority + self.AGE_CREDIT_S * (now - task.created)
+        return cost
+
     def _assign(self, now: float) -> None:
         idle = [r for r in self.m.robots.values() if self._available(r)]
         if not idle:
             return
-        queue = sorted((t for t in self.tasks.values() if t.state == "QUEUED"),
+        queue = sorted((t for t in self.tasks.values() if t.state == "QUEUED"
+                        and (not self.process or self.process.ready(t))),
                        key=lambda t: (-t.priority, t.created))
-        for task in queue:
-            if not idle:
-                break
-            if self.process and not self.process.ready(task):
+        if self.policy == "fifo":
+            pairs = []
+            for task in queue:
+                best = min((r for r in idle if self._eligible(r, task)),
+                           key=lambda r: self._pair_cost(r, task, now), default=None)
+                if best is not None:
+                    pairs.append((task, best))
+                    idle.remove(best)
+            for task, rec in pairs:
+                self._start(task, rec, now)
+            return
+        # cost policy: the cheapest robot-task pair first (greedy matching on the cost matrix); the queue is
+        # capped so a long backlog does not make each tick quadratic
+        cand = [(self._pair_cost(r, t, now), i, j) for i, t in enumerate(queue[:60]) for j, r in enumerate(idle)
+                if math.isfinite(self.planner.travel_time(r.last_node, t.source, r.vclass))]
+        cand.sort()
+        used_t, used_r = set(), set()
+        for cost, i, j in cand:
+            if i in used_t or j in used_r:
                 continue
-            best, best_cost = None, math.inf
-            for rec in idle:
-                if task.vclass is not None and rec.vclass not in (task.vclass, None):
-                    continue
-                if not all(self.m.supports(rec, s.action) for s in task.stops):
-                    continue
-                if not self._feasible(rec, task):
-                    continue
-                cost = self.planner.travel_time(rec.last_node, task.source, rec.vclass)
-                cost += max(0.0, 80.0 - rec.battery) * 1.5
-                if cost < best_cost:
-                    best, best_cost = rec, cost
-            if best is None:
+            task, rec = queue[i], idle[j]
+            if not self._eligible(rec, task):
                 continue
-            start_actions = []
-            if best.charging:
-                start_actions.append(action("stopCharging", self.aid(f"{best.serial}-stopchg"), "HARD"))
-            task.leg = 0
-            if not self.m.assign_route(best, task.source, "pickup", [self._stop_action(task, 0)], task.id,
-                                       start_actions=start_actions):
-                continue
-            self._release_spots(best.serial)
-            task.state, task.robot, task.assigned_at = "ACTIVE", best.serial, now
-            if self.process:
-                self.process.on_assigned(task, now)
-            idle.remove(best)
-            self.charge_wait_since.pop(best.serial, None)
+            if self._start(task, rec, now):
+                used_t.add(i)
+                used_r.add(j)
+
+    def _start(self, task: Task, best: RobotRecord, now: float) -> bool:
+        start_actions = []
+        if best.charging:
+            start_actions.append(action("stopCharging", self.aid(f"{best.serial}-stopchg"), "HARD"))
+        task.leg = 0
+        if not self.m.assign_route(best, task.source, "pickup", [self._stop_action(task, 0)], task.id,
+                                   start_actions=start_actions):
+            return False
+        self._release_spots(best.serial)
+        task.state, task.robot, task.assigned_at = "ACTIVE", best.serial, now
+        if self.process:
+            self.process.on_assigned(task, now)
+        self.emit("ASSIGNED", task, now)
+        self.charge_wait_since.pop(best.serial, None)
+        return True
 
     def _release_spots(self, serial: str) -> None:
         for d in (self.charger_owner, self.park_owner):
@@ -365,6 +446,7 @@ class Dispatcher:
         self.counts["requeued"] += 1
         if self.process:
             self.process.on_requeue(task)
+        self.emit("REQUEUED", task, self.m.now, note=why)
         self.m.event("task_requeued", task.id, f"{task.id} 재대기: {why}", "warn")
 
     def detach(self, rec: RobotRecord, why: str) -> None:
@@ -428,11 +510,21 @@ class Dispatcher:
         items = sorted(self.tasks.values(), key=lambda t: (order.get(t.state, 2), -t.priority, t.created))
         return [t.to_json(now) for t in items[:limit]]
 
+    def reset_metrics(self, now: float) -> None:
+        """Start a measurement window: finished-task history and counters restart, live tasks stay."""
+        self.finished.clear()
+        for k in self.counts:
+            self.counts[k] = 0
+        self._window_start = now
+
     def stats(self, now: float, window: float = 3600.0) -> dict:
+        start = getattr(self, "_window_start", 0.0)
+        window = min(window, max(1.0, now - start))
         recent = [t for t in self.finished if t.state == "DONE" and t.done_at is not None and now - t.done_at <= window]
         cycles = sorted(t.done_at - t.created for t in recent)
         waits = sorted(t.assigned_at - t.created for t in recent if t.assigned_at is not None)
-        span = min(window, max(now, 1.0))
+        execs = sorted(t.done_at - t.assigned_at for t in recent if t.assigned_at is not None)
+        span = min(window, max(now - start, 1.0))
 
         def pct(values: list[float], q: float) -> float | None:
             if not values:
@@ -449,6 +541,7 @@ class Dispatcher:
             "by_kind_h": {k: round(v * 3600.0 / span, 1) for k, v in by_kind.items()},
             "cycle_avg": round(sum(cycles) / len(cycles), 1) if cycles else None,
             "cycle_p90": pct(cycles, 0.9),
-            "wait_avg": round(sum(waits) / len(waits), 1) if waits else None,
+            "wait_avg": round(sum(waits) / len(waits), 1) if waits else None,     # created -> assigned
+            "exec_avg": round(sum(execs) / len(execs), 1) if execs else None,     # assigned -> done
             **self.counts,
         }

@@ -13,6 +13,7 @@ import math
 
 from .sim import Simulation
 from .traffic import node_res
+from .vehicle import SAFETY_FAULTS
 
 FAULTS_FIELD = ("DRIVE_FAULT", "SENSOR_FAULT", "BUMPER", "BATTERY_DEPLETED", "LOCALIZATION_LOST")
 
@@ -209,6 +210,10 @@ class Operations:
         rec = self._robot(a)
         if not rec.fatal:
             raise CommandError("고장 상태가 아님")
+        if rec.fatal in SAFETY_FAULTS:
+            raise CommandError("안전 관련 고장(스캐너·범퍼)은 원격 리셋 불가: 현장 확인 후 차량에서 리셋")
+        if not self.sim.manager.supports(rec, "x_resetFault"):
+            raise CommandError("이 차량은 원격 리셋을 지원하지 않음(제원표): 현장 조치")
         self.sim.manager.instant(rec.serial, "x_resetFault")
         return f"{rec.serial} 원격 리셋 전송(결과는 상태 메시지로 확인)"
 

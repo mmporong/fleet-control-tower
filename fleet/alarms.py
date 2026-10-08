@@ -43,12 +43,12 @@ ALARM_DEFS: dict[str, AlarmDef] = {
          "안전 담당 확인 후 현장 조치 완료 처리, 주변 로봇 재개"),
         ("zone_lock", "set_mode_manual", "field_service_done", "resume_area")),
     "ROBOT_COLLISION": AlarmDef(
-        1, "충돌(범퍼 접촉)", "관련 로봇 범퍼 정지",
+        1, "충돌(범퍼 접촉)", "관련 로봇 범퍼 정지(안전 관련 고장: 원격 리셋 불가)",
         ("사고 재생으로 두 유닛의 진입 순서와 예약 상태 확인",
-         "외관·적재물 손상 확인 요청(현장)",
-         "손상 없으면 원격 리셋, 있으면 현장 조치 후 해제",
+         "현장 인원이 차량·적재물·범퍼 손상과 주변을 확인",
+         "현장 인원이 차량에서 리셋한 뒤 '현장 조치 완료' 등록",
          "예약 불일치·통신 지연이 원인이면 해당 구간 봉쇄 후 보고"),
-        ("reset_fault", "field_service_done", "zone_lock")),
+        ("field_service_done", "zone_lock")),
     "FLEET_ESTOP": AlarmDef(
         1, "관제 비상정지 활성", "전체 로봇 정지 명령 전송",
         ("비상정지 사유를 감사 로그에 기록",
@@ -70,9 +70,9 @@ ALARM_DEFS: dict[str, AlarmDef] = {
         ("cancel_task", "set_mode_manual", "send_to_park")),
     "ROBOT_FAULT": AlarmDef(
         2, "로봇 고장", "로봇 자체 정지, 예약 유지",
-        ("원격 리셋 1회 시도",
-         "실패 시 현장 조치 요청, 작업은 재할당",
-         "적재물이 있으면 현장 회수 요청",
+        ("고장 종류 확인: 구동부 과전류 같은 비안전 고장만 원격 리셋 1회 시도",
+         "안전 스캐너 이상은 원격 리셋 불가: 현장 인원이 확인하고 차량에서 리셋",
+         "리셋 실패나 현장 조치가 필요하면 작업 재할당, 적재물이 있으면 현장 회수 요청",
          "복구 후 자동 모드와 위치 확인"),
         ("reset_fault", "reassign_task", "field_service_done")),
     "LOCALIZATION_LOST": AlarmDef(
@@ -83,12 +83,18 @@ ALARM_DEFS: dict[str, AlarmDef] = {
          "현장 조치를 마치면 '현장 조치 완료'로 복귀, 막고 있던 작업은 재할당"),
         ("init_position", "set_mode_manual", "field_service_done", "reassign_task")),
     "COMMS_LOST": AlarmDef(
-        2, "통신 두절", "예약 유지(로봇은 해제 구간 끝에서 자체 정지)",
+        2, "통신 두절(30초 이상)", "예약 유지, 적재 전 작업은 자동 재할당(로봇은 해제 구간 끝에서 자체 정지)",
         ("마지막 수신 위치와 해제 구간 확인",
-         "무선 AP·로봇 전원 상태 확인 요청",
-         "30초 넘게 지속되면 작업 재할당",
+         "무선 AP·로봇 전원 상태 현장 확인 요청",
+         "적재 중이면 현장 회수 여부 판단",
          "복구 후 상태 동기화(주문 ID·위치) 확인"),
         ("reassign_task",)),
+    # a short silence (Wi-Fi roaming) needs no action: the vehicle stops at its base end by itself and the
+    # reservations stay; it becomes the COMMS_LOST alarm only when it lasts
+    "COMMS_DEGRADED": AlarmDef(
+        4, "통신 지연", "예약 유지, 30초 지속 시 통신 두절 알람으로 승격",
+        ("반복되는 위치면 무선 커버리지 점검 대상으로 기록",),
+        ()),
     "INFRA_FEED_LOST": AlarmDef(
         2, "인프라 감지 두절", "사람 작업·보행·피킹 구역 전체에 사람 감속 적용",
         ("카메라·위치 서버 상태와 네트워크 확인",

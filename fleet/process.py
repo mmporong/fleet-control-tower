@@ -42,6 +42,14 @@ class Process:
 
     def on_requeue(self, task: Task) -> None: ...
 
+    def on_action_failed(self, task: Task, idx: int, reason: str, now: float, robot: str) -> tuple[str, str]:
+        """What to do when the vehicle reports a stop's action FAILED.
+
+        Returns (verdict, note): "retry" the same stop, "redirect" to a stop the process has just rewritten,
+        "requeue" the task for any vehicle, or "fail" it. Default: requeue while nothing is on board.
+        """
+        return ("requeue" if task.started_at is None else "fail"), reason
+
     def stats(self, now: float) -> dict:
         return {}
 
@@ -55,11 +63,8 @@ class GridProcess(Process):
         {"kind": "PUTAWAY", "label": "PUTAWAY · 입고→보관", "src": ["inbound"], "dst": ["storage"]},
     ]
 
-    def __init__(self, dispatcher: Dispatcher, rng: random.Random, rate_per_h: float,
-                 pick_s: float = 6.0, drop_s: float = 5.0) -> None:
+    def __init__(self, dispatcher: Dispatcher, rng: random.Random, rate_per_h: float) -> None:
         super().__init__(dispatcher, rng, rate_per_h)
-        self.pick_s = pick_s
-        self.drop_s = drop_s
         self.storage = self.layout.nodes_of_kind("storage")
         self.inbound = self.layout.nodes_of_kind("inbound")
         self.outbound = self.layout.nodes_of_kind("outbound")
@@ -83,9 +88,9 @@ class GridProcess(Process):
             raise ValueError("kind must be PICK or PUTAWAY")
         if source not in self.layout.nodes or (dest is not None and dest not in self.layout.nodes):
             raise ValueError("unknown node")
-        stops = [Stop(source, "pick", {"duration": self.pick_s}, source)]
+        stops = [Stop(source, "pick", {"stationName": source}, source)]
         if dest is not None:
-            stops.append(Stop(dest, "drop", {"duration": self.drop_s}, dest))
+            stops.append(Stop(dest, "drop", {"stationName": dest}, dest))
         t = Task(self.d.next_id(), kind, None, stops, priority, self.d.m.now)
         if dest is None:
             t.meta["dest_open"] = True
@@ -101,7 +106,7 @@ class GridProcess(Process):
     def on_assigned(self, task: Task, now: float) -> None:
         if task.meta.pop("dest_open", False):
             dest = self._choose_outbound(task.source)
-            task.stops.append(Stop(dest, "drop", {"duration": self.drop_s}, dest))
+            task.stops.append(Stop(dest, "drop", {"stationName": dest}, dest))
             task.meta["auto_dest"] = True
 
     def on_requeue(self, task: Task) -> None:

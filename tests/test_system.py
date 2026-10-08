@@ -315,12 +315,18 @@ class DoorTests(unittest.TestCase):
         self.assertTrue(alarm is not None and alarm.active)        # no door alarm covers it: raised
         self.assertIn("사용 중지", alarm.message)
 
-    def test_south_door_is_a_single_point_of_failure_for_outbound(self):
-        """Finding from the door drill: with the south door out, outbound staging is unreachable."""
+    def test_outbound_stays_reachable_through_either_door(self):
+        """The door drill found the south door to be a single point of failure for outbound staging; the
+        east return lane removes it: with either door out an AGF still reaches every outbound lane."""
         sim = lone_agf()
-        closed = sim.layout.doors["D-S"].lanes
-        self.assertIsNone(sim.manager.planner.plan("CA11_5", "SO1", avoid_lanes=set(closed), vclass="FORKLIFT"))
-        self.assertIsNotNone(sim.manager.planner.plan("CA11_5", "SO1", vclass="FORKLIFT"))
+        for door in ("D-S", "D-N"):
+            closed = set(sim.layout.doors[door].lanes)
+            for spot in sim.layout.nodes_of_kind("out_stage"):
+                path = sim.manager.planner.plan("CA11_5", spot, avoid_lanes=closed, vclass="FORKLIFT")
+                self.assertIsNotNone(path, f"{spot} unreachable with {door} closed")
+        path = sim.manager.planner.plan("CA11_5", "SO1", avoid_lanes=set(sim.layout.doors["D-S"].lanes),
+                                        vclass="FORKLIFT")
+        self.assertIn("NE76_8", path)          # the detour runs down the east return lane
 
 
 class LocalizationRecoveryTests(unittest.TestCase):

@@ -1,31 +1,45 @@
-"""Distribution centre process: pallets, trucks, staging spots and orders.
+"""Distribution centre process: the WMS side and the physical truth of the site.
 
 Inbound: trucks arrive, the manual dock forklift moves each pallet to a free
-floor staging spot, and only then does a PUTAWAY task exist for an autonomous
-forklift (to a reserved rack slot). Outbound: PALLET_OUT orders move a pallet
-from its rack slot to a free outbound staging spot; the manual forklift then
-loads it on the truck. Tote orders (TOTE_PICK) send a tote AMR from a pack
-station through two or three pick faces, where a picker must come to the
-robot, and back to packing.
+floor staging lane, and only then does a PUTAWAY task exist for an autonomous
+forklift, to a rack location the WMS chooses (lowest level and nearest aisle
+first). Outbound: PALLET_OUT orders take the oldest stored pallet (FIFO) to a
+free outbound staging lane; the manual forklift then loads it on the truck.
+Tote orders are released to tote AMRs in batches of several orders (multi-order
+picking, as collaborative picking robots carry several totes): the robot
+inducts its totes at a pack station, visits the pick faces in aisle order, where
+a picker must come to it, and drops the totes at packing.
 
-The process keeps the ground truth of where every pallet is, so KPIs such as
-dock-to-stock time are measured, not assumed.
+Two views of the rack are kept apart: ``slots`` is what the WMS believes,
+``phys`` is what is really there. A share of locations disagree (inventory
+error), and a pallet pocket is sometimes not recognised (handling failure). The
+vehicle's load sensors find these out (``physical_check``); the WMS answers with
+a retry, another location or a requeue (``on_action_failed``) and reports the
+exception upstream.
 """
 from __future__ import annotations
 
 from collections import deque
-import random
-
 import math
+import random
 
 from .agents_dc import SERVE_DIST, dock_points
 from .dispatcher import Dispatcher, Stop, Task
 from .process import Process
-from .site_dc import AGF, AMR, DOCK_YS, STAGE_LANE_CAPACITY
-from .vehicle import agf_drop_time, agf_pick_time
+from .site_dc import AGF, AMR, DOCK_YS, PICK_AISLES, RACK_AISLES, STAGE_LANE_CAPACITY
 
-LEVEL_HEIGHT = 1.6       # m between beam levels
-LEVELS = 3               # floor + two beam levels per bay side
+LEVEL_HEIGHT = 1.4       # m between beam levels: 0, 1.4, 2.8, 4.2 m (AGF lift 4.5 m)
+LEVELS = 4
+POSITIONS = 2            # pallet positions per bay side at each AGF stop (2.7-2.8 m bay, two T11 pallets)
+SIDES = ("L", "R")
+TOTE_BATCH = 3           # orders a tote AMR carries per trip
+BATCH_WAIT_S = 45.0      # release a smaller batch once its oldest order has waited this long
+
+
+def location_id(slot: tuple) -> str:
+    """WMS location name: aisle node, side, level and position, e.g. ``R1-05-L-2-1``."""
+    node, side, lvl, pos = slot
+    return f"{node}-{side}-{lvl + 1}-{pos + 1}"
 
 
 class DcProcess(Process):
@@ -37,9 +51,16 @@ class DcProcess(Process):
     ]
 
     def __init__(self, dispatcher: Dispatcher, rng: random.Random, trucks_h: float = 5.0, pallets_per_truck=(10, 16),
-                 out_pallets_h: float = 45.0, tote_orders_h: float = 150.0, fill: float = 0.6) -> None:
+                 out_pallets_h: float = 45.0, tote_orders_h: float = 150.0, fill: float = 0.7,
+                 tote_batch: int = TOTE_BATCH, handling_fail_p: float = 0.01, inventory_error_p: float = 0.01,
+                 truth_rng: random.Random | None = None) -> None:
         super().__init__(dispatcher, rng, tote_orders_h)
         L = self.layout
+        # the physical world draws from its own stream, so the WMS's choices stay comparable across settings
+        self.truth_rng = truth_rng or random.Random(rng.random())
+        self.handling_fail_p = handling_fail_p
+        self.inventory_error_p = inventory_error_p
+        self.tote_batch = max(1, int(tote_batch))
         # floor staging lanes in front of each door: FIFO queues of pallets
         self.in_stage: dict[str, list[str]] = {n: [] for n in L.nodes_of_kind("in_stage")}
         self.out_stage: dict[str, list[str]] = {n: [] for n in L.nodes_of_kind("out_stage")}
@@ -48,15 +69,40 @@ class DcProcess(Process):
         self.packs = L.nodes_of_kind("pack")
         self.pickfaces = L.nodes_of_kind("pickface")
         self.rack_nodes = L.nodes_of_kind("rack")
-        self.slots: dict[tuple[str, str, int], str | None] = {}
+        self.slots: dict[tuple, str | None] = {}         # WMS record
+        self.phys: dict[tuple, str | None] = {}          # what is physically in the location
+        self.loc_index: dict[str, tuple] = {}
         self.slot_reserved: dict[tuple, str] = {}
         self.pallets: dict[str, dict] = {}
         self._pid = 0
+        aisle_rank = {x: i for i, x in enumerate(RACK_AISLES)}
+        self._slot_order: list[tuple] = []
         for n in self.rack_nodes:
-            for side in ("L", "R"):
+            for side in SIDES:
                 for lvl in range(LEVELS):
-                    pid = self._new_pallet(("rack", (n, side, lvl)), 0.0) if rng.random() < fill else None
-                    self.slots[(n, side, lvl)] = pid
+                    for pos in range(POSITIONS):
+                        slot = (n, side, lvl, pos)
+                        pid = None
+                        if rng.random() < fill:
+                            pid = self._new_pallet(("rack", slot), -rng.uniform(0, 7 * 86400))
+                            self.pallets[pid]["stored"] = self.pallets[pid]["created"]
+                        self.slots[slot] = pid
+                        self.phys[slot] = pid
+                        self.loc_index[location_id(slot)] = slot
+        # slotting rule of the WMS: lower levels first, then the aisle nearest the inbound staging
+        self._slot_order = sorted(self.slots, key=lambda s: (s[2], aisle_rank.get(L.nodes[s[0]].x, 9),
+                                                             s[0], s[1], s[3]))
+        # inventory record errors: a location the WMS believes empty holds a pallet, or the reverse
+        self.metrics = {"trucks": 0, "pallets_unloaded": 0, "putaway": 0, "shipped": 0, "out_orders": 0,
+                        "out_backlog": 0, "tote_orders": 0, "tote_done": 0, "picks": 0, "units": 0,
+                        "d2s": deque(maxlen=500), "picker_wait_s": 0.0, "picker_waits": 0,
+                        "exceptions": 0, "retries": 0, "redirects": 0, "inventory_fixes": 0}
+        for slot in sorted(self.slots):
+            if self.truth_rng.random() < inventory_error_p:
+                if self.phys[slot] is None:
+                    self.phys[slot] = "UNRECORDED"
+                else:
+                    self.phys[slot] = None
         self.trucks_h = trucks_h
         self.pallets_per_truck = pallets_per_truck
         self.out_pallets_h = out_pallets_h
@@ -66,9 +112,8 @@ class DcProcess(Process):
         self.docks_out: dict[int, int] = {}          # dock index -> pallets loaded on the current truck
         self.truck_queue: deque = deque()
         self.picker_claims: dict[str, str] = {}     # robot -> picker
-        self.metrics = {"trucks": 0, "pallets_unloaded": 0, "putaway": 0, "shipped": 0, "out_orders": 0,
-                        "out_backlog": 0, "tote_orders": 0, "tote_done": 0, "picks": 0, "d2s": deque(maxlen=500),
-                        "picker_wait_s": 0.0, "picker_waits": 0}
+        self.tote_backlog: list[dict] = []          # orders waiting to be batched onto a robot
+        self._oid = 0
         self.forklift_jobs: dict[str, dict] = {}
         self._waiting: dict[str, dict] = {}
 
@@ -105,43 +150,49 @@ class DcProcess(Process):
             self.next_arrival = now + 60.0
         while self.rate_per_h > 0 and self.next_arrival <= now:
             r = self.rng.random()
-            self.d.submit(self._make_tote(priority=2 if r < 0.05 else 1 if r < 0.2 else 0))
+            self.tote_backlog.append(self._tote_order(2 if r < 0.05 else 1 if r < 0.2 else 0, now))
             self.next_arrival += self.rng.expovariate(self.rate_per_h / 3600.0)
+        self._release_batches(now)
 
     # ------------------------------------------------------------ task builders
     def _free_slot(self) -> tuple | None:
-        free = [k for k, v in self.slots.items() if v is None and k not in self.slot_reserved]
-        if not free:
-            return None
-        # fill lower levels first, like a slotting rule would
-        lvl = min(k[2] for k in free)
-        return self.rng.choice([k for k in free if k[2] == lvl])
+        for s in self._slot_order:
+            if self.slots[s] is None and s not in self.slot_reserved:
+                return s
+        return None
 
-    def _rack_params(self, slot: tuple, pid: str, pick: bool) -> dict:
-        n, side, lvl = slot
-        h = lvl * LEVEL_HEIGHT
-        return {"duration": round(agf_pick_time(h) if pick else agf_drop_time(h), 1), "loadId": pid,
-                "loadType": "T11", "lhd": side, "height": round(h, 2), "stationType": "RACK",
-                "stationName": f"{n}-{side}{lvl}"}
+    def _rack_params(self, slot: tuple, pid: str) -> dict:
+        n, side, lvl, _pos = slot
+        return {"loadId": pid, "loadType": "T11", "lhd": "FORKS", "side": "LEFT" if side == "L" else "RIGHT",
+                "height": round(lvl * LEVEL_HEIGHT, 2), "stationType": "RACK", "stationName": location_id(slot)}
+
+    def _floor_params(self, spot: str, pid: str) -> dict:
+        return {"loadId": pid, "loadType": "T11", "lhd": "FORKS", "height": 0.0, "stationType": "FLOOR",
+                "stationName": spot}
 
     def _make_putaway(self, spot: str, pid: str, now: float) -> Task | None:
         slot = self._free_slot()
         if slot is None:
             return None
         t = Task(self.d.next_id(), "PUTAWAY", AGF,
-                 [Stop(spot, "pick", {"duration": agf_pick_time(0.0), "loadId": pid, "loadType": "T11",
-                                      "stationType": "FLOOR", "stationName": spot}, f"{spot}"),
-                  Stop(slot[0], "drop", self._rack_params(slot, pid, pick=False), f"{slot[0]}-{slot[1]}{slot[2]}")],
+                 [Stop(spot, "pick", self._floor_params(spot, pid), spot),
+                  Stop(slot[0], "drop", self._rack_params(slot, pid), location_id(slot))],
                  1, now, meta={"pallet": pid, "slot": slot, "spot": spot})
         self.slot_reserved[slot] = t.id
         return t
 
+    def _oldest_full_slot(self, exclude: set | frozenset = frozenset()) -> tuple | None:
+        full = [k for k, v in self.slots.items() if v is not None and v != "UNKNOWN"
+                and k not in self.slot_reserved and k not in exclude]
+        if not full:
+            return None
+        return min(full, key=lambda k: (self.pallets[self.slots[k]]["stored"], k))
+
     def _make_pallet_out(self, priority: int, slot: tuple | None = None, spot: str | None = None) -> Task | None:
         if slot is None:
-            full = [k for k, v in self.slots.items() if v is not None and k not in self.slot_reserved]
-            if not full:
+            slot = self._oldest_full_slot()          # FIFO: the oldest stored pallet ships first
+            if slot is None:
                 return None
-            slot = self.rng.choice(full)
         if spot is None:
             free = [s for s, lane in self.out_stage.items()
                     if len(lane) + self.out_pending[s] < STAGE_LANE_CAPACITY]
@@ -149,34 +200,62 @@ class DcProcess(Process):
                 return None
             spot = min(free, key=lambda s: (len(self.out_stage[s]) + self.out_pending[s], self.rng.random()))
         pid = self.slots[slot]
-        n, side, lvl = slot
         t = Task(self.d.next_id(), "PALLET_OUT", AGF,
-                 [Stop(n, "pick", self._rack_params(slot, pid, pick=True), f"{n}-{side}{lvl}"),
-                  Stop(spot, "drop", {"duration": agf_drop_time(0.0), "loadId": pid, "loadType": "T11",
-                                      "stationType": "FLOOR", "stationName": spot}, spot)],
+                 [Stop(slot[0], "pick", self._rack_params(slot, pid), location_id(slot)),
+                  Stop(spot, "drop", self._floor_params(spot, pid), spot)],
                  priority, self.d.m.now, meta={"pallet": pid, "slot": slot, "spot": spot})
         self.slot_reserved[slot] = t.id
         self.out_pending[spot] += 1
         return t
 
-    def _make_tote(self, priority: int, faces: list[str] | None = None, drop: str | None = None) -> Task:
-        start = self.rng.choice(self.packs)
+    def _tote_order(self, priority: int, now: float, faces: list[str] | None = None) -> dict:
+        self._oid += 1
         faces = faces or sorted(self.rng.sample(self.pickfaces, self.rng.choice((2, 2, 3))))
-        drop = drop or self.rng.choice(self.packs)
-        stops = [Stop(start, "x_toteInduct", {"duration": 6.0}, start)]
-        for f in faces:
-            items = self.rng.randint(1, 4)
-            stops.append(Stop(f, "x_pickItems", {"duration": 4.0 + 2.5 * items, "items": items}, f))
-        stops.append(Stop(drop, "x_toteDrop", {"duration": 6.0}, drop))
         self.metrics["tote_orders"] += 1
-        return Task(self.d.next_id(), "TOTE_PICK", AMR, stops, priority, self.d.m.now)
+        return {"id": f"O{self._oid:05d}", "lines": [(f, self.rng.randint(1, 4)) for f in faces],
+                "created": now, "priority": priority}
+
+    def _aisle_order(self, face: str) -> tuple:
+        """Pick path: aisles in turn, each walked in its travel direction (north in even aisles)."""
+        n = self.layout.nodes[face]
+        idx = min(range(len(PICK_AISLES)), key=lambda i: abs(PICK_AISLES[i] - n.x))
+        return (idx, n.y if idx % 2 == 0 else -n.y)
+
+    def _release_batches(self, now: float) -> None:
+        while self.tote_backlog:
+            self.tote_backlog.sort(key=lambda o: (-o["priority"], o["created"]))
+            urgent = self.tote_backlog[0]["priority"] >= 2
+            oldest = min(o["created"] for o in self.tote_backlog)
+            if len(self.tote_backlog) < self.tote_batch and now - oldest < BATCH_WAIT_S and not urgent:
+                return
+            batch, self.tote_backlog = self.tote_backlog[:self.tote_batch], self.tote_backlog[self.tote_batch:]
+            self.d.submit(self._tote_task(batch, now))
+
+    def _tote_task(self, batch: list[dict], now: float, drop: str | None = None) -> Task:
+        start = self.rng.choice(self.packs)
+        drop = drop or self.rng.choice(self.packs)
+        items: dict[str, int] = {}
+        for o in batch:
+            for face, n in o["lines"]:
+                items[face] = items.get(face, 0) + n
+        stops = [Stop(start, "x_toteInduct", {"totes": len(batch)}, start)]
+        for face in sorted(items, key=self._aisle_order):
+            stops.append(Stop(face, "x_pickItems", {"items": items[face]}, face))
+        stops.append(Stop(drop, "x_toteDrop", {"totes": len(batch)}, drop))
+        return Task(self.d.next_id(), "TOTE_PICK", AMR, stops, max(o["priority"] for o in batch), now,
+                    meta={"orders": batch, "units": sum(items.values()),
+                          "lines": sum(len(o["lines"]) for o in batch)})
 
     def make_task(self, kind: str, source: str, dest: str | None, priority: int) -> Task:
         L = self.layout
         if kind == "PALLET_OUT":
-            if source not in L.nodes or L.nodes[source].kind != "rack":
-                raise ValueError("PALLET_OUT source는 랙 통로 노드(R*-**)여야 함")
-            full = [k for k, v in self.slots.items() if k[0] == source and v is not None and k not in self.slot_reserved]
+            if source in self.loc_index:
+                slots = [self.loc_index[source]]
+            elif source in L.nodes and L.nodes[source].kind == "rack":
+                slots = [k for k in self.slots if k[0] == source]
+            else:
+                raise ValueError("PALLET_OUT source는 랙 위치(R1-05-L-2-1) 또는 랙 통로 노드(R*-**)여야 함")
+            full = [k for k in slots if self.slots[k] not in (None, "UNKNOWN") and k not in self.slot_reserved]
             if not full:
                 raise ValueError(f"{source}에 출고 가능한 팔레트 없음")
             if dest is not None and (dest not in self.out_stage or
@@ -192,7 +271,8 @@ class DcProcess(Process):
                 raise ValueError("TOTE_PICK source는 피킹면 노드(K*-**)여야 함")
             if dest is not None and dest not in self.packs:
                 raise ValueError("dest는 패킹 스테이션(PK*)이어야 함")
-            return self._make_tote(priority, faces=[source], drop=dest)
+            order = self._tote_order(priority, self.d.m.now, faces=[source])
+            return self._tote_task([order], self.d.m.now, drop=dest)
         raise ValueError("kind는 PALLET_OUT 또는 TOTE_PICK (PUTAWAY는 입고 하역 시 자동 생성)")
 
     def ready(self, task: Task) -> bool:
@@ -204,6 +284,67 @@ class DcProcess(Process):
             return not any(t.kind == "PUTAWAY" and t.meta.get("spot") == spot and t.state == "ACTIVE"
                            and t.started_at is None and t.id != task.id for t in self.d.tasks.values())
         return True
+
+    # ------------------------------------------------------------ physical truth
+    def physical_check(self, serial: str, action) -> str | None:
+        """What the forklift's load sensors find when a pick or drop starts (None: all clear)."""
+        p = action.params
+        slot = self.loc_index.get(str(p.get("stationName", "")))
+        if action.action_type == "pick":
+            if slot is not None and self.phys[slot] is None:
+                return "적재물 없음(위치 비어 있음)"
+            if self.truth_rng.random() < self.handling_fail_p:
+                return "팔레트 포켓 인식 실패"
+        elif action.action_type == "drop" and slot is not None and self.phys[slot] is not None:
+            return "적치 위치 점유(다른 팔레트 있음)"
+        return None
+
+    def on_action_failed(self, task: Task, idx: int, reason: str, now: float, robot: str) -> tuple[str, str]:
+        self.metrics["exceptions"] += 1
+        tries = task.meta.setdefault("tries", {})
+        tries[idx] = tries.get(idx, 0) + 1
+        slot = task.meta.get("slot")
+        if "포켓" in reason and tries[idx] <= 1:
+            self.metrics["retries"] += 1
+            self.d.emit("EXCEPTION", task, now, code="PICK_RETRY", detail=reason, location=task.stops[idx].label)
+            return "retry", f"{reason}: 재시도"
+        if task.kind == "PUTAWAY" and idx == 1 and "점유" in reason:
+            # the WMS record was wrong: book the unknown pallet for a count and store to the next location
+            self.slots[slot] = "UNKNOWN"
+            self.slot_reserved.pop(slot, None)
+            self.metrics["inventory_fixes"] += 1
+            new = self._free_slot()
+            self.d.emit("EXCEPTION", task, now, code="SLOT_OCCUPIED", detail=reason, location=location_id(slot))
+            if new is None:
+                return "fail", "빈 적치 위치 없음: 현장 회수"
+            pid = task.meta["pallet"]
+            task.stops[idx] = Stop(new[0], "drop", self._rack_params(new, pid), location_id(new))
+            task.meta["slot"] = new
+            self.slot_reserved[new] = task.id
+            self.metrics["redirects"] += 1
+            return "redirect", f"{location_id(slot)} 점유 → {location_id(new)}"
+        if task.kind == "PALLET_OUT" and idx == 0:
+            if "없음" in reason:
+                self.slots[slot] = None       # the record was wrong: the location is empty
+                self.metrics["inventory_fixes"] += 1
+                code = "PALLET_NOT_FOUND"
+            else:
+                code = "PICK_FAILED"
+            self.slot_reserved.pop(slot, None)
+            self.d.emit("EXCEPTION", task, now, code=code, detail=reason, location=location_id(slot))
+            new = self._oldest_full_slot(exclude={slot})
+            if new is None:
+                return "fail", "출고 가능한 다른 팔레트 없음"
+            pid = self.slots[new]
+            task.stops[0] = Stop(new[0], "pick", self._rack_params(new, pid), location_id(new))
+            task.meta.update(slot=new, pallet=pid)
+            self.slot_reserved[new] = task.id
+            self.metrics["redirects"] += 1
+            return "redirect", f"{location_id(slot)} {code} → {location_id(new)}"
+        if task.kind == "PUTAWAY" and idx == 0:
+            self.d.emit("EXCEPTION", task, now, code="PICK_FAILED", detail=reason, location=task.meta["spot"])
+            return "requeue", f"{reason}: 현장 확인 후 재시도"
+        return super().on_action_failed(task, idx, reason, now, robot)
 
     # ------------------------------------------------------------ stop and task hooks
     def on_stop_done(self, task: Task, idx: int, now: float, robot: str) -> None:
@@ -217,6 +358,7 @@ class DcProcess(Process):
             else:
                 slot = task.meta["slot"]
                 self.slots[slot] = pid
+                self.phys[slot] = pid
                 self.slot_reserved.pop(slot, None)
                 self.pallets[pid].update(loc=("rack", slot), stored=now)
                 self.metrics["putaway"] += 1
@@ -227,6 +369,7 @@ class DcProcess(Process):
             if idx == 0:
                 slot = task.meta["slot"]
                 self.slots[slot] = None
+                self.phys[slot] = None
                 self.slot_reserved.pop(slot, None)
                 self.pallets[pid]["loc"] = ("agf", robot)
             else:
@@ -236,10 +379,17 @@ class DcProcess(Process):
                 self.pallets[pid]["loc"] = ("out_stage", spot)
         elif task.kind == "TOTE_PICK" and task.stops[idx].action == "x_pickItems":
             self.metrics["picks"] += 1
+            self.metrics["units"] += int(task.stops[idx].params.get("items", 1))
 
     def on_task_end(self, task: Task, state: str, now: float) -> None:
-        if task.kind == "TOTE_PICK" and state == "DONE":
-            self.metrics["tote_done"] += 1
+        if task.kind == "TOTE_PICK":
+            orders = task.meta.get("orders", [])
+            if state == "DONE":
+                self.metrics["tote_done"] += len(orders)
+            else:
+                # the batch did not finish: its orders go back to be picked again
+                self.tote_backlog.extend(orders)
+            return
         if state == "DONE":
             return
         # failed or canceled: give back what is still reserved
@@ -348,32 +498,45 @@ class DcProcess(Process):
         m = self.metrics
         hours = max(now / 3600.0, 1e-6)
         d2s = sorted(m["d2s"])
+        known = [v for v in self.slots.values()]
         return {
             "trucks": m["trucks"], "pallets_unloaded": m["pallets_unloaded"], "putaway": m["putaway"],
             "shipped": m["shipped"], "out_backlog": m["out_backlog"], "tote_done": m["tote_done"],
-            "picks": m["picks"],
+            "tote_orders": m["tote_orders"], "tote_backlog": len(self.tote_backlog),
+            "picks": m["picks"], "units": m["units"],
             "putaway_h": round(m["putaway"] / hours, 1), "shipped_h": round(m["shipped"] / hours, 1),
             "tote_h": round(m["tote_done"] / hours, 1),
             "dock_to_stock_avg": round(sum(d2s) / len(d2s), 1) if d2s else None,
             "dock_to_stock_p90": round(d2s[int(0.9 * (len(d2s) - 1))], 1) if d2s else None,
             "picker_wait_s": round(m["picker_wait_s"], 1),
-            "rack_fill": round(sum(1 for v in self.slots.values() if v) / len(self.slots), 3),
+            "rack_fill": round(sum(1 for v in known if v) / len(known), 3),
             "staged_in": sum(len(v) for v in self.in_stage.values()),
             "staged_out": sum(len(v) for v in self.out_stage.values()),
             "trucks_waiting": len(self.truck_queue),
+            "exceptions": m["exceptions"], "retries": m["retries"], "redirects": m["redirects"],
+            "inventory_fixes": m["inventory_fixes"],
         }
+
+    def reset_metrics(self) -> None:
+        """Start a measurement window (after warm-up): counters restart, the site state stays."""
+        for k, v in list(self.metrics.items()):
+            if isinstance(v, deque):
+                v.clear()
+            else:
+                self.metrics[k] = 0.0 if isinstance(v, float) else 0
 
     def snapshot(self) -> dict:
         per_node: dict[str, int] = {}
-        for (n, _side, _lvl), pid in self.slots.items():
+        for (n, _side, _lvl, _pos), pid in self.slots.items():
             if pid:
                 per_node[n] = per_node.get(n, 0) + 1
         return {
             "in_stage": {k: len(v) for k, v in self.in_stage.items()},
             "out_stage": {k: len(v) for k, v in self.out_stage.items()},
             "lane_capacity": STAGE_LANE_CAPACITY,
-            "rack": per_node, "slots_per_node": 2 * LEVELS,
+            "rack": per_node, "slots_per_node": len(SIDES) * LEVELS * POSITIONS,
             "docks_in": {f"IN{k + 1}": v for k, v in self.docks_in.items()},
             "trucks_waiting": len(self.truck_queue),
             "picker_claims": dict(self.picker_claims),
+            "tote_backlog": len(self.tote_backlog),
         }

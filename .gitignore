@@ -4,3 +4,4 @@ __pycache__/
 .omc/
 node_modules/
 results/*.tmp
+.claude/

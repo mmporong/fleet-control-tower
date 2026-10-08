@@ -13,6 +13,8 @@ from dataclasses import dataclass, field
 from itertools import count
 from typing import Any
 
+from .clock import Clock, SimClock
+
 VERSION = "2.0.0"
 INTERFACE = "uagv"
 MAJOR = "v2"
@@ -56,14 +58,12 @@ class HeaderIds:
         return next(self._counters[topic_name])
 
 
+_SIM_CLOCK = SimClock()
+
+
 def iso_time(sim_time_s: float) -> str:
     """Simulation clock as an ISO-8601 string on a fixed shift start date."""
-    total_ms = int(round(sim_time_s * 1000))
-    h, rem = divmod(total_ms, 3_600_000)
-    m, rem = divmod(rem, 60_000)
-    s, ms = divmod(rem, 1000)
-    day = 1 + h // 24
-    return f"2026-10-{day:02d}T{h % 24:02d}:{m:02d}:{s:02d}.{ms:03d}Z"
+    return _SIM_CLOCK.iso(sim_time_s)
 
 
 def parse_iso_time(stamp: str) -> float:
@@ -74,16 +74,18 @@ def parse_iso_time(stamp: str) -> float:
     >>> parse_iso_time(iso_time(90000.0))    # second day of the shift calendar
     90000.0
     """
-    date, clock = stamp.rstrip("Z").split("T")
-    h, m, s = clock.split(":")
-    day = int(date.split("-")[2])
-    return round((day - 1) * 86400 + int(h) * 3600 + int(m) * 60 + float(s), 3)
+    t = _SIM_CLOCK.parse(stamp)
+    if t is None:
+        raise ValueError(f"not an ISO-8601 timestamp: {stamp!r}")
+    return round(t, 3)
 
 
-def header(ids: HeaderIds, topic_name: str, manufacturer: str, serial: str, sim_time_s: float) -> dict:
+def header(ids: HeaderIds, topic_name: str, manufacturer: str, serial: str, t: float,
+           clock: Clock | None = None) -> dict:
+    """Common header; ``t`` is seconds on ``clock`` (simulation calendar by default)."""
     return {
         "headerId": ids.next(topic_name),
-        "timestamp": iso_time(sim_time_s),
+        "timestamp": (clock or _SIM_CLOCK).iso(t),
         "version": VERSION,
         "manufacturer": manufacturer,
         "serialNumber": serial,
@@ -108,6 +110,7 @@ class RouteNode:
     x: float
     y: float
     actions: list[dict] = field(default_factory=list)
+    theta: float | None = None        # required heading at the node (stations), with allowedDeviationTheta
 
 
 @dataclass
@@ -135,12 +138,15 @@ def build_order(hdr: dict, order_id: str, update_id: int, nodes: list[RouteNode]
         raise ValueError("the base must contain at least the first node")
     out_nodes = []
     for i, n in enumerate(nodes):
+        pos = {"x": round(n.x, 3), "y": round(n.y, 3), "mapId": MAP_ID, "allowedDeviationXY": 0.5}
+        if n.theta is not None:
+            pos["theta"] = round(n.theta, 3)
+            pos["allowedDeviationTheta"] = 0.1
         out_nodes.append({
             "nodeId": n.node_id,
             "sequenceId": first_sequence_id + 2 * i,
             "released": i < released_nodes,
-            "nodePosition": {"x": round(n.x, 3), "y": round(n.y, 3), "mapId": MAP_ID,
-                             "allowedDeviationXY": 0.5},
+            "nodePosition": pos,
             "actions": list(n.actions),
         })
     out_edges = []

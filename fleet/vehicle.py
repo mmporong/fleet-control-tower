@@ -13,15 +13,19 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import math
 import random
+from typing import Callable
 
 from .geometry import box_gap, circle_hits_forward_box, dist, point_in_polygon, segment_hits_polygon, wrap_angle
 from .layout import Layout
+from .clock import Clock, SimClock
 from .vda5050 import (INSTANT_ACTIONS, NODE_ACTIONS, HeaderIds, build_connection, header, topic,
                       validate_order)
 
 # Automatic restart after a protective stop once the field has been clear this long
 # (MiR fleet documentation describes a 2 s clear period before resuming).
 PROTECTIVE_RESET_S = 2.0
+# Reduced clearance (narrow field set) is only allowed at or below this speed (ISO 3691-4 Annex A, 0.3 m/s)
+NARROW_FIELD_SPEED = 0.3
 
 FAULT_TYPES = {
     "DRIVE_FAULT": "구동부 과전류",
@@ -30,6 +34,9 @@ FAULT_TYPES = {
     "BUMPER": "범퍼 접촉(충돌)",
     "BATTERY_DEPLETED": "배터리 방전",
 }
+# faults of the safety-related parts (scanner, bumper): the vehicle refuses a remote reset; a person checks the
+# vehicle and the scene and resets it at the vehicle (ISO 13849-1: reset from where the hazard zone is visible)
+SAFETY_FAULTS = frozenset({"SENSOR_FAULT", "BUMPER"})
 
 
 @dataclass
@@ -52,12 +59,23 @@ class VehicleSpec:
     charge_rate_s: float = 0.08   # battery % per second on a charger
     manual_max_speed: float = 0.5
     sense_range: float = 6.0
-    # blind-corner rule: slow down within this distance of an intersection (None disables)
-    intersection_speed: float | None = 0.6
+    # intersections: 5 km/h (KOSHA / UKMHA site rule); blind ones (storage blocks the view) slower, so the
+    # vehicle can stop for a person stepping out 1 m ahead (see docs/SITE.md). None disables the rule.
+    intersection_speed: float | None = 1.39
+    blind_speed: float | None = 1.0
     intersection_radius: float = 1.5
     loaded_speed: float | None = None   # speed cap while carrying a load
     field_base: float = 0.35      # protective field length at standstill (m)
     field_gain: float = 0.9       # extra protective length per m/s
+    # load handling times of vehicles without a lift model (the forklift uses agf_pick_time / agf_drop_time)
+    pick_s: float = 6.0
+    drop_s: float = 5.0
+    tote_s: float = 6.0           # tote induct / drop at a pack station
+    # onboard person detection (lidar clustering): detection probability in line of sight, position noise,
+    # share of detections given the wrong class
+    detect_p: float = 0.9
+    detect_sigma: float = 0.1
+    misclass_p: float = 0.05
 
     def circles(self, x: float, y: float, theta: float) -> list[tuple[float, float, float]]:
         """Body as circles of the chassis half-width spaced along its length.
@@ -93,8 +111,13 @@ def agf_spec() -> VehicleSpec:
     """Autonomous counterbalance forklift: 2.7 m x 1.3 m incl. forks (VisionNav VNP15 / OTTO Lifter class).
 
     1.5 m/s empty, 1.3 m/s loaded; three-wheel steering cannot turn on the spot: the ~2 m radius arc is
-    approximated by an in-place turn of the same duration (0.3 rad/s). Li battery 10->90 % in about 1 h;
-    about 5.7 h of continuous driving, roughly an 8 h shift with handling and waiting.
+    approximated by an in-place turn of the same duration. A 90 degree arc of the 2.0 m planning radius at the
+    0.6 m/s turning speed takes pi/2 * 2.0 / 0.6 = 5.2 s, i.e. 0.3 rad/s (the 0.5 rad/s angular limit of the
+    research notes is a cap, not the arc rate). Li battery 10->90 % in about 1 h; about 5.7 h of continuous
+    driving, roughly an 8 h shift with handling and waiting.
+
+    >>> round(math.pi / 2 * 2.0 / 0.6, 1), round((math.pi / 2) / (math.pi / 2 * 2.0 / 0.6), 2)
+    (5.2, 0.3)
     """
     return VehicleSpec(vclass="FORKLIFT", series="자율 카운터밸런스 지게차 (1.5 t급)", kinematic="THREEWHEEL",
                        max_load_kg=1500.0, lift_height=4.5, length=2.7, width=1.3, radius=1.5, max_speed=1.5,
@@ -179,6 +202,7 @@ class Vehicle:
         self.clear_since = 0.0
         self.speed_limits: dict[str, float] = {}
         self.load = False
+        self.load_info: dict = {"loadId": f"{serial}-L", "loadType": "TOTE"}
         self.manual_cmd = (0.0, 0.0, -1.0)      # v, omega, valid-until (sim time)
         self.errors: list[dict] = []
         self.detections: list[dict] = []
@@ -190,6 +214,12 @@ class Vehicle:
         self.stop_reason = ""
         self.served = False            # set by the site when a picker is working at this robot
         self._factsheet_due = True     # published once at start-up and on factsheetRequest
+        # what the world tells the vehicle's load sensors when a pick or drop starts: None when the pallet is
+        # found (pick) or the slot is free (drop), otherwise the failure the vehicle reports
+        self.station_check: Callable[[str, "ActionState"], str | None] | None = None
+        # standard-only vehicles: a second vendor's truck that declares no x_ extensions in its factsheet
+        self.extensions = True
+        self.clock: Clock = SimClock()        # WallClock when the vehicle runs over MQTT in real time
 
     # ------------------------------------------------------------------ helpers
     def _node_msg(self, node_id: str, seq: int, released: bool) -> dict:
@@ -293,7 +323,7 @@ class Vehicle:
 
     def _register_actions(self, node: dict) -> None:
         for a in node.get("actions", []):
-            if a["actionType"] not in NODE_ACTIONS:
+            if a["actionType"] not in NODE_ACTIONS or a["actionType"] not in self.supported_actions():
                 self._error("actionError", f"unsupported action {a['actionType']}")
                 continue
             params = {p["key"]: p["value"] for p in a.get("actionParameters", [])}
@@ -306,8 +336,10 @@ class Vehicle:
             kind = a.get("actionType")
             params = {p["key"]: p["value"] for p in a.get("actionParameters", [])}
             st = ActionState(a.get("actionId", "?"), kind, "FINISHED", blocking=a.get("blockingType", "NONE"))
-            if kind not in INSTANT_ACTIONS:
+            if kind not in self.supported_instant_actions():
                 st.status, st.result = "FAILED", "unsupported"
+                self._error("actionError", f"unsupported instant action {kind}",
+                            refs=[{"referenceKey": "actionId", "referenceValue": st.action_id}])
             elif kind == "startPause":
                 self.paused = True
             elif kind == "stopPause":
@@ -338,6 +370,8 @@ class Vehicle:
             elif kind == "x_resetFault":
                 if self.fault is None:
                     st.result = "no fault"
+                elif self.fault in SAFETY_FAULTS:
+                    st.status, st.result = "FAILED", "안전 관련 고장: 현장 확인 후 차량에서 리셋"
                 elif self.fault in ("DRIVE_FAULT",) and not self.fault_recoverable:
                     st.status, st.result = "FAILED", "재발: 원격 리셋 불가, 현장 조치 필요"
                 elif self.fault in ("LOCALIZATION_LOST", "BATTERY_DEPLETED"):
@@ -431,9 +465,14 @@ class Vehicle:
 
     # ------------------------------------------------------------------ sensing
     def sense(self, obstacles: list[Obstacle], racks: list) -> None:
-        """Onboard detections of people and forklifts, blocked by racks."""
+        """Onboard detections of people and forklifts, blocked by racks.
+
+        Lidar clustering is imperfect: an object in line of sight is found with ``detect_p``, its position is
+        noisy and a share of detections carries the wrong class (a person read as a truck and the reverse).
+        """
+        s = self.spec
         found = []
-        rng2 = self.spec.sense_range
+        rng2 = s.sense_range
         # one detection per object: a forklift body is several circles with the same id
         merged: dict[str, list[Obstacle]] = {}
         for o in obstacles:
@@ -449,8 +488,13 @@ class Vehicle:
             if any(segment_hits_polygon(self.pos, (o.x, o.y), r) for r in racks
                    if not point_in_polygon((o.x, o.y), r)):
                 continue
-            found.append({"cls": o.kind, "x": round(o.x + self.rng.gauss(0, 0.05), 2),
-                          "y": round(o.y + self.rng.gauss(0, 0.05), 2)})
+            if self.rng.random() > s.detect_p:
+                continue
+            cls = o.kind
+            if self.rng.random() < s.misclass_p:
+                cls = "forklift" if cls == "human" else "human"
+            found.append({"cls": cls, "x": round(o.x + self.rng.gauss(0, s.detect_sigma), 2),
+                          "y": round(o.y + self.rng.gauss(0, s.detect_sigma), 2)})
         self.detections = found
 
     def _fields(self, obstacles: list[Obstacle], reverse: bool = False) -> tuple[str, str]:
@@ -460,9 +504,10 @@ class Vehicle:
         # clearing needs extra distance so a stopped vehicle does not creep back into its own field
         p_len = s.field_base + speed * s.field_gain + (0.15 if self.field == "PROTECTIVE" else 0.0)
         w_len = max(2.5, 1.8 + speed * 1.2) + (0.5 if self.field != "CLEAR" else 0.0)
-        # field-set switching: in rack aisles at creep speed the protective field narrows to the
+        # field-set switching: in rack and pick aisles at creep speed the protective field narrows to the
         # body (reduced clearance is only allowed at <= 0.3 m/s)
-        narrow = speed <= 0.35 and any(z.kind in ("aisle", "picking") for z in self.layout.zones_at(self.pos))
+        narrow = speed <= NARROW_FIELD_SPEED + 1e-6 and \
+            any(z.kind in ("aisle", "picking") for z in self.layout.zones_at(self.pos))
         p_half = s.width / 2 + (0.08 if narrow else 0.25)
         flank = 0.03 if narrow else 0.25
         rotating = abs(self.omega) > 1e-3 and speed < 0.05
@@ -504,16 +549,42 @@ class Vehicle:
         if self.edges:
             cap = min(cap, float(self.edges[0].get("maxSpeed") or cap))
             if s.intersection_speed is not None:
-                e = self.edges[0]
-                length = self._edge_len(e)
-                near_start = self.progress < s.intersection_radius and self.layout.is_intersection(e["startNodeId"])
-                near_end = length - self.progress < s.intersection_radius and self.layout.is_intersection(e["endNodeId"])
-                if near_start or near_end:
-                    cap = min(cap, s.intersection_speed)
+                cap = min(cap, self._intersection_cap())
         if self.field == "WARNING":
             cap = min(cap, 0.3 if self.field_cause.startswith(("human", "forklift")) else 0.6)
         if self.load and s.loaded_speed is not None:
             cap = min(cap, s.loaded_speed)
+        return cap
+
+    def _node_limit(self, node_id: str) -> float | None:
+        if not self.layout.is_intersection(node_id):
+            return None
+        s = self.spec
+        return s.blind_speed if node_id in self.layout.blind and s.blind_speed is not None else s.intersection_speed
+
+    def _intersection_cap(self) -> float:
+        """Speed allowed now so the vehicle is already at the intersection limit where its radius begins.
+
+        Within ``intersection_radius`` of an intersection the limit holds; before that the cap rises with the
+        braking distance (v^2 = limit^2 + 2 * decel * d), looking one edge ahead of the current one.
+        """
+        s = self.spec
+        cap = math.inf
+        e0 = self.edges[0]
+        if self.progress < s.intersection_radius:
+            lim = self._node_limit(e0["startNodeId"])
+            if lim is not None:
+                cap = min(cap, lim)
+        ahead = self._edge_len(e0) - self.progress
+        for i in range(min(2, len(self.edges))):
+            e = self.edges[i]
+            if i > 0:
+                ahead += self._edge_len(e)
+            lim = self._node_limit(e["endNodeId"])
+            if lim is not None:
+                # 80 % of the service deceleration and 0.2 m margin: the speed is updated in steps, not continuously
+                d = max(0.0, ahead - s.intersection_radius - 0.2)
+                cap = min(cap, math.sqrt(lim * lim + 2 * 0.8 * s.decel * d))
         return cap
 
     def _stop_distance_ahead(self) -> float:
@@ -607,7 +678,7 @@ class Vehicle:
         t = topic(self.manufacturer, self.serial, "factsheet")
         node_actions = sorted(NODE_ACTIONS & set(self.supported_actions()))
         return {
-            **header(self._ids, t, self.manufacturer, self.serial, now),
+            **header(self._ids, t, self.manufacturer, self.serial, now, self.clock),
             "typeSpecification": {"seriesName": s.series, "agvKinematic": s.kinematic, "agvClass": s.vclass,
                                   "maxLoadMass": s.max_load_kg, "localizationTypes": ["NATURAL"],
                                   "navigationTypes": ["VIRTUAL_LINE_GUIDED"]},
@@ -619,7 +690,8 @@ class Vehicle:
             "protocolFeatures": {
                 "optionalParameters": [],
                 "agvActions": ([{"actionType": a, "actionScopes": ["NODE"]} for a in node_actions] +
-                               [{"actionType": a, "actionScopes": ["INSTANT"]} for a in sorted(INSTANT_ACTIONS)]),
+                               [{"actionType": a, "actionScopes": ["INSTANT"]}
+                                for a in sorted(self.supported_instant_actions())]),
             },
             "agvGeometry": {"envelopes2d": [{"set": "default", "description": "chassis",
                                              "polygonPoints": [{"x": sx * s.length / 2, "y": sy * s.width / 2}
@@ -636,7 +708,25 @@ class Vehicle:
     def supported_actions(self) -> list[str]:
         if self.spec.vclass == "FORKLIFT":
             return ["pick", "drop", "startCharging", "stopCharging"]
-        return ["pick", "drop", "x_toteInduct", "x_toteDrop", "x_pickItems", "startCharging", "stopCharging"]
+        acts = ["pick", "drop", "x_toteInduct", "x_toteDrop", "x_pickItems", "startCharging", "stopCharging"]
+        return acts if self.extensions else [a for a in acts if not a.startswith("x_")]
+
+    def supported_instant_actions(self) -> set[str]:
+        return set(INSTANT_ACTIONS) if self.extensions else {a for a in INSTANT_ACTIONS if not a.startswith("x_")}
+
+    def action_duration(self, a: "ActionState") -> float:
+        """How long a node action takes, from the vehicle's own parameters (orders carry no durations)."""
+        kind, p = a.action_type, a.params
+        if kind in ("pick", "drop"):
+            if self.spec.vclass == "FORKLIFT":
+                h = float(p.get("height") or 0.0)
+                return agf_pick_time(h) if kind == "pick" else agf_drop_time(h)
+            return self.spec.pick_s if kind == "pick" else self.spec.drop_s
+        if kind in ("x_toteInduct", "x_toteDrop"):
+            return self.spec.tote_s * max(1, int(p.get("totes") or 1))    # per tote placed or taken off
+        if kind == "x_pickItems":
+            return 4.0 + 2.5 * int(p.get("items") or 1)      # picker time at the robot (docs/SITE.md)
+        return 0.0
 
     def _step_manual(self, dt: float, now: float, obstacles: list[Obstacle], halted: bool) -> float:
         vx, om, until = self.manual_cmd
@@ -774,8 +864,15 @@ class Vehicle:
             if a.status == "WAITING" and a.params.get("_node") == self.last_node_id \
                     and a.params.get("_seq") == self.last_node_seq:
                 a.status = "RUNNING"
-                a.remaining_s = float(a.params.get("duration", 0.0))
-                if a.action_type == "startCharging":
+                a.remaining_s = self.action_duration(a)
+                failure = self.station_check(self.serial, a) if self.station_check and \
+                    a.action_type in ("pick", "drop") else None
+                if failure:
+                    # the load sensors refuse the handling: the action fails at once and says why
+                    a.status, a.result, a.remaining_s = "FAILED", failure, 0.0
+                    self._error("actionError", failure,
+                                refs=[{"referenceKey": "actionId", "referenceValue": a.action_id}])
+                elif a.action_type == "startCharging":
                     if self.layout.nodes[self.last_node_id].kind == "charger":
                         self.charging = True
                         a.remaining_s = 0.0
@@ -802,6 +899,8 @@ class Vehicle:
                 a.status = "FINISHED"
                 if a.action_type in ("pick", "x_toteInduct"):
                     self.load = True
+                    self.load_info = {"loadId": str(a.params.get("loadId") or f"{self.serial}-L"),
+                                      "loadType": str(a.params.get("loadType") or "TOTE")}
                 elif a.action_type in ("drop", "x_toteDrop"):
                     self.load = False
                 self._state_dirty = True
@@ -817,7 +916,7 @@ class Vehicle:
         base = self.base_end_index()
         remaining_base = sum(self._edge_len(e) for e in self.edges[:base]) - self.progress
         msg = {
-            **header(self._ids, t, self.manufacturer, self.serial, now),
+            **header(self._ids, t, self.manufacturer, self.serial, now, self.clock),
             "orderId": self.order_id,
             "orderUpdateId": self.order_update_id,
             "zoneSetId": "warehouse-a",
@@ -836,7 +935,7 @@ class Vehicle:
                             "mapId": "warehouse-a", "positionInitialized": self.position_initialized,
                             "localizationScore": 0.9 if self.position_initialized else 0.1},
             "velocity": {"vx": round(self.v, 3), "vy": 0.0, "omega": round(self.omega, 3)},
-            "loads": [{"loadId": f"{self.serial}-L", "loadType": "tote"}] if self.load else [],
+            "loads": [dict(self.load_info)] if self.load else [],
             "actionStates": [{"actionId": a.action_id, "actionType": a.action_type,
                               "actionStatus": a.status, "resultDescription": a.result}
                              for a in (self.finished_actions[-4:] + self.actions)],
@@ -847,23 +946,25 @@ class Vehicle:
                               "infoDescription": self.stop_reason}] if self.stop_reason else []),
             "safetyState": {"eStop": "REMOTE" if self.estop else "NONE",
                             "fieldViolation": self.field == "PROTECTIVE"},
-            "x_safetyField": {"state": self.field, "cause": self.field_cause},
-            "x_detections": self.detections,
         }
+        if self.extensions:
+            # vendor extensions: what caused the field state and the objects the scanners classified
+            msg["x_safetyField"] = {"state": self.field, "cause": self.field_cause}
+            msg["x_detections"] = self.detections
         # warnings are reported once, FATAL errors stay until cleared
         self.errors = [e for e in self.errors if e["errorLevel"] == "FATAL"]
         return msg
 
     def visualization_msg(self, now: float) -> dict:
         t = topic(self.manufacturer, self.serial, "visualization")
-        return {**header(self._ids, t, self.manufacturer, self.serial, now),
+        return {**header(self._ids, t, self.manufacturer, self.serial, now, self.clock),
                 "agvPosition": {"x": round(self.x, 3), "y": round(self.y, 3), "theta": round(self.theta, 3),
                                 "mapId": "warehouse-a", "positionInitialized": self.position_initialized},
                 "velocity": {"vx": round(self.v, 3), "vy": 0.0, "omega": round(self.omega, 3)}}
 
     def connection_msg(self, now: float, state: str = "ONLINE") -> dict:
         t = topic(self.manufacturer, self.serial, "connection")
-        return build_connection(header(self._ids, t, self.manufacturer, self.serial, now), state)
+        return build_connection(header(self._ids, t, self.manufacturer, self.serial, now, self.clock), state)
 
     def publish_due(self, now: float, state_period: float = 1.0, vis_period: float = 0.2) -> list[tuple[str, dict]]:
         out = []

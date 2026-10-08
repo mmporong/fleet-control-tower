@@ -10,7 +10,10 @@ from collections import deque
 from dataclasses import dataclass, field
 import math
 
-from .geometry import Point, point_in_polygon, rect
+from .geometry import Point, point_in_polygon, rect, segment_hits_polygon, segments_intersect
+
+# sight line used to judge a blind intersection: points this far back along two approaches must see each other
+BLIND_SIGHT_M = 3.0
 
 COLUMN_X = (3.0, 9.0, 15.0, 21.0, 27.0, 33.0, 39.0, 45.0, 51.0, 57.0)
 ROW_Y = (3.0, 6.5, 10.0, 13.5, 17.0, 20.5, 24.0, 27.5, 31.0)
@@ -76,8 +79,9 @@ class Layout:
     two_way: bool = False
     site: str = "grid"
     doors: dict = field(default_factory=dict)         # id -> facility.DoorSpec
-    walls: list = field(default_factory=list)         # drawn only: [(x1, y1), (x2, y2)]
+    walls: list = field(default_factory=list)         # [(x1, y1), (x2, y2)]: block sight, drawn on the map
     no_stop: set = field(default_factory=set)         # nodes a vehicle must not stop on (door thresholds)
+    blind: set = field(default_factory=set)           # intersections whose approaches cannot see each other
 
     def __post_init__(self) -> None:
         self.reindex()
@@ -95,6 +99,37 @@ class Layout:
             n.id: [z.id for z in self.zones.values() if point_in_polygon(n.pos, z.polygon)]
             for n in self.nodes.values()
         }
+        self.blind = self._blind_intersections()
+
+    def _blind_intersections(self, sight: float = BLIND_SIGHT_M) -> set[str]:
+        """Intersections where storage or a wall hides one approach from another.
+
+        For every pair of lanes meeting at an intersection, the points ``sight`` metres back along each lane
+        (or the lane's far end if shorter) must see each other. Racks and walls block the line.
+        """
+        out = set()
+        for nid in self.nodes:
+            if not self.is_intersection(nid):
+                continue
+            n = self.nodes[nid]
+            probes = []
+            for other in self.neighbors[nid]:
+                o = self.nodes[other]
+                d = math.hypot(o.x - n.x, o.y - n.y) or 1.0
+                k = min(1.0, sight / d)
+                probes.append((n.x + (o.x - n.x) * k, n.y + (o.y - n.y) * k))
+            hidden = False
+            for i, a in enumerate(probes):
+                for b in probes[i + 1:]:
+                    if any(segment_hits_polygon(a, b, r) for r in self.racks) or \
+                            any(segments_intersect(a, b, w[0], w[1]) for w in self.walls):
+                        hidden = True
+                        break
+                if hidden:
+                    break
+            if hidden:
+                out.add(nid)
+        return out
 
     # ---- lookups -------------------------------------------------------
     def edge_between(self, a: str, b: str) -> Edge:
@@ -210,7 +245,8 @@ class Layout:
             "two_way": self.two_way,
             "site": self.site,
             "nodes": [{"id": n.id, "x": n.x, "y": n.y, "kind": n.kind,
-                       "intersection": self.is_intersection(n.id)} for n in self.nodes.values()],
+                       "intersection": self.is_intersection(n.id), "blind": n.id in self.blind}
+                      for n in self.nodes.values()],
             "edges": [{"id": e.id, "s": e.start, "e": e.end, "lane": e.lane,
                        "oneway": e.oneway, "v": e.max_speed, "cls": sorted(e.classes)}
                       for e in self.edges.values()],

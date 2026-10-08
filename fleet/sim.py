@@ -142,7 +142,7 @@ class Simulation:
         self.dt = dt
         self.now = 0.0
         self.steps = 0
-        self.layout = dc_layout() if scenario.site == "dc" else warehouse_layout(scenario.two_way)
+        self.layout = dc_layout(scenario.pick_limit) if scenario.site == "dc" else warehouse_layout(scenario.two_way)
         self.rng_faults = random.Random(seed * 7 + 3)
         self.rng_sense = random.Random(seed * 7 + 4)
         self.rng_doors = random.Random(seed * 7 + 8)
@@ -151,11 +151,14 @@ class Simulation:
         cfg.strategy = strategy
         self.manager = FleetManager(self.layout, self.bus, cfg)
         self.doors = {d.id: DoorDevice(d, self.bus) for d in self.layout.doors.values()}
-        self.dispatcher = Dispatcher(self.manager, random.Random(seed * 7 + 2))
+        self.dispatcher = Dispatcher(self.manager, random.Random(seed * 7 + 2), policy=scenario.dispatch)
         prng = random.Random(seed * 7 + 6)
         if scenario.site == "dc":
             self.process = DcProcess(self.dispatcher, prng, trucks_h=scenario.trucks_h,
-                                     out_pallets_h=scenario.out_pallets_h, tote_orders_h=scenario.tote_orders_h)
+                                     out_pallets_h=scenario.out_pallets_h, tote_orders_h=scenario.tote_orders_h,
+                                     tote_batch=scenario.tote_batch, handling_fail_p=scenario.handling_fail_p,
+                                     inventory_error_p=scenario.inventory_error_p,
+                                     truth_rng=random.Random(seed * 7 + 9))
         else:
             self.process = GridProcess(self.dispatcher, prng, scenario.rate_per_h)
         self.dispatcher.process = self.process
@@ -185,6 +188,8 @@ class Simulation:
         out = [e for e in L.out_edges[node] if L.allowed(e, v.spec.vclass)] or L.out_edges[node]
         rng.choice((0, 1, 2, 3))          # same draw as the old random heading: later draws stay comparable
         v.theta = math.atan2(L.nodes[out[0].end].y - L.nodes[node].y, L.nodes[out[0].end].x - L.nodes[node].x)
+        if isinstance(self.process, DcProcess):
+            v.station_check = self.process.physical_check     # the load sensors meet the site's real inventory
         self.vehicles.append(v)
         self.manager.register(serial)
         self.bus.subscribe(topic("sim", serial, "order"), lambda t, m, v=v: v.on_order(m))

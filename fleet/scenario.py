@@ -31,6 +31,14 @@ class Scenario:
     dock_forklifts_in: int = 2
     dock_forklifts_out: int = 1
     rack_forklift: int = 1
+    # ---- dc operating methods (docs/BENCHMARK.md compares the alternatives)
+    pick_limit: str = "aisle"        # zone | aisle | vehicle: where pickers slow the tote AMRs
+    tote_batch: int = 3              # orders per tote AMR trip (1 = one order per trip)
+    dispatch: str = "cost"           # cost | fifo task assignment
+    # ---- dc exceptions (assumptions, swept in the benchmark): pallet pocket not recognised per pick,
+    # share of rack locations whose WMS record disagrees with what is there
+    handling_fail_p: float = 0.01
+    inventory_error_p: float = 0.01
     # ---- grid fleet and process
     robots: int = 30
     workers: int = 4
