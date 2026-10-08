@@ -434,9 +434,15 @@ class Forklift:
         """
         if self._in_aisle():
             return
-        base = self.layout.nodes[self.loop[self.idx]]
-        if math.hypot(self.bx - base.x, self.by - base.y) > 1e-6:
-            self.idx = self._target()
+        if self.back > 0.0:
+            # backed off short of its node: it is on the edge it came by, so it drives on back along that edge
+            self.bx -= math.cos(self.heading) * self.back
+            self.by -= math.sin(self.heading) * self.back
+            self.back = 0.0
+        else:
+            base = self.layout.nodes[self.loop[self.idx]]
+            if math.hypot(self.bx - base.x, self.by - base.y) > 1e-6:
+                self.idx = self._target()
         self.direction = -self.direction
         self.reversals += 1
         self.blocked_since = None
@@ -459,6 +465,12 @@ class Forklift:
             return
         nxt = self.loop[self._target()]
         tn = self.layout.nodes[nxt]
+        if math.hypot(tn.x - self.bx, tn.y - self.by) < 1e-6:
+            # standing on the target already (rounding at arrival): it counts as reached, so no zero-length
+            # heading (atan2(0, 0) = east) ever starts a turn that is not there
+            self.idx = self._target()
+            nxt = self.loop[self._target()]
+            tn = self.layout.nodes[nxt]
         heading = math.atan2(tn.y - self.by, tn.x - self.bx)
         # lateral manoeuvre toward the passing offset (or back to the lane centre)
         if not any(until > now for until in self.passing.values()) and now >= self.keep_offset_until:
@@ -586,7 +598,7 @@ class Forklift:
         step = speed * dt
         d = math.hypot(tn.x - self.bx, tn.y - self.by)
         self.heading = heading
-        if d <= step:
+        if d <= step + 1e-9:
             self.bx, self.by = tn.x, tn.y
             self.idx = self._target()
             if nxt in self.dwell_nodes and self.lat == 0.0:
@@ -645,12 +657,15 @@ class Forklift:
     def radio_yield(self, now: float) -> str:
         """The control room asks the driver over the radio to give way (RUNBOOK: standoff with a truck).
 
-        Outside a narrow aisle the driver goes back the way they came; inside one (one-way, no turning back)
-        they back off further than they would on their own, up to 6 m.
+        Outside a narrow aisle the driver goes back the way they came; waiting to turn, they may back off up to
+        6 m instead of 4.5 for the next 40 s. Inside a narrow aisle there is nothing to give: the aisle is one-way
+        and the driver cannot turn round in it, so the answer is to wait until the truck is out.
         """
         self.radioed += 1
+        if self._in_aisle():
+            return "통로 안이라 양보할 수 없음(통로를 빠져나간 뒤 양보)"
         self.yield_until = now + 40.0
-        if not self._in_aisle() and now - self.reversed_at > 10.0:
+        if now - self.reversed_at > 10.0:
             self.reversed_at = now
             self.turn_wait_since = None
             self.blocked_since = None

@@ -43,6 +43,10 @@ class Track:
     hits: int = 1
     sources: set[str] = field(default_factory=set)
     heading: float | None = None      # last direction of travel; a stopped truck keeps its orientation
+    # the direction of travel before the track last reversed and where it did (a truck backing off, or turning
+    # round); cleared when it turns a corner
+    heading_before: float | None = None
+    reversed_xy: tuple[float, float] | None = None
     votes: dict = field(default_factory=dict)    # class -> decayed count of detections that called it so
 
     @property
@@ -188,7 +192,14 @@ class Tracker:
             tr.vx *= vmax / sp
             tr.vy *= vmax / sp
         if math.hypot(tr.vx, tr.vy) >= STILL_SPEED:
-            tr.heading = math.atan2(tr.vy, tr.vx)
+            heading = math.atan2(tr.vy, tr.vx)
+            if tr.heading is not None:
+                turned = abs(math.remainder(heading - tr.heading, 2 * math.pi))
+                if turned > 2.6:
+                    tr.heading_before, tr.reversed_xy = tr.heading, (tr.x, tr.y)
+                elif turned > 1.0:
+                    tr.heading_before = tr.reversed_xy = None
+            tr.heading = heading
         tr.last_seen = now
         tr.hits += 1
         tr.sources = set(d.source.split(","))

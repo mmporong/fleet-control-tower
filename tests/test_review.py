@@ -75,16 +75,70 @@ class AisleRequestTests(unittest.TestCase):
         self.assertFalse(any(node_res(n) in self.m.blocks for n in self.nodes))
 
 
+def drive_track(manager, legs, dt: float = 0.5):
+    """Feed one truck's detections along ``legs`` ((x, y) waypoints with the speed to reach each, m/s; speed 0
+    = stand there for that many seconds), ending at the manager's clock. Returns its track."""
+    points = [legs[0][0]]
+    for (x, y), v in legs[1:]:
+        px, py = points[-1]
+        if v == 0:
+            points += [(px, py)] * int(y / dt)          # (seconds, seconds): standing still
+            continue
+        n = max(1, round(math.hypot(x - px, y - py) / (v * dt)))
+        points += [(px + (x - px) * k / n, py + (y - py) * k / n) for k in range(1, n + 1)]
+    manager.tracker = Tracker()
+    t0 = manager.now - dt * (len(points) - 1)
+    for k, (x, y) in enumerate(points):
+        manager.tracker.update([Detection("forklift", x, y, "infra")], t0 + k * dt)
+    (track,) = manager.tracker.tracks.values()
+    return track
+
+
 class StoppedTruckTests(unittest.TestCase):
-    def test_a_truck_waiting_short_of_an_intersection_gets_its_turn_circle(self):
-        sim = quiet_dc()
-        m = sim.manager
-        node = sim.layout.nodes["NE22_8"]                   # the R2 corner on the north main aisle
-        tid = confirmed_track(m, "forklift", node.x, node.y - 3.0)      # backed off 3 m into the aisle mouth
-        m.tracker.tracks[tid].heading = -math.pi / 2                     # its last motion: backing off
-        m._fl_still_since = {tid: m.now - 5.0}
-        m._update_blocks()
-        self.assertEqual(m.block_src.get(node_res("NE22_8")), "turn")
+    def setUp(self):
+        self.sim = quiet_dc()
+        self.m = self.sim.manager
+        self.L = self.sim.layout
+
+    def at(self, node: str, dx: float = 0.0, dy: float = 0.0) -> tuple[float, float]:
+        n = self.L.nodes[node]
+        return (n.x + dx, n.y + dy)
+
+    def blocks_for(self, track, waited: float) -> None:
+        self.m._fl_still_since = {track.id: self.m.now - waited - 3.0}
+        self.m._update_blocks()
+
+    def test_a_truck_that_backed_off_waits_for_the_intersection_it_backed_away_from(self):
+        # FL-R1's two corners: west along the south main aisle into R1, east along the north one into R2
+        for node, back, aisle in (("SW16_2", (1, 0), "Z-R1"), ("NE22_8", (-1, 0), "Z-R2")):
+            for metres in (3.0, 4.5, 6.0):
+                with self.subTest(node=node, metres=metres):
+                    bx, by = back
+                    tr = drive_track(self.m, [(self.at(node, 8 * bx, 8 * by), 0), (self.at(node), 1.5), ((0, 4), 0),
+                                              (self.at(node, metres * bx, metres * by), 0.5), ((0, 4), 0)])
+                    self.assertEqual(self.m._turn_ahead(tr), node)
+                    self.blocks_for(tr, waited=2.0)
+                    self.assertEqual(self.m.block_src.get(node_res(node)), "turn")
+                    # the aisle it turns into is held (6 m back it also stands at the next aisle's mouth)
+                    self.assertIn(aisle, {z for z, _t in self.m.aisle_requests.values()})
+
+    def test_a_truck_driving_the_loop_backwards_is_judged_the_same_way(self):
+        # a driver who turned back drives north out of R2 against its flow, waits at NE22_8, backs off south
+        tr = drive_track(self.m, [(self.at("R2-09", 0, -6), 0), (self.at("NE22_8"), 1.5), ((0, 4), 0),
+                                  (self.at("NE22_8", 0, -3.0), 0.5), ((0, 4), 0)])
+        self.assertEqual(self.m._turn_ahead(tr), "NE22_8")
+
+    def test_a_truck_that_passed_an_intersection_is_not_waiting_at_it(self):
+        tr = drive_track(self.m, [(self.at("SW16_2", 6, 0), 0), (self.at("SW16_2"), 1.5), ((0, 3), 0),
+                                  (self.at("R1-01"), 1.5), ((0, 4), 0)])
+        self.assertIsNone(self.m._turn_ahead(tr))
+
+    def test_the_aisle_request_stays_while_the_truck_waits_on_red(self):
+        # stopped at the queue node short of SW16_2 by the light, past the 20 s the turn request holds
+        tr = drive_track(self.m, [(self.at("SW16_2", 9, 0), 0), (self.at("qSW16_2SW22_8"), 1.5), ((0, 4), 0)])
+        self.blocks_for(tr, waited=30.0)
+        self.assertNotEqual(self.m.block_src.get(node_res("SW16_2")), "turn")
+        self.assertTrue(all(node_res(n) in self.m.aisle_requests for n in self.m._zone_nodes["Z-R1"]))
 
     def test_turning_back_on_a_node_heads_for_the_node_it_came_from(self):
         from fleet.agents import Forklift
@@ -95,6 +149,34 @@ class StoppedTruckTests(unittest.TestCase):
         f.bx, f.by = n.x, n.y
         f._reverse()
         self.assertEqual(f.loop[f._target()], "A1")
+
+    def test_turning_back_after_backing_off_drives_on_from_where_the_truck_stands(self):
+        from fleet.agents import Forklift
+        f = Forklift("F", ["qSW16_2SW22_8", "SW16_2", "R1-01"], self.L, random.Random(1), idx=1)
+        f.bx, f.by = self.at("SW16_2")
+        f.heading, f.back = math.pi, 4.5                    # arrived heading west, backed off 4.5 m east
+        f._place(f.heading)
+        x0, y0 = f.x, f.y
+        f._reverse()
+        self.assertEqual(f.back, 0.0)
+        self.assertAlmostEqual(f.bx, x0, places=6)
+        self.assertAlmostEqual(f.by, y0, places=6)
+        self.assertEqual(f.loop[f._target()], "qSW16_2SW22_8")
+
+    def test_no_turn_on_a_straight_aisle(self):
+        from fleet.agents import Forklift
+        f = Forklift("F", [f"R1-0{k}" for k in range(1, 10)], self.L, random.Random(1), idx=0)
+        f.bx, f.by = self.at("R1-01")
+        f.heading = math.pi / 2
+        f._place(f.heading)
+        headings = set()
+        for k in range(600):
+            f.step(self.sim.dt, 1000.0 + k * self.sim.dt, [], [])
+            headings.add(round(f.heading, 3))
+            if f.loop[f.idx] == "R1-09":
+                break
+        self.assertEqual(f.loop[f.idx], "R1-09")
+        self.assertEqual(headings, {round(math.pi / 2, 3)})
 
 
 class AisleLightTests(unittest.TestCase):
@@ -127,8 +209,38 @@ class AisleLightTests(unittest.TestCase):
         self.assertEqual(f.direction, -1)
         g = Forklift("G", ["R1-01", "R1-02", "R1-03"], L, random.Random(2), idx=1)
         g.bx, g.by = L.nodes["R1-02"].pos
-        g.radio_yield(100.0)
-        self.assertEqual(g.direction, 1)                    # inside the aisle: backs off, does not turn round
+        answer = g.radio_yield(100.0)
+        self.assertEqual(g.direction, 1)                    # inside the aisle: it cannot give way
+        self.assertIn("통로", answer)
+        self.assertLess(g.yield_until, 100.0)
+
+    def test_the_radio_call_goes_to_the_truck_the_robot_is_stuck_at(self):
+        sim = quiet_dc(rack_forklift=1, dock_forklifts_in=1)
+        fl_r1, dock = (next(f for f in sim.forklifts if f.id == i) for i in ("FL-R1", "FL-IN1"))
+        v = sim.vehicle("AGF-01")
+        v.x, v.y = fl_r1.x + 2.0, fl_r1.y
+        v.field_cause = f"forklift:{dock.id}"               # stuck at the dock truck, beside FL-R1
+        answer = sim.radio_yield("AGF-01")
+        self.assertIn(dock.id, answer)
+        self.assertEqual((fl_r1.radioed, fl_r1.direction), (0, 1))
+        v.x, v.y = fl_r1.x + 20.0, fl_r1.y                  # stuck at FL-R1, named by the field, 20 m off
+        v.field_cause = "forklift:FL-R1"
+        sim.radio_yield("AGF-01")
+        self.assertEqual(fl_r1.radioed, 1)
+
+    def test_the_operator_radios_once_per_standoff(self):
+        from types import SimpleNamespace
+        from fleet.autoop import AutoOperator
+        sim = quiet_dc()
+        op = AutoOperator(Operations(sim), random.Random(1))
+        calls = []
+        op._do = lambda cmd, **a: calls.append(cmd) or {"ok": True}
+        sim.manager.robots["AGF-01"].field_cause = "forklift:FL-R1"
+        alarm = SimpleNamespace(type="STANDOFF", source="AGF-01")
+        plan = {"stage": 0}
+        for now in (100.0, 160.0, 220.0):
+            op._respond(alarm, plan, now)
+        self.assertEqual(calls.count("radio_yield"), 1)
 
 
 class ReleaseTests(unittest.TestCase):

@@ -194,8 +194,8 @@ def path_gap(center: Point, radius: float, origin: Point, heading: float, half_l
     """Distance from the front of a vehicle to a circle standing in its path, or None when it is not in it.
 
     The path is the band the body sweeps ahead of the front face, widened by ``side`` on each side (negative:
-    narrowed, for a position that is only an estimate). A circle overlapping that band ahead of the front is in
-    the path; beside or behind the vehicle it is not.
+    narrowed, for a position that is only an estimate). A circle whose centre is ahead of the front face and
+    whose body reaches into that band is in the path; beside or behind the vehicle it is not.
 
     >>> path_gap((2.0, 0.0), 0.3, (0.0, 0.0), 0.0, 0.45, 0.35)
     1.25
