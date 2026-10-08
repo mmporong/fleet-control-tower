@@ -244,6 +244,24 @@ class Simulation:
         self.handovers: list[dict] = []
         self.manager.alarms.listeners.append(self._on_alarm)
         self._build(random.Random(seed * 7 + 5))
+        self.capacity_warnings = self._check_spots()
+
+    def _check_spots(self) -> list[str]:
+        """A fleet larger than the places its idle vehicles can stand (parking bays, chargers, and the pack
+        stations tote AMRs wait at) leaves idle vehicles on the main aisles, where they block traffic. Reported, not refused:
+        the benchmark shows what happens."""
+        L = self.layout
+        out = []
+        by_cls: dict[str, int] = {}
+        for v in self.vehicles:
+            by_cls[v.spec.vclass] = by_cls.get(v.spec.vclass, 0) + 1
+        for cls, n in by_cls.items():
+            spots = sum(1 for node in L.nodes.values() if node.kind in ("park", "charger", "pack")
+                        and any(L.allowed(e, cls) for e in L.out_edges[node.id]))
+            if spots and n > spots:
+                out.append(f"{cls} {n}대 > 대기 자리 {spots}곳")
+                self.manager.event("capacity", "site", f"대수가 대기 자리(주차·충전·패킹)보다 많음: {out[-1]}", "warn")
+        return out
 
     # ------------------------------------------------------------ setup
     def _add_vehicle(self, serial: str, node: str, spec: VehicleSpec | None, rng: random.Random, idx: int) -> None:

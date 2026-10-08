@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from http.client import HTTPConnection
 import json
+import math
 from pathlib import Path
 import random
 import tempfile
@@ -74,6 +75,44 @@ class AisleRequestTests(unittest.TestCase):
         self.assertFalse(any(node_res(n) in self.m.blocks for n in self.nodes))
 
 
+class StoppedTruckTests(unittest.TestCase):
+    def test_a_truck_waiting_short_of_an_intersection_gets_its_turn_circle(self):
+        sim = quiet_dc()
+        m = sim.manager
+        node = sim.layout.nodes["NE22_8"]                   # the R2 corner on the north main aisle
+        tid = confirmed_track(m, "forklift", node.x, node.y - 3.0)      # backed off 3 m into the aisle mouth
+        m.tracker.tracks[tid].heading = -math.pi / 2                     # its last motion: backing off
+        m._fl_still_since = {tid: m.now - 5.0}
+        m._update_blocks()
+        self.assertEqual(m.block_src.get(node_res("NE22_8")), "turn")
+
+    def test_turning_back_on_a_node_heads_for_the_node_it_came_from(self):
+        from fleet.agents import Forklift
+        layout = warehouse_layout()
+        loop = ["A1", "A2", "A3", "A4"]
+        f = Forklift("F", loop, layout, random.Random(1), idx=1)
+        n = layout.nodes["A2"]
+        f.bx, f.by = n.x, n.y
+        f._reverse()
+        self.assertEqual(f.loop[f._target()], "A1")
+
+
+class ReleaseTests(unittest.TestCase):
+    def test_tote_trips_are_released_up_to_the_cap(self):
+        sim = quiet_dc(amr=4)
+        d = sim.dispatcher
+        cap = sim.manager.cfg.pick_aisle_capacity * len(sim.manager.pick_aisles)
+        self.assertEqual(d._tote_room(), cap)
+        sim.manager.cfg.pick_aisle_capacity = 0
+        self.assertEqual(d._tote_room(), math.inf)
+
+    def test_a_fleet_larger_than_its_waiting_places_is_reported(self):
+        from fleet.scenario import get
+        from fleet.sim import Simulation
+        self.assertEqual(Simulation(get("standard"), seed=1).capacity_warnings, [])
+        self.assertTrue(Simulation(get("standard", amr=22), seed=1).capacity_warnings)
+
+
 class FireAndFleetStopTests(unittest.TestCase):
     def test_a_fire_alarm_keeps_a_fleet_stop_and_its_release_returns_to_fire_mode(self):
         sim = quiet_dc()
@@ -139,6 +178,10 @@ class NearMissTests(unittest.TestCase):
         v.v, v.theta = 1.0, 0.0
         beside = Human("B1", "walker", v.x, v.y + v.spec.width / 2 + 0.6, random.Random(1))
         sim.evaluator.check(sim.now, [v], [beside], [], [])
+        self.assertEqual(sim.evaluator.near_misses, 0)
+        # ahead but clear of the swept width (a picker at the shelf face as the vehicle passes): not in the path
+        aside = Human("S1", "walker", v.x + v.spec.length / 2 + 0.6, v.y + v.spec.width / 2 + 0.4, random.Random(3))
+        sim.evaluator.check(sim.now + 5, [v], [aside], [], [])
         self.assertEqual(sim.evaluator.near_misses, 0)
         ahead = Human("A1", "walker", v.x + v.spec.length / 2 + 0.6, v.y, random.Random(2))
         sim.evaluator.check(sim.now + 11, [v], [ahead], [], [])

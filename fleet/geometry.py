@@ -190,19 +190,23 @@ def centroid(points: Iterable[Point]) -> Point:
 
 
 def path_gap(center: Point, radius: float, origin: Point, heading: float, half_length: float,
-             half_width: float, side: float = 0.3) -> float | None:
+             half_width: float, side: float = 0.0) -> float | None:
     """Distance from the front of a vehicle to a circle standing in its path, or None when it is not in it.
 
-    The path is the band ahead of the front, as wide as the body plus ``side`` on each side (someone close
-    enough to step in). Beside or behind the vehicle the circle is not in the path.
+    The path is the band the body sweeps ahead of the front face, widened by ``side`` on each side (negative:
+    narrowed, for a position that is only an estimate). A circle overlapping that band ahead of the front is in
+    the path; beside or behind the vehicle it is not.
 
     >>> path_gap((2.0, 0.0), 0.3, (0.0, 0.0), 0.0, 0.45, 0.35)
     1.25
     >>> path_gap((0.0, 0.8), 0.3, (0.0, 0.0), 0.0, 0.45, 0.35) is None, path_gap((-2.0, 0.0), 0.3, (0, 0), 0.0, 0.45, 0.35)
     (True, None)
+    >>> path_gap((0.4, 0.6), 0.3, (0.0, 0.0), 0.0, 0.45, 0.35) is None      # beside the front corner
+    True
     """
     lx, ly = to_local(center, origin, heading)
-    if lx + radius < half_length or abs(ly) - radius > half_width + side:
+    # ahead: the centre is in front of the front face (someone beside the body is not in its path)
+    if lx < half_length or abs(ly) - radius > half_width + side:
         return None
     return lx - radius - half_length
 

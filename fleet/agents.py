@@ -350,7 +350,8 @@ def expand_loop(layout: Layout, loop: list[str], allowed: set[str] | None = None
 
 
 TURN_RATE = 0.8        # rad/s: a counterbalance truck turning on the spot (rear end at walking pace)
-AISLE_GIVE_UP_S = 120.0  # waiting at an aisle mouth this long, the driver goes back the way they came
+AISLE_GIVE_UP_S = 120.0  # waiting at an aisle mouth (or backed off at a turn) this long, the driver turns back
+ROBOT_GIVE_UP_S = 60.0   # a robot standing in the way that long (no room to pass it), the driver turns back
 
 
 @dataclass
@@ -420,8 +421,14 @@ class Forklift:
         return (self.idx + self.direction) % len(self.loop)
 
     def _reverse(self) -> None:
-        """Driver gives up on the blocked way and drives back the way they came."""
-        self.idx = self._target()
+        """Driver gives up on the blocked way and drives back the way they came.
+
+        Between two nodes the truck turns round on that edge (the node ahead becomes the one it came from);
+        standing on its node it only takes the other direction, so it never targets the node it stands on.
+        """
+        base = self.layout.nodes[self.loop[self.idx]]
+        if math.hypot(self.bx - base.x, self.by - base.y) > 1e-6:
+            self.idx = self._target()
         self.direction = -self.direction
         self.reversals += 1
         self.blocked_since = None
@@ -492,8 +499,11 @@ class Forklift:
                         self.lat_target = side
                         self.passes += 1
                         self.blocked_since = None
-                    elif now - self.reversed_at > 30.0:
+                    elif now - self.blocked_since > ROBOT_GIVE_UP_S and now - self.reversed_at > 30.0:
+                        # a robot that does not move off (the control room usually moves it within seconds):
+                        # the driver eventually goes back the way they came
                         self.reversed_at = now
+                        self.blocked_since = None
                         self._reverse()
                 return
         if self._aisle_occupied(tn, robots):
@@ -525,6 +535,13 @@ class Forklift:
                     # flow of a main aisle: they back off a few metres if they can (above) or keep waiting (the
                     # control room moves the robot within seconds); a driver who could not back off turns anyway
                     # after 30 s in a share of cases, decided once per blocked turn
+                    if self.back >= 3.0 and now - self.turn_wait_since > AISLE_GIVE_UP_S \
+                            and now - self.reversed_at > 30.0:
+                        # backed off as far as it goes and still no gap: the driver goes back the way they came
+                        self.reversed_at = now
+                        self.turn_wait_since = None
+                        self._reverse()
+                        return
                     if self.back > 0.0 or now - self.turn_wait_since < 30.0 or self.turn_decided:
                         self.v = 0.0
                         self.turning = False

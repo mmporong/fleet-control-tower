@@ -105,6 +105,10 @@ class ManagerConfig:
     # alarm (operator action) only past that; collaborative picking waits for people by design, longer still
     blocked_alarm_s: float = 120.0
     collab_blocked_alarm_s: float = 300.0
+    # work released to the picking hall (CONWIP): at most this many tote trips per pick aisle at a time; the
+    # extra tote AMRs stay parked. Without it they queue on the tote spine and the main aisles the forklifts
+    # use for a hall that cannot take them yet (0: off; swept in the benchmark)
+    pick_aisle_capacity: int = 3
     standoff_alarm_s: float = 60.0      # protective stop lasting this long: someone has to clear the vehicle's way
     comms_timeout_s: float = 3.0       # silence after which the vehicle counts as CONNECTIONBROKEN (alert)
     comms_alarm_s: float = 30.0        # silence that needs the operator (alarm); tasks are reassigned then too
@@ -1129,6 +1133,20 @@ class FleetManager:
                 if z is not None:
                     for nid in self._zone_nodes.get(z.id, ()):
                         requests.setdefault(node_res(nid), (z.id, tr.id))
+                # turn request: a truck stopped on a lane just short of an intersection waits to turn there. On a
+                # busy main aisle a robot is always passing through its swing circle, so the driver never gets
+                # a gap; new robots are held out of the circle (those in it carry on) until the truck has turned
+                # the FMS cannot tell a truck that waits to turn from one that just stands there: the request
+                # holds robots for 20 s at a time, then lets them through for 30 s
+                waited = self.now - still[tr.id] - 3.0
+                turn_at = self._turn_ahead(tr) if waited % 50.0 < 20.0 else None
+                if turn_at is not None:
+                    n = self.layout.nodes[turn_at]
+                    zone_r = SWING_RADIUS + CLEARANCE_TURN
+                    for k2, i2 in self._query(n.x, n.y, zone_r):
+                        if k2 == "N" and math.hypot(self.layout.nodes[i2].x - n.x,
+                                                    self.layout.nodes[i2].y - n.y) <= zone_r:
+                            put(node_res(i2), "forklift", tr.id, "turn")
             self._fl_still_since = still
         for z in self.layout.zones.values():
             if z.locked:
@@ -1157,6 +1175,41 @@ class FleetManager:
                 return z
         return None
 
+    def _turn_ahead(self, tr) -> str | None:
+        """The intersection a stopped truck stands in line with on a lane (within 4.5 m), if any.
+
+        Its last direction of travel is tried first; a truck that backed off to let a robot pass last moved
+        away from the intersection it is waiting for, so the opposite direction is tried next.
+        """
+        if tr.heading is None:
+            return None
+        for heading in (tr.heading, tr.heading + math.pi):
+            hx, hy = math.cos(heading), math.sin(heading)
+            for kind, nid in sorted(self._query(tr.x, tr.y, 4.5)):
+                if kind != "N" or not self.layout.is_intersection(nid):
+                    continue
+                n = self.layout.nodes[nid]
+                dx, dy = n.x - tr.x, n.y - tr.y
+                d = math.hypot(dx, dy)
+                if d > 4.5 or d < 0.3 or (dx * hx + dy * hy) / d < 0.85:
+                    continue                    # not in line, or the truck already stands on the node
+                for m in self.layout.neighbors[nid]:
+                    if seg_point_dist((tr.x, tr.y), self.layout.nodes[m].pos, n.pos) <= 1.0:
+                        return nid              # on a lane into that intersection
+        return None
+
+    @property
+    def pick_aisles(self) -> list[Zone]:
+        return [z for z in self.layout.zones.values() if z.kind == "aisle" and z not in self._aisle_zones]
+
+    def pick_aisle_of(self, node: str) -> Zone | None:
+        """The pick aisle (aisle zone tote AMRs work, not a rack aisle) a node lies in, if any."""
+        for zid in self.layout.node_zones.get(node, ()):
+            z = self.layout.zones[zid]
+            if z.kind == "aisle" and z not in self._aisle_zones:
+                return z
+        return None
+
     def _inside_aisle(self, rec: RobotRecord, zone_id: str) -> bool:
         zone = self.layout.zones[zone_id]
         if point_in_polygon((rec.x, rec.y), zone.polygon):
@@ -1170,10 +1223,10 @@ class FleetManager:
         hit = self.blocks.get(res)
         if hit is not None:
             kind, ref = hit
-            # leaving a stopped truck's swept circle: that truck's own occupancy disc does not hold us, as long
-            # as it stands still (its turn zones, aisle signal and a moving truck's path still do)
+            # leaving a stopped truck's swept circle: that truck's own occupancy disc and turn request do not hold
+            # us, as long as it stands still (its aisle signal and a moving truck's path still do)
             escaping = rec.purpose == "evade" and ref is not None and ref == rec.escape_from and \
-                self.block_src.get(res) == "disc" and ref in self.tracker.tracks and \
+                self.block_src.get(res) in ("disc", "turn") and ref in self.tracker.tracks and \
                 self.tracker.tracks[ref].speed < 0.3
             if not escaping:
                 return hit
@@ -1730,10 +1783,18 @@ class FleetManager:
             return
         stalled_ext = {k: v for k, v in self.external.items() if self.now - v.get("moved", self.now) > 4.0}
         stalled_fl = [tr for tr in self.tracker.tracks.values() if tr.cls == "forklift" and tr.speed < 0.2]
+        # where a stopped truck will swing: around itself, and around the intersection it waits to turn at (a
+        # truck that backed off to let robots pass stands metres away from the circle it needs clear)
+        circles = []
+        for tr in stalled_fl:
+            if tr.confirmed:
+                circles.append((tr, (tr.x, tr.y)))
+                turn_at = self._turn_ahead(tr)
+                if turn_at is not None:
+                    circles.append((tr, self.layout.nodes[turn_at].pos))
         for rec in self.robots.values():
             in_swing = not rec.driving and any(
-                tr.confirmed and dist((tr.x, tr.y), (rec.x, rec.y)) < SWING_RADIUS + rec.length / 2 + 0.2
-                for tr in stalled_fl)
+                dist(c, (rec.x, rec.y)) < SWING_RADIUS + rec.length / 2 + 0.2 for _tr, c in circles)
             if not in_swing:
                 rec.swing_since = None        # the 5 s count starts again the next time it stands in a circle
             if self.now < rec.yield_next or not self.can_take_route(rec):
@@ -1754,15 +1815,14 @@ class FleetManager:
                         reason = f"지게차 {tr.id} 대치"
             # standing inside the circle a stopped truck sweeps when it turns: the driver either waits or swings
             # into us, so we leave after 5 s whatever we are waiting for
-            swing = [tr for tr in stalled_fl if tr.confirmed and
-                     dist((tr.x, tr.y), (rec.x, rec.y)) < SWING_RADIUS + rec.length / 2 + 0.2]
+            swing = [(tr, c) for tr, c in circles if dist(c, (rec.x, rec.y)) < SWING_RADIUS + rec.length / 2 + 0.2]
             impassable: set[str] = set()
             escape = None
             if swing and not rec.driving:
                 rec.swing_since = rec.swing_since if rec.swing_since is not None else self.now
                 if self.now - rec.swing_since >= 5.0:
-                    tr = swing[0]
-                    near = {n: dist(self.layout.nodes[n].pos, (tr.x, tr.y)) for n in self.layout.nodes}
+                    tr, centre = swing[0]
+                    near = {n: dist(self.layout.nodes[n].pos, centre) for n in self.layout.nodes}
                     # not through the circle itself, and no stopping close enough to be inside it again
                     impassable = {n for n, d in near.items() if d < SWING_RADIUS + 0.3 and n != here}
                     forbidden.update(n for n, d in near.items() if d < SWING_RADIUS + 2.0)
@@ -1860,7 +1920,7 @@ class FleetManager:
                 if abs(tr.x - rec.x) > 4 or abs(tr.y - rec.y) > 4:
                     continue
                 gap = path_gap((tr.x, tr.y), 0.3, (rec.x, rec.y), heading, rec.length / 2, rec.width / 2,
-                               side=0.3 + NM_TRACK_MARGIN)
+                               side=-NM_TRACK_MARGIN)
                 # the margin is the camera track's position uncertainty (about 1.2 sigma of 0.25 m): the control
                 # room only claims a near miss its own estimate can support
                 if near_miss(abs(rec.v), gap, margin=NM_TRACK_MARGIN, decel=decel):

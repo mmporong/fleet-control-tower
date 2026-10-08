@@ -256,6 +256,19 @@ class Dispatcher:
             return []
         return [action(st.action, self.aid(f"{task.id}-{idx}-{st.action}"), "HARD", st.params)]
 
+    def _tote_room(self) -> float:
+        """How many more tote trips may start now (CONWIP release, ``pick_aisle_capacity`` per pick aisle).
+
+        Releasing work only up to a cap keeps the extra tote AMRs parked instead of queueing on the tote spine
+        and the main aisles (where the forklifts drive) for a picking hall that cannot take them yet.
+        """
+        per_aisle = self.m.cfg.pick_aisle_capacity
+        aisles = len(self.m.pick_aisles)
+        if per_aisle <= 0 or not aisles:
+            return math.inf
+        active = sum(1 for t in self.tasks.values() if t.kind == "TOTE_PICK" and t.state == "ACTIVE")
+        return per_aisle * aisles - active
+
     def _purpose(self, task: Task) -> str:
         return "pickup" if task.leg == 0 else "dropoff" if task.leg == len(task.stops) - 1 else "stop"
 
@@ -376,14 +389,20 @@ class Dispatcher:
         queue = sorted((t for t in self.tasks.values() if t.state == "QUEUED"
                         and (not self.process or self.process.ready(t))),
                        key=lambda t: (-t.priority, t.created))
+        room = self._tote_room()
+        if room <= 0:
+            queue = [t for t in queue if t.kind != "TOTE_PICK"]
         if self.policy == "fifo":
             pairs = []
             for task in queue:
+                if task.kind == "TOTE_PICK" and room <= 0:
+                    continue
                 best = min((r for r in idle if self._eligible(r, task)),
                            key=lambda r: self._pair_cost(r, task, now), default=None)
                 if best is not None:
                     pairs.append((task, best))
                     idle.remove(best)
+                    room -= task.kind == "TOTE_PICK"
             for task, rec in pairs:
                 self._start(task, rec, now)
             return
@@ -397,11 +416,12 @@ class Dispatcher:
             if i in used_t or j in used_r:
                 continue
             task, rec = queue[i], idle[j]
-            if not self._eligible(rec, task):
+            if not self._eligible(rec, task) or task.kind == "TOTE_PICK" and room <= 0:
                 continue
             if self._start(task, rec, now):
                 used_t.add(i)
                 used_r.add(j)
+                room -= task.kind == "TOTE_PICK"
 
     def _start(self, task: Task, best: RobotRecord, now: float) -> bool:
         start_actions = []
