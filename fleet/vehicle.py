@@ -789,7 +789,7 @@ class Vehicle:
             if self.fault:
                 self.stop_reason = f"고장: {FAULT_TYPES[self.fault]}"
             elif self.estop:
-                self.stop_reason = "관제 비상정지"
+                self.stop_reason = "관제 일괄 정지"
             elif self.paused:
                 self.stop_reason = "관제 일시정지"
             elif running_hard:

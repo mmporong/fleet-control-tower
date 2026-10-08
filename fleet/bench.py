@@ -128,7 +128,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--duration", type=float, default=3600.0, help="measured seconds (after the warm-up)")
     ap.add_argument("--warmup", type=float, default=1800.0, help="seconds run before measuring starts")
     ap.add_argument("--robots", default="", help="comma list: fleet-size sweep (overrides scenario)")
-    ap.add_argument("--variants", default="", help="JSON list of {label, manager, vehicle, scenario_overrides}")
+    ap.add_argument("--variants", default="",
+                    help="JSON list of {label, scenario, seeds, strategy, manager, vehicle, scenario_overrides}; "
+                         "scenario and seeds default to --scenario and --seeds, strategy to every --strategies")
     ap.add_argument("--no-operator", action="store_true", help="run without the simulated operator")
     ap.add_argument("--workers", type=int, default=max(1, (os.cpu_count() or 2) - 2))
     ap.add_argument("--out", default="")
@@ -140,14 +142,16 @@ def main(argv: list[str] | None = None) -> int:
     jobs = []
     for strategy in args.strategies.split(","):
         for var in variants:
+            if var.get("strategy", strategy) != strategy:
+                continue                    # a variant that names its strategy runs only under that one
             for n in robots or [None]:
-                for seed in seeds:
+                for seed in var.get("seeds", seeds):
                     overrides = dict(var.get("scenario_overrides", {}))
                     if n is not None:
                         overrides["robots"] = n
                     label = "/".join(x for x in (strategy, var.get("label", "default"),
                                                  f"{n} robots" if n else "") if x)
-                    jobs.append({"scenario": args.scenario, "strategy": strategy, "seed": seed,
+                    jobs.append({"scenario": var.get("scenario", args.scenario), "strategy": strategy, "seed": seed,
                                  "duration": args.duration, "warmup": args.warmup, "manager": var.get("manager", {}),
                                  "vehicle": var.get("vehicle", {}), "scenario_overrides": overrides,
                                  "operator": not args.no_operator, "label": label})

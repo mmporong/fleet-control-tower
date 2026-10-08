@@ -11,7 +11,7 @@
   const STATUS = {
     FAULT: { rank: 0, color: '#b42332', tone: 'danger', label: '고장' },
     OFFLINE: { rank: 1, color: '#b42332', tone: 'danger', label: '통신 두절' },
-    ESTOP: { rank: 2, color: '#b42332', tone: 'danger', label: '비상정지' },
+    ESTOP: { rank: 2, color: '#b42332', tone: 'danger', label: '일괄 정지' },
     PROTECTIVE: { rank: 3, color: '#c2410c', tone: 'warn', label: '보호정지' },
     MANUAL: { rank: 4, color: '#6d28d9', tone: 'special', label: '원격 조종' },
     BLOCKED: { rank: 5, color: '#b45309', tone: 'warn', label: '차단 대기' },

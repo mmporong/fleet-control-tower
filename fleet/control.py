@@ -86,7 +86,7 @@ def near_miss(speed: float, gap: float, margin: float = 0.0, decel: float = 1.5)
     return speed > 0.05 and gap < stop_envelope(speed, decel) - margin
 STATUS_LABEL = {
     "MOVING": "주행", "WAITING": "교통 대기", "BLOCKED": "차단 대기", "ACTION": "작업 동작",
-    "CHARGING": "충전", "IDLE": "대기", "PARKED": "주차", "PAUSED": "일시정지", "ESTOP": "비상정지",
+    "CHARGING": "충전", "IDLE": "대기", "PARKED": "주차", "PAUSED": "일시정지", "ESTOP": "일괄 정지",
     "FAULT": "고장", "MANUAL": "원격 조종", "OFFLINE": "통신 두절", "PROTECTIVE": "보호정지",
 }
 
@@ -1356,7 +1356,7 @@ class FleetManager:
         elif rec.mode == "MANUAL":
             st, why = "MANUAL", "원격 조종 인계"
         elif rec.estop:
-            st, why = "ESTOP", "관제 비상정지"
+            st, why = "ESTOP", "관제 일괄 정지(비안전)"
         elif rec.paused:
             st, why = "PAUSED", "구역 일시정지" if rec.serial in self.area_paused else "관제 일시정지"
         elif rec.safety_field == "PROTECTIVE" and not rec.driving:
