@@ -45,6 +45,7 @@ MAX_BODY = 64 * 1024
 SPEEDS = (0.5, 1.0, 2.0, 5.0, 10.0)
 DEFAULT_DB = Path.home() / ".local" / "state" / "fleet-control-tower" / "server.sqlite3"
 # commands that only a supervisor may give: training drills inject faults into the simulation
+LOCK_SLICE_S = 0.05      # longest the simulation loop holds the state lock in one go
 SUPERVISOR_COMMANDS = {"drill_fault", "drill_comms", "drill_intruder", "drill_door", "drill_fire", "door_field_fix",
                        "set_task_rate"}
 
@@ -126,17 +127,19 @@ class Runner(threading.Thread):
                 continue
             with self.lock:
                 budget += real_dt * self.effective_speed()
-                steps = int(budget / self.sim.dt)
-                if steps > 200:                 # cannot keep up: drop time instead of spiralling
-                    self.lag_s += (steps - 200) * self.sim.dt
-                    steps = 200
-                    budget = steps * self.sim.dt
-                for _ in range(steps):
+                cap = 200 * self.sim.dt
+                if budget > cap:                # cannot keep up: drop time instead of spiralling
+                    self.lag_s += budget - cap
+                    budget = cap
+                # hold the lock only briefly, so web requests (layout, commands) are not kept waiting
+                # behind seconds of simulation when the machine is busy
+                end = time.monotonic() + LOCK_SLICE_S
+                while budget >= self.sim.dt and time.monotonic() < end:
                     self.sim.step()
+                    budget -= self.sim.dt
                     if self.sim.now >= self._next_sample:
                         self._next_sample = self.sim.now + 10.0
                         self._sample()
-                budget -= steps * self.sim.dt
 
     def _sample(self) -> None:
         k = self.sim.kpi()
@@ -275,8 +278,11 @@ def make_handler(runner: Runner, jdamr: JdamrReadOnly | None, auth: Auth | None,
                 if self._api_key() is None and self._require("operator") is None:
                     return
                 after = int((parse_qs(url.query).get("after") or ["0"])[0])
-                with runner.lock:
-                    self._json(runner.sim.dispatcher.events_after(after))
+                if getattr(runner.sim, "simulated", True):
+                    with runner.lock:
+                        self._json(runner.sim.dispatcher.events_after(after))
+                else:                       # the runtime's outbox is durable: events survive a restart
+                    self._json(runner.store.events_after(after))
                 return
             if self._require("viewer") is None:
                 return
@@ -484,6 +490,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--add-user", metavar="NAME:ROLE", help="계정 추가 후 종료(ROLE: viewer|operator|supervisor)")
     ap.add_argument("--create-api-key", metavar="NAME", help="WMS API 키 발급 후 종료")
     ap.add_argument("--read-only", action="store_true", help="관찰 전용: 모든 명령 거부")
+    ap.add_argument("--secure-cookie", action="store_true", help="세션 쿠키에 Secure 속성(TLS 역방향 프록시 뒤에서)")
     ap.add_argument("--auto-operator", action="store_true", help="가상 운영자가 SOP대로 알람에 대응")
     ap.add_argument("--jdamr-url", default=DEFAULT_URL, help="실물 JD-AMR 읽기 전용 상태 URL (루프백만)")
     ap.add_argument("--no-jdamr", action="store_true")
@@ -510,7 +517,7 @@ def main(argv: list[str] | None = None) -> int:
     runner.start()
     if jdamr:
         jdamr.start()
-    server = ThreadingHTTPServer((args.host, args.port), make_handler(runner, jdamr, auth))
+    server = ThreadingHTTPServer((args.host, args.port), make_handler(runner, jdamr, auth, args.secure_cookie))
     server.daemon_threads = True
     print(f"AMR 관제탑: http://{args.host}:{args.port}  (시나리오 {args.scenario}, 전략 {args.strategy}"
           f"{', 관찰 전용' if args.read_only else ''}{', 인증 꺼짐(개발용)' if auth is None else ''})", flush=True)

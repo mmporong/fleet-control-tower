@@ -10,7 +10,7 @@
   };
 
   const S = {
-    layout: null, layoutKey: null, snap: null, prev: null, snapAt: 0, meta: null,
+    layout: null, layoutKey: null, layoutLoading: null, snap: null, prev: null, snapAt: 0, meta: null,
     sel: null, view: { zoom: 1, panX: 0, panY: 0 }, openAlarm: null, tab: store.get('fct.tab', 'fleet'),
     layers: Object.assign({ locks: true, routes: true, wait: true, predict: true, zones: true, heat: false, cams: false, truth: false, ids: true },
       store.get('fct.layers', {})),
@@ -131,13 +131,22 @@
     };
   }
 
+  // the key is kept only once the layout has arrived, so a failed or slow request is asked again by a later snapshot
   async function loadLayout(key) {
-    S.layoutKey = key;
-    const r = await api('/api/layout');
-    if (r.ok) {
-      S.layout = r.body;
-      S.nodes = Object.fromEntries(S.layout.nodes.map((n) => [n.id, n]));
-      fillStaticSelects();
+    if (S.layoutLoading === key) return;
+    S.layoutLoading = key;
+    try {
+      const r = await api('/api/layout');
+      if (r.ok) {
+        S.layout = r.body;
+        S.nodes = Object.fromEntries(S.layout.nodes.map((n) => [n.id, n]));
+        S.layoutKey = key;
+        fillStaticSelects();
+      }
+    } catch (e) {
+      // network error: retried with the next snapshot
+    } finally {
+      if (S.layoutLoading === key) S.layoutLoading = null;
     }
   }
 

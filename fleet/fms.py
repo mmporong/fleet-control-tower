@@ -40,7 +40,7 @@ from .control import FleetManager, ManagerConfig
 from .dispatcher import Dispatcher, task_to_json
 from .layout import Layout
 from .mqtt import MqttClient, Will
-from .mqttbus import MqttBus
+from .mqttbus import MqttBus, add_broker_args, broker_options
 from .ops import Operations
 from .process import TransportProcess
 from .schema import validate_message
@@ -58,7 +58,7 @@ class Runtime:
 
     def __init__(self, layout: Layout, host: str, port: int, store: Store, clock: WallClock | None = None,
                  config: ManagerConfig | None = None, tls=None, run_id: str | None = None,
-                 resync_s: float = 15.0) -> None:
+                 resync_s: float = 15.0, username: str | None = None, password: str | None = None) -> None:
         self.layout = layout
         self.store = store
         self.clock = clock or WallClock()
@@ -66,8 +66,8 @@ class Runtime:
         self.scenario = SimpleNamespace(name="runtime", title="실운영(MQTT)")
         self.seed = 0
         will = json.dumps({"state": "OFFLINE", "run": self.run_id}).encode()
-        self.client = MqttClient(host, port, f"fms-{self.run_id}", keepalive=15, tls=tls,
-                                 will=Will(FMS_TOPIC, will, 1, True))
+        self.client = MqttClient(host, port, f"fms-{self.run_id}", keepalive=15, tls=tls, username=username,
+                                 password=password, will=Will(FMS_TOPIC, will, 1, True))
         self.bus = MqttBus(self.client, self.clock)
         self.manager = FleetManager(layout, self.bus, config or ManagerConfig(), clock=self.clock,
                                     validator=validate_message)
@@ -260,7 +260,7 @@ def main(argv: list[str] | None = None) -> int:
     from .auth import Auth
     from .server import account_commands, is_loopback, make_handler
     ap = argparse.ArgumentParser(description="AMR 관제 서비스(MQTT·VDA 5050)")
-    ap.add_argument("--broker", default="127.0.0.1:1883")
+    add_broker_args(ap)
     ap.add_argument("--site", required=True, help="VDMA LIF 파일 (예: sites/dc.lif.json)")
     ap.add_argument("--extras", help="사이드카(기본: <site>에서 .lif.json → .site.json)")
     ap.add_argument("--host", default="127.0.0.1")
@@ -270,6 +270,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--add-user", metavar="NAME:ROLE")
     ap.add_argument("--create-api-key", metavar="NAME")
     ap.add_argument("--read-only", action="store_true")
+    ap.add_argument("--secure-cookie", action="store_true", help="세션 쿠키에 Secure 속성(TLS 역방향 프록시 뒤에서)")
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     store = Store(args.db)
@@ -290,11 +291,12 @@ def main(argv: list[str] | None = None) -> int:
         generated = auth.bootstrap(os.environ.get("FCT_ADMIN_PASSWORD"))
         if generated:
             print(f"첫 실행: 감독자 계정 admin을 만들었습니다. 비밀번호(한 번만 표시): {generated}", flush=True)
-    host, _, port = args.broker.partition(":")
-    runtime = Runtime(layout, host, int(port or 1883), store)
+    b = broker_options(args)
+    runtime = Runtime(layout, b["host"], b["port"], store, tls=b["tls"], username=b["username"],
+                      password=b["password"])
     runner = RuntimeRunner(runtime, store, read_only=args.read_only)
     runner.start()
-    server = ThreadingHTTPServer((args.host, args.port), make_handler(runner, None, auth))
+    server = ThreadingHTTPServer((args.host, args.port), make_handler(runner, None, auth, args.secure_cookie))
     server.daemon_threads = True
     print(f"관제 서비스: http://{args.host}:{args.port} · 브로커 {args.broker} · 실행 ID {runtime.run_id}", flush=True)
     try:

@@ -636,7 +636,10 @@ class MqttClient:
         except (OSError, MqttError) as exc:
             low, high = self.reconnect_delay
             self._delay = min(max(self._delay * 2, low), high)
-            log.info("mqtt %s: connection attempt failed (%s); next in %.1f s", self.client_id, exc, self._delay)
+            # a refused CONNECT (credentials, client id) is a configuration error that retrying will not fix
+            level = logging.WARNING if isinstance(exc, ConnectRefused) else logging.INFO
+            log.log(level, "mqtt %s: connection attempt failed (%s); next in %.1f s", self.client_id, exc,
+                    self._delay)
 
     def _tls_guard(self):
         # OpenSSL objects are not safe for a concurrent read and write, and SSLSocket.close() swaps out

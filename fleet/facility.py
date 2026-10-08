@@ -177,6 +177,7 @@ class DoorSupervisor:
         self.view = {d: DoorView() for d in doors}
         self.lane_door = {lane: d.id for d in doors.values() for lane in d.lanes}
         self._next_request: dict[str, float] = {d: 0.0 for d in doors}
+        self.started: float | None = None          # first tick: the start-up grace runs from here
         bus.subscribe(f"{DOOR_TOPIC}/+/state", self._on_state)
 
     def _on_state(self, topic: str, msg: dict) -> None:
@@ -190,8 +191,8 @@ class DoorSupervisor:
         v.last_rx = self.bus.now
 
     def _fresh(self, v: DoorView, now: float) -> bool:
-        if v.last_rx < -1e8:
-            return now <= self.STALE_S        # start-up grace before the first state message
+        if v.last_rx < -1e8:                  # start-up grace before the first state message
+            return self.started is None or now - self.started <= self.STALE_S
         return now - v.last_rx <= self.STALE_S
 
     def is_open(self, door_id: str, now: float) -> bool:
@@ -213,6 +214,8 @@ class DoorSupervisor:
         is still let through: taking the door out of use must not shut it in front of that vehicle.
         """
         holders = holders or {}
+        if self.started is None:
+            self.started = now
         for door_id, v in self.view.items():
             who = wanted.get(door_id, set())
             held = holders.get(door_id, set())
@@ -233,7 +236,8 @@ class DoorSupervisor:
             v.requesters = set(who)
             cause, why = "", ""
             if not fresh:
-                cause, why = "stale", f"상태 {now - v.last_rx:.0f}초 무응답"
+                cause, why = "stale", ("상태 보고 없음(제어기 미연결)" if v.last_rx < -1e8
+                                       else f"상태 {now - v.last_rx:.0f}초 무응답")
             elif v.fault:
                 cause, why = "fault", f"제어기 고장 신호 {v.fault}"
             elif v.requested_since is not None and now - v.requested_since > self.RESPONSE_TIMEOUT_S:

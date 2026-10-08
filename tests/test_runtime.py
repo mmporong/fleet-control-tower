@@ -10,7 +10,7 @@ from pathlib import Path
 
 from fleet.agvsim import AgvSim
 from fleet.clock import WallClock
-from fleet.fms import Runtime, RuntimeRunner
+from fleet.fms import Runtime, RuntimeRunner, load_site
 from fleet.layout import warehouse_layout
 from fleet.minibroker import MiniBroker
 from fleet.mqtt import MqttClient
@@ -160,6 +160,23 @@ class RuntimeTests(unittest.TestCase):
         self.assertTrue(wait_for(lambda: task.id not in second.sim.dispatcher.tasks, 60))
         self.assertEqual(second.store.task(task.id)["state"], "DONE")
         self.assertEqual(m2.locks.check(), [])
+        # the WMS reads the outbox through the restart: the first run's events are still there, in order
+        from http.server import ThreadingHTTPServer
+        import threading
+        from urllib.request import urlopen
+        from fleet.server import make_handler
+        httpd = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(second, None, None))
+        threading.Thread(target=httpd.serve_forever, daemon=True).start()
+        try:
+            with urlopen(f"http://127.0.0.1:{httpd.server_address[1]}/api/wms/events?after=0", timeout=5) as resp:
+                events = json.loads(resp.read())
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
+        kinds = [e["type"] for e in events if e["task"] == task.id]
+        self.assertEqual(kinds[:2], ["CREATED", "ASSIGNED"])
+        self.assertEqual(kinds[-1], "COMPLETED")
+        self.assertEqual([e["seq"] for e in events], sorted(e["seq"] for e in events))
 
     def test_malformed_messages_are_dropped_not_fatal(self):
         runner = self.fms("r1")
@@ -178,6 +195,53 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(runner.sim.errors, 0)
         self.assertTrue(m.robots["AMR-01"].connection == "ONLINE")
 
+
+
+class RuntimeDoorTests(unittest.TestCase):
+    """The distribution centre from its LIF file: forklifts cross the fire wall through rapid-roll doors."""
+
+    def setUp(self):
+        self.broker = MiniBroker()
+        self.broker.start()
+        self.layout = load_site(str(Path(__file__).resolve().parents[1] / "sites" / "dc.lif.json"), None)
+        self.clock = WallClock(scale=8.0)
+        self.tmp = tempfile.TemporaryDirectory()
+        store = Store(Path(self.tmp.name) / "fms.sqlite3")
+        self.runner = RuntimeRunner(Runtime(self.layout, "127.0.0.1", self.broker.port, store, clock=self.clock,
+                                            run_id="d1"), store)
+        self.sim = None
+
+    def tearDown(self):
+        self.runner.stop()
+        if self.sim is not None:
+            self.sim.stop()
+        self.broker.stop()
+        self.tmp.cleanup()
+
+    def start(self, doors: bool) -> None:
+        self.runner.start()
+        self.sim = AgvSim(self.layout, [("AGF-01", "FORKLIFT", "PA39_5")], "127.0.0.1", self.broker.port,
+                          clock=self.clock, doors=doors)
+        self.sim.start()
+
+    def test_a_forklift_crosses_the_fire_wall_through_a_door_that_answers(self):
+        self.start(doors=True)
+        m = self.runner.sim.manager
+        self.assertTrue(wait_for(lambda: "AGF-01" in m.robots and m.robots["AGF-01"].factsheet, 10))
+        with self.runner.lock:
+            task = self.runner.sim.dispatcher.add_task("MOVE", "NE54", None, ref="W-DOOR")
+        self.assertTrue(wait_for(lambda: task.id not in self.runner.sim.dispatcher.tasks, 60),
+                        [e["msg"] for e in m.events][-8:])
+        self.assertEqual(task.state, "DONE")
+        self.assertGreaterEqual(m.doors.view["D-N"].opens, 1)
+        self.assertFalse([a for a in m.alarms.active_list() if a["type"] == "FACILITY_FAULT"])
+
+    def test_a_door_without_a_controller_is_kept_out_of_the_routes(self):
+        self.start(doors=False)
+        m = self.runner.sim.manager
+        self.assertTrue(wait_for(lambda: m.doors.view["D-N"].fail_cause == "stale", 10))
+        self.assertTrue(any("상태 보고 없음" in e["msg"] for e in m.events if e["type"] == "door_fault"))
+        self.assertTrue({"NE42_6|NE47", "NW42_6|NW47"} <= m.doors.unavailable_lanes(m.now))
 
 if __name__ == "__main__":
     unittest.main()

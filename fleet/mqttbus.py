@@ -15,9 +15,12 @@ control code runs in the deterministic simulation and against a broker:
 """
 from __future__ import annotations
 
+import argparse
 from collections import deque
 import json
+import os
 import queue
+import ssl
 from typing import Callable
 
 from .bus import LinkQuality
@@ -26,6 +29,22 @@ from .mqtt import MqttClient, topic_matches
 from .vda5050 import split_topic
 
 Handler = Callable[[str, dict], None]
+
+
+def add_broker_args(ap: argparse.ArgumentParser) -> None:
+    """Broker options shared by the services. The password only comes from the environment (not ``ps``)."""
+    ap.add_argument("--broker", default="127.0.0.1:1883", help="브로커 호스트:포트(TLS 기본 포트 8883)")
+    ap.add_argument("--mqtt-user", help="브로커 사용자 이름. 비밀번호는 환경변수 FCT_MQTT_PASSWORD")
+    ap.add_argument("--tls", action="store_true", help="TLS로 연결(시스템 신뢰 저장소)")
+    ap.add_argument("--cafile", help="브로커 CA 인증서(지정하면 TLS)")
+
+
+def broker_options(args: argparse.Namespace) -> dict:
+    """host, port, username, password and an ``ssl`` context from the options of ``add_broker_args``."""
+    tls = ssl.create_default_context(cafile=args.cafile) if args.tls or args.cafile else None
+    host, _, port = args.broker.rpartition(":") if args.broker.count(":") == 1 else (args.broker, "", "")
+    return {"host": host, "port": int(port or (8883 if tls else 1883)), "username": args.mqtt_user,
+            "password": os.environ.get("FCT_MQTT_PASSWORD") if args.mqtt_user else None, "tls": tls}
 
 
 def qos_retain(topic: str) -> tuple[int, bool]:

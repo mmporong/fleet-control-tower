@@ -464,6 +464,31 @@ def random_rng(seed: int):
     return random.Random(seed)
 
 
+class CollaborativeZoneTests(unittest.TestCase):
+    def blocked_by_people(self, sim: Simulation, points: list[tuple[float, float]]) -> set[str]:
+        from fleet.perception import Detection, Tracker
+        m = sim.manager
+        m.tracker = Tracker()
+        for dt in (-0.5, 0.0):                             # two sightings confirm a track
+            m.tracker.update([Detection("human", x, y, "infra") for x, y in points], m.now + dt)
+        m._update_blocks()
+        return {r for r, (kind, _ref) in m.blocks.items() if kind == "human"}
+
+    def test_a_picker_holds_only_the_stop_they_stand_on(self):
+        sim = quiet_dc()
+        k1, k2 = sim.layout.nodes["K2-01"], sim.layout.nodes["K2-02"]
+        # between two pick faces (1.5 m from each): robots may pass the picker at the aisle's speed limit
+        self.assertEqual(self.blocked_by_people(sim, [(k1.x, (k1.y + k2.y) / 2)]), set())
+        # on a pick face: that stop is the picker's
+        self.assertEqual(self.blocked_by_people(sim, [(k2.x, k2.y + 0.2)]), {"N:K2-02"})
+
+    def test_outside_collaborative_zones_a_person_blocks_the_lane_around_them(self):
+        sim = quiet_dc()
+        r = sim.layout.nodes["R1-03"]                      # rack aisle: not a collaborative zone
+        held = self.blocked_by_people(sim, [(r.x, r.y + 1.5)])
+        self.assertTrue(any(res.startswith("L:") for res in held), held)
+
+
 class FacilityAndTruckSignalTests(unittest.TestCase):
     def test_fire_alarm_closes_doors_and_stops_releasing(self):
         sim = quiet_dc()
