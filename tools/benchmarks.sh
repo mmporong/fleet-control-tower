@@ -13,12 +13,14 @@ B=${BENCH:-"python3 -m fleet.bench --workers $WORKERS --warmup $WARMUP"}   # BEN
 PEAK='"trucks_h": 3.0, "out_pallets_h": 39.0, "tote_orders_h": 103.0'
 
 sizing() {
-  # fleet sizing at the design peak (docs/SITE.md section 5): one class varied, the others generous
+  # fleet sizing at the design peak (docs/SITE.md section 5): one class varied, the others fixed. Fleets stay
+  # within the places idle vehicles can stand (AGF 11, tote AMR 17); a pick-speed variant shows that trade-off
   $B --scenario standard --seeds 1,2 --duration 3600 --out results/dc_sizing.json --variants "[
-    $(for n in 8 10 12 14 16; do printf '{"label": "agf%02d", "scenario_overrides": {%s, "agf": %d, "amr": 24, "pickers": 8}},' $n "$PEAK" $n; done)
-    $(for n in 12 16 20 24 28; do printf '{"label": "amr%02d", "scenario_overrides": {%s, "agf": 16, "amr": %d, "pickers": 8}},' $n "$PEAK" $n; done)
-    $(for n in 5 6 7; do printf '{"label": "pickers%d", "scenario_overrides": {%s, "agf": 16, "amr": 28, "pickers": %d}},' $n "$PEAK" $n; done)
-    {\"label\": \"pickers8\", \"scenario_overrides\": {$PEAK, \"agf\": 16, \"amr\": 28, \"pickers\": 8}}]"
+    $(for n in 8 9 10 11; do printf '{"label": "agf%02d", "scenario_overrides": {%s, "agf": %d, "amr": 16, "pickers": 7}},' $n "$PEAK" $n; done)
+    $(for n in 10 12 14 16; do printf '{"label": "amr%02d", "scenario_overrides": {%s, "agf": 10, "amr": %d, "pickers": 7}},' $n "$PEAK" $n; done)
+    $(for n in 5 6 8; do printf '{"label": "pickers%d", "scenario_overrides": {%s, "agf": 10, "amr": 16, "pickers": %d}},' $n "$PEAK" $n; done)
+    $(for n in 12 16; do printf '{"label": "amr%02d-vehicle", "scenario_overrides": {%s, "agf": 10, "amr": %d, "pickers": 7, "pick_limit": "vehicle"}},' $n "$PEAK" $n; done)
+    {\"label\": \"agf10-nocap\", \"scenario_overrides\": {$PEAK, \"agf\": 10, \"amr\": 16, \"pickers\": 7}, \"manager\": {\"pick_aisle_capacity\": 0}}]"
 }
 
 shift_runs() {
