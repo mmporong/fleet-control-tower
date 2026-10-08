@@ -79,6 +79,32 @@ UPSTREAM_REPAIRS: dict[tuple[str, str], tuple[str, ...]] = {
 }
 
 
+def _errata_200(name: str, schema: dict) -> None:
+    """Where the 2.0.0 schema files contradict the 2.0.0 specification text, follow the text (as 2.1.0 does).
+
+    - instantActions: an action is identified by ``actionType`` (the files say ``actionName``);
+    - order: the deviation field is ``allowedDeviationXY`` (the files say ``allowedDeviationXy``);
+    - state: ``PAUSED`` is a valid actionStatus (missing from the enum).
+    """
+    if name == "instantActions":
+        item = schema["properties"]["actions"]["items"]
+        props = item["properties"]
+        if "actionName" in props:
+            props["actionType"] = props.pop("actionName")
+        item["required"] = ["actionType" if r == "actionName" else r for r in item.get("required", [])]
+    elif name == "order":
+        pos = schema["properties"]["nodes"]["items"]["properties"]["nodePosition"]["properties"]
+        if "allowedDeviationXy" in pos:
+            pos["allowedDeviationXY"] = pos.pop("allowedDeviationXy")
+    elif name == "state":
+        status = schema["properties"]["actionStates"]["items"]["properties"]["actionStatus"]
+        if "PAUSED" not in status["enum"]:
+            status["enum"] = [*status["enum"][:3], "PAUSED", *status["enum"][3:]]
+
+
+SPEC_ERRATA = {"2.0.0": _errata_200}
+
+
 class SchemaError(ValueError):
     """The schema uses something this validator does not implement, or is malformed."""
 
@@ -459,8 +485,11 @@ def _schema_file(version: str, name: str) -> Path:
     raise FileNotFoundError(f"no VDA 5050 {version} schema for {name!r} in {folder}")
 
 
-def load_vda5050_schemas(version: str = "2.0.0") -> dict[str, dict]:
+def load_vda5050_schemas(version: str = "2.0.0", errata: bool = True) -> dict[str, dict]:
     """Official schemas by topic name, with the known upstream defects repaired.
+
+    ``errata`` also applies the corrections in :data:`SPEC_ERRATA`, where the schema files contradict the
+    specification text; ``errata=False`` returns the files as published (structural repairs only).
 
     A fresh copy is read on every call; see :func:`validate` before changing one.
     """
@@ -472,6 +501,8 @@ def load_vda5050_schemas(version: str = "2.0.0") -> dict[str, dict]:
             for token in pointer.split("/")[1:]:
                 node = node[token]
             _relocate_properties(node, pointer)
+        if errata and version in SPEC_ERRATA:
+            SPEC_ERRATA[version](name, schema)
         out[name] = schema
     return out
 

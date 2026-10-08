@@ -45,17 +45,17 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 ## 읽을 때 적용하는 보정
 
-파일은 그대로 두고, `fleet/schema.py`의 `load_vda5050_schemas("2.0.0")`가 읽은 뒤 한 가지만 보정합니다(`UPSTREAM_REPAIRS`).
+파일은 그대로 두고, `fleet/schema.py`의 `load_vda5050_schemas("2.0.0")`가 읽은 뒤 구조 보정 한 가지(`UPSTREAM_REPAIRS`, 아래)와 정오표 세 가지(`SPEC_ERRATA`, 다음 절)를 적용합니다.
 
 - `factsheet.json`은 루트와 `protocolLimits.maxArrayLens` 두 곳에서 속성 정의(`headerId`, `typeSpecification`, `order.nodes` 등)를 `properties` 안이 아니라 키워드 자리에 적었습니다. 표준 검증기는 이 키들을 모르는 키워드로 보고 무시하므로, 원본 그대로면 factsheet는 루트의 `type`과 `required`만 검사됩니다. 로더는 이 정의들을 `properties` 아래로 옮깁니다. 2.1.0 태그의 `factsheet.schema`가 같은 구조로 고쳐져 있습니다.
 - 원본 파일을 그대로 컴파일하면 `SchemaError`가 나고, 테스트가 이를 확인합니다.
 
-## 명세 본문과 다른 점(원본 그대로 둠)
+## 명세 본문과 다른 점
 
-검증 결과를 읽을 때 알아야 할 2.0.0 스키마의 특성입니다. 스키마 규칙이므로 보정하지 않았습니다.
+2.0.0 스키마 파일이 명세 본문과 어긋나는 곳입니다. 파일은 그대로 두고, 로더(`load_vda5050_schemas`)의 기본값이 아래 세 가지를 명세 본문과 2.1.0 스키마에 맞춰 읽습니다(`fleet/schema.py`의 `SPEC_ERRATA`). `errata=False`로 읽으면 파일 그대로의 규칙으로 검증합니다. 다른 업체 차량이 2.0.0 파일 그대로 검증하는 경우를 대비해 두 방식 모두 테스트로 고정했습니다.
 
-- `instantActions`의 action 항목은 `actionType`이 아니라 `actionName`을 필수로 요구합니다. 명세 본문과 `order` 스키마, 2.1.0 스키마는 `actionType`입니다.
-- `state.actionStates[].actionStatus` enum에 `PAUSED`가 없습니다. 명세 본문은 `PAUSED`를 허용합니다(2.1.0 스키마도 빠져 있음).
-- `order.nodes[].nodePosition`의 편차 필드 이름이 `allowedDeviationXy`입니다. 명세 본문과 2.1.0은 `allowedDeviationXY`입니다.
+- (보정) `instantActions`의 action 항목은 파일에서 `actionName`을 필수로 요구합니다. 명세 본문과 `order` 스키마, 2.1.0 스키마는 `actionType`입니다.
+- (보정) `state.actionStates[].actionStatus` enum에 `PAUSED`가 없습니다. 명세 본문은 `PAUSED`를 허용합니다(2.1.0 스키마도 빠져 있음).
+- (보정) `order.nodes[].nodePosition`의 편차 필드 이름이 `allowedDeviationXy`입니다. 명세 본문과 2.1.0은 `allowedDeviationXY`입니다.
 - 어떤 스키마도 `additionalProperties`를 쓰지 않으므로 정의되지 않은 필드(`x_` 확장 포함)는 모든 위치에서 허용됩니다.
 - `timestamp`의 `format: date-time`은 JSON Schema에서 주석이므로 검사되지 않습니다.

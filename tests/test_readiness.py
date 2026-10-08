@@ -344,3 +344,36 @@ class RackModelTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class OfficialSchemaTests(unittest.TestCase):
+    def test_every_published_message_passes_the_official_schema(self):
+        from fleet.schema import validate_message
+        from fleet.vda5050 import split_topic
+        sim = Simulation(get("standard", fault_mtbf_h=1.0, comms_mtbf_h=1.0), seed=2)
+        problems: list[str] = []
+        seen: set[str] = set()
+        orig = sim.bus.publish
+
+        def checked(t, payload, now):
+            parts = split_topic(t)
+            if parts:
+                seen.add(parts[2])
+                problems.extend(f"{parts[2]}: {p}" for p in validate_message(parts[2], payload)[:1])
+            return orig(t, payload, now)
+
+        sim.bus.publish = checked
+        for v in sim.vehicles:
+            problems.extend(validate_message("connection", v.connection_msg(0.0)))
+        sim.run(240)
+        self.assertEqual(problems[:5], [])
+        self.assertTrue({"state", "visualization", "order", "instantActions", "factsheet"} <= seen)
+
+    def test_spec_errata_are_applied_on_purpose(self):
+        from fleet.schema import load_vda5050_schemas, validate
+        msg = {"headerId": 1, "timestamp": "2026-10-01T00:00:00.000Z", "version": "2.0.0", "manufacturer": "sim",
+               "serialNumber": "AMR-01", "actions": [{"actionType": "startPause", "actionId": "a1",
+                                                      "blockingType": "HARD"}]}
+        self.assertEqual(validate(load_vda5050_schemas()["instantActions"], msg), [])
+        raw = load_vda5050_schemas(errata=False)["instantActions"]
+        self.assertTrue(any("actionName" in p for p in validate(raw, msg)))   # the published file's quirk

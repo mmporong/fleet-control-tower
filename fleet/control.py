@@ -198,10 +198,11 @@ class FleetManager:
                          "resends": 0, "protective_stops": 0, "protective_human": 0, "near_miss": 0,
                          "nudges": 0, "mismatch": 0, "comms_lost": 0, "invalid_msgs": 0}
         self._grid = self._build_resource_grid()
-        bus.subscribe(f"uagv/v2/{manufacturer}/+/state", self._on_state)
-        bus.subscribe(f"uagv/v2/{manufacturer}/+/visualization", self._on_vis)
-        bus.subscribe(f"uagv/v2/{manufacturer}/+/connection", self._on_connection)
-        bus.subscribe(f"uagv/v2/{manufacturer}/+/factsheet", self._on_factsheet)
+        # every manufacturer on the site: "+" in the manufacturer level (orders go back under each one's own)
+        bus.subscribe("uagv/v2/+/+/state", self._on_state)
+        bus.subscribe("uagv/v2/+/+/visualization", self._on_vis)
+        bus.subscribe("uagv/v2/+/+/connection", self._on_connection)
+        bus.subscribe("uagv/v2/+/+/factsheet", self._on_factsheet)
         self.doors = DoorSupervisor(layout.doors, bus, self.alarms, self.event) if layout.doors else None
         self._zone_nodes: dict[str, list[str]] = {}
         for nid, zones in layout.node_zones.items():
@@ -215,24 +216,32 @@ class FleetManager:
                             "level": level, **data})
 
     # ================================================================ inbound
-    def register(self, serial: str) -> RobotRecord:
-        rec = self.robots.setdefault(serial, RobotRecord(serial, self.manufacturer))
+    def register(self, serial: str, manufacturer: str | None = None) -> RobotRecord:
+        """Record of a vehicle; serial numbers are assumed unique across manufacturers on one site."""
+        rec = self.robots.setdefault(serial, RobotRecord(serial, manufacturer or self.manufacturer))
+        if manufacturer:
+            rec.manufacturer = manufacturer
         return rec
 
     def _serial(self, t: str) -> str:
         return t.split("/")[3]
 
+    def _rec(self, t: str) -> RobotRecord:
+        """Record for a message topic uagv/v2/<manufacturer>/<serial>/<name> (several vendors share a site)."""
+        parts = t.split("/")
+        return self.register(parts[3], parts[2])
+
     def _on_connection(self, t: str, msg: dict) -> None:
         if not self._accept(t, "connection", msg):
             return
-        rec = self.register(self._serial(t))
+        rec = self._rec(t)
         rec.connection = msg["connectionState"]
         rec.last_seen = self.now
 
     def _on_factsheet(self, t: str, msg: dict) -> None:
         if not self._accept(t, "factsheet", msg):
             return
-        rec = self.register(self._serial(t))
+        rec = self._rec(t)
         rec.factsheet = msg
         rec.vclass = msg["typeSpecification"]["agvClass"]
         rec.length = float(msg["physicalParameters"]["length"])
@@ -263,7 +272,7 @@ class FleetManager:
     def _on_vis(self, t: str, msg: dict) -> None:
         if not self._accept(t, "visualization", msg):
             return
-        rec = self.register(self._serial(t))
+        rec = self._rec(t)
         p = msg.get("agvPosition")            # optional in VDA 5050: without it the last pose stays
         if p:
             rec.x, rec.y, rec.theta = p["x"], p["y"], p["theta"]
@@ -287,7 +296,7 @@ class FleetManager:
     def _on_state(self, t: str, msg: dict) -> None:
         if not self._accept(t, "state", msg):
             return
-        rec = self.register(self._serial(t))
+        rec = self._rec(t)
         self._seen(rec, msg)
         rec.has_state = True
         # optional fields (agvPosition, velocity, loads, paused, distanceSinceLastNode, safetyState parts) keep
@@ -442,8 +451,8 @@ class FleetManager:
         return f"{kind}-{self._action_seq}"
 
     def _instant(self, rec: RobotRecord, actions: list[dict]) -> None:
-        t = topic(self.manufacturer, rec.serial, "instantActions")
-        msg = build_instant_actions(header(self.ids, t, self.manufacturer, rec.serial, self.now, self.clock),
+        t = topic(rec.manufacturer, rec.serial, "instantActions")
+        msg = build_instant_actions(header(self.ids, t, rec.manufacturer, rec.serial, self.now, self.clock),
                                     actions)
         self.bus.publish(t, msg, self.now)
 
@@ -467,8 +476,8 @@ class FleetManager:
             edges.append(RouteEdge(e.id, a, b, self._edge_speed(rec, e)))
         if not new:
             rec.update_id += 1
-        t = topic(self.manufacturer, rec.serial, "order")
-        msg = build_order(header(self.ids, t, self.manufacturer, rec.serial, self.now, self.clock), rec.order_id,
+        t = topic(rec.manufacturer, rec.serial, "order")
+        msg = build_order(header(self.ids, t, rec.manufacturer, rec.serial, self.now, self.clock), rec.order_id,
                           rec.update_id, nodes, edges, 2 * i0, rec.base_end - i0 + 1)
         self.bus.publish(t, msg, self.now)
         self.counters["order_updates" if not new else "orders"] += 1
@@ -679,7 +688,7 @@ class FleetManager:
                     and now - rec.last_order_at > self.cfg.order_resend_s \
                     and (rec.state_order_id != rec.last_order["orderId"]
                          or rec.state_update_id < rec.last_order["orderUpdateId"]):
-                self.bus.publish(topic(self.manufacturer, rec.serial, "order"), rec.last_order, now)
+                self.bus.publish(topic(rec.manufacturer, rec.serial, "order"), rec.last_order, now)
                 rec.last_order_at = now
                 self.counters["resends"] += 1
         self._zone_speeds()
@@ -1535,8 +1544,9 @@ class FleetManager:
                 self._zone_broadcast[zid] = limit
                 for rec in self.robots.values():
                     if self.supports(rec, "x_fleetSpeedLimit"):     # others carry it in edge maxSpeed
-                        self._instant(rec, [action("x_fleetSpeedLimit", self._aid("x_speed"), "NONE",
-                                                   {"zoneId": zid, "limit": limit})])
+                        # no "limit" parameter lifts the zone's limit (parameter values may not be null)
+                        params = {"zoneId": zid} if limit is None else {"zoneId": zid, "limit": limit}
+                        self._instant(rec, [action("x_fleetSpeedLimit", self._aid("x_speed"), "NONE", params)])
         if rebroadcast:
             self._last_zone_rebroadcast = self.now
 

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from itertools import count
+import math
 from typing import Any
 
 from .clock import Clock, SimClock
@@ -140,7 +141,8 @@ def build_order(hdr: dict, order_id: str, update_id: int, nodes: list[RouteNode]
     for i, n in enumerate(nodes):
         pos = {"x": round(n.x, 3), "y": round(n.y, 3), "mapId": MAP_ID, "allowedDeviationXY": 0.5}
         if n.theta is not None:
-            pos["theta"] = round(n.theta, 3)
+            # rounding pi up to 3.142 would leave the [-pi, pi] range the schema allows
+            pos["theta"] = max(-math.pi, min(math.pi, round(n.theta, 3)))
             pos["allowedDeviationTheta"] = 0.1
         out_nodes.append({
             "nodeId": n.node_id,

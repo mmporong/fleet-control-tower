@@ -52,8 +52,8 @@ MINIMAL: dict[str, dict] = {
         "agvGeometry": {},
         "loadSpecification": {},
     },
-    # the 2.0.0 schema calls this field actionName; the specification text and the 2.1.0 schema say actionType
-    "instantActions": {**HDR, "actions": [{"actionName": "x_fleetSpeedLimit", "actionId": "a-1", "blockingType": "NONE",
+    # the 2.0.0 schema file calls this field actionName; the loader follows the specification text (actionType)
+    "instantActions": {**HDR, "actions": [{"actionType": "x_fleetSpeedLimit", "actionId": "a-1", "blockingType": "NONE",
                                            "actionParameters": [{"key": "limit", "value": 0.3}]}]},
     "order": {**HDR, "orderId": "o-1", "orderUpdateId": 0, "edges": [],
               "nodes": [{"nodeId": "n1", "sequenceId": 0, "released": True,
@@ -226,7 +226,6 @@ def apply_reported_fixes(name: str, msg: dict) -> dict:
         limits.setdefault("maxArrayLens", {})
     elif name == "instantActions":
         for a in out.get("actions", []):
-            a.setdefault("actionName", a.get("actionType"))   # defect of the 2.0.0 schema, see SOURCE.md
             a["actionParameters"] = [p for p in a.get("actionParameters", []) if p.get("value") is not None]
     return out
 
@@ -373,17 +372,22 @@ class Vda5050MessageTests(unittest.TestCase):
                 self.assertEqual([x for x in left if x[1]], [])
 
     def test_properties_of_the_2_0_0_schemas(self):
-        """Rules of the published 2.0.0 schemas that differ from the specification text, kept as published."""
+        """Rules of the published 2.0.0 schema files that differ from the specification text.
+
+        The files keep them (errata=False); the loader's default follows the specification text."""
+        raw = load_vda5050_schemas(errata=False)
         # extra fields are allowed everywhere: no schema uses additionalProperties
         self.assertEqual(validate_message("state", {**MINIMAL["state"], "x_safetyField": {"state": "CLEAR"}}), [])
-        # instant actions need actionName, not the actionType of the specification text
+        # instant actions: the file needs actionName, the specification text says actionType
         spec_style = mutate(MINIMAL["instantActions"], ("actions", 0),
                             {"actionType": "startPause", "actionId": "a", "blockingType": "HARD"})
-        self.assertEqual(validate_message("instantActions", spec_style),
+        self.assertEqual(validate(raw["instantActions"], spec_style),
                          ["$.actions[0]: missing required property 'actionName'"])
-        # actionStatus has no PAUSED although the specification text defines it
+        self.assertEqual(validate_message("instantActions", spec_style), [])
+        # actionStatus: the file has no PAUSED although the specification text defines it
         paused = mutate(MINIMAL["state"], ("actionStates",), [{"actionId": "a", "actionStatus": "PAUSED"}])
-        self.assertEqual(len(validate_message("state", paused)), 1)
+        self.assertEqual(len(validate(raw["state"], paused)), 1)
+        self.assertEqual(validate_message("state", paused), [])
         # visualization and instantActions have no required header fields
         self.assertEqual(validate_message("visualization", {}), [])
         self.assertEqual(validate_message("instantActions", {}), [])

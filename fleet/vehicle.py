@@ -685,7 +685,17 @@ class Vehicle:
             "physicalParameters": {"speedMin": 0.0, "speedMax": s.max_speed, "accelerationMax": s.accel,
                                    "decelerationMax": s.decel, "heightMin": 0.0,
                                    "heightMax": s.lift_height, "width": s.width, "length": s.length},
-            "protocolLimits": {"timing": {"minOrderInterval": 0.2, "minStateInterval": 0.2,
+            # what the vehicle's parser accepts: the master control must stay inside these limits
+            "protocolLimits": {"maxStringLens": {"msgLen": 1_000_000, "topicSerialLen": 64, "topicElemLen": 64,
+                                                 "idLen": 64, "idNumericalOnly": False, "enumLen": 32,
+                                                 "loadIdLen": 64},
+                               "maxArrayLens": {"order.nodes": 100, "order.edges": 99, "node.actions": 8,
+                                                "edge.actions": 8, "actions.actionsParameters": 16,
+                                                "instantActions": 16, "state.nodeStates": 100,
+                                                "state.edgeStates": 99, "state.loads": 4, "state.actionStates": 32,
+                                                "state.errors": 16, "state.information": 8,
+                                                "error.errorReferences": 8, "information.infoReferences": 8},
+                               "timing": {"minOrderInterval": 0.2, "minStateInterval": 0.2,
                                           "defaultStateInterval": 1.0, "visualizationInterval": 0.2}},
             "protocolFeatures": {
                 "optionalParameters": [],
