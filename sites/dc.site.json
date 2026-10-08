@@ -351,7 +351,8 @@
    ],
    "staticSpeed": 0.8,
    "humanSpeed": 0.3,
-   "locked": false
+   "locked": false,
+   "collaborative": false
   },
   {
    "id": "Z-OUT",
@@ -377,7 +378,8 @@
    ],
    "staticSpeed": 0.8,
    "humanSpeed": 0.3,
-   "locked": false
+   "locked": false,
+   "collaborative": false
   },
   {
    "id": "Z-PACK",
@@ -403,7 +405,8 @@
    ],
    "staticSpeed": null,
    "humanSpeed": 0.3,
-   "locked": false
+   "locked": false,
+   "collaborative": true
   },
   {
    "id": "Z-RACK",
@@ -429,7 +432,8 @@
    ],
    "staticSpeed": 1.0,
    "humanSpeed": 0.5,
-   "locked": false
+   "locked": false,
+   "collaborative": false
   },
   {
    "id": "Z-PICK",
@@ -455,7 +459,8 @@
    ],
    "staticSpeed": 1.0,
    "humanSpeed": null,
-   "locked": false
+   "locked": false,
+   "collaborative": true
   },
   {
    "id": "Z-PICK-END-S",
@@ -481,7 +486,8 @@
    ],
    "staticSpeed": null,
    "humanSpeed": 0.3,
-   "locked": false
+   "locked": false,
+   "collaborative": false
   },
   {
    "id": "Z-PICK-END-N",
@@ -507,7 +513,8 @@
    ],
    "staticSpeed": null,
    "humanSpeed": 0.3,
-   "locked": false
+   "locked": false,
+   "collaborative": false
   },
   {
    "id": "Z-CROSS-S",
@@ -533,7 +540,8 @@
    ],
    "staticSpeed": null,
    "humanSpeed": 0.3,
-   "locked": false
+   "locked": false,
+   "collaborative": false
   },
   {
    "id": "Z-CROSS-N",
@@ -559,7 +567,8 @@
    ],
    "staticSpeed": null,
    "humanSpeed": 0.3,
-   "locked": false
+   "locked": false,
+   "collaborative": false
   },
   {
    "id": "Z-WALK",
@@ -585,7 +594,8 @@
    ],
    "staticSpeed": null,
    "humanSpeed": null,
-   "locked": false
+   "locked": false,
+   "collaborative": false
   },
   {
    "id": "Z-BAY",
@@ -611,7 +621,8 @@
    ],
    "staticSpeed": null,
    "humanSpeed": null,
-   "locked": false
+   "locked": false,
+   "collaborative": false
   },
   {
    "id": "Z-R1",
@@ -637,7 +648,8 @@
    ],
    "staticSpeed": null,
    "humanSpeed": null,
-   "locked": false
+   "locked": false,
+   "collaborative": false
   },
   {
    "id": "Z-R2",
@@ -663,7 +675,8 @@
    ],
    "staticSpeed": null,
    "humanSpeed": null,
-   "locked": false
+   "locked": false,
+   "collaborative": false
   },
   {
    "id": "Z-R3",
@@ -689,7 +702,8 @@
    ],
    "staticSpeed": null,
    "humanSpeed": null,
-   "locked": false
+   "locked": false,
+   "collaborative": false
   },
   {
    "id": "Z-R4",
@@ -715,7 +729,8 @@
    ],
    "staticSpeed": null,
    "humanSpeed": null,
-   "locked": false
+   "locked": false,
+   "collaborative": false
   },
   {
    "id": "Z-R5",
@@ -741,7 +756,8 @@
    ],
    "staticSpeed": null,
    "humanSpeed": null,
-   "locked": false
+   "locked": false,
+   "collaborative": false
   },
   {
    "id": "Z-K1",
@@ -767,7 +783,8 @@
    ],
    "staticSpeed": null,
    "humanSpeed": 0.3,
-   "locked": false
+   "locked": false,
+   "collaborative": false
   },
   {
    "id": "Z-K2",
@@ -793,7 +810,8 @@
    ],
    "staticSpeed": null,
    "humanSpeed": 0.3,
-   "locked": false
+   "locked": false,
+   "collaborative": false
   },
   {
    "id": "Z-K3",
@@ -819,7 +837,8 @@
    ],
    "staticSpeed": null,
    "humanSpeed": 0.3,
-   "locked": false
+   "locked": false,
+   "collaborative": false
   },
   {
    "id": "Z-K4",
@@ -845,7 +864,8 @@
    ],
    "staticSpeed": null,
    "humanSpeed": 0.3,
-   "locked": false
+   "locked": false,
+   "collaborative": false
   },
   {
    "id": "Z-K5",
@@ -871,7 +891,8 @@
    ],
    "staticSpeed": null,
    "humanSpeed": 0.3,
-   "locked": false
+   "locked": false,
+   "collaborative": false
   }
  ],
  "racks": [

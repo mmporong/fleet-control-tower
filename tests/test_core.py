@@ -478,49 +478,60 @@ class PedestrianTests(unittest.TestCase):
 
 
 class ForkliftTests(unittest.TestCase):
-    def test_turn_waits_for_a_robot_in_the_swept_circle_then_completes(self):
-        layout = warehouse_layout()
-        loop = expand_loop(layout, forklift_loops()[0][0])      # A9 south to A5, across to B5, north
-        f = Forklift("FL-1", loop, layout, random.Random(1))
-        f.careless_p = 1.0                                    # this driver turns anyway after waiting
-        f.heading = 0.0                                       # facing east at A9; the loop leaves heading south
-        robot = [("AMR-01", layout.nodes["A9"].x + 1.6, layout.nodes["A9"].y, 0.45, 0.0)]
-        t, turned_at = 0.0, None
-        target = math.atan2(layout.nodes[loop[1]].y - f.by, layout.nodes[loop[1]].x - f.bx)
-        start = f.heading
-        for _ in range(400):                                  # 40 s
-            f.step(0.1, t, robot, [])
-            t += 0.1
-            if turned_at is None and abs(math.remainder(f.heading - target, 2 * math.pi)) < 0.06:
-                turned_at = t
-        self.assertIsNotNone(turned_at)
-        # it waited about 10 s for the robot, then turned in one go (not 10 s per step of rotation)
-        need = abs(math.remainder(target - start, 2 * math.pi)) / 0.8
-        self.assertLess(turned_at, 10.0 + need + 1.0)
-        self.assertEqual(f.careless_turns, 1)
+    def setUp(self):
+        self.layout = warehouse_layout()
+        self.loop = expand_loop(self.layout, forklift_loops()[0][0])   # A9 south to A5, across to B5, north
+        a9 = self.layout.nodes["A9"]
+        self.in_circle = ("AMR-01", a9.x + 1.6, a9.y, 0.45, 0.0)       # standing inside the truck's turn circle
 
-    def test_most_drivers_back_out_instead_of_turning_into_a_standing_robot(self):
-        layout = warehouse_layout()
-        loop = expand_loop(layout, forklift_loops()[0][0])
-        f = Forklift("FL-1", loop, layout, random.Random(1))
-        f.careless_p = 0.0
-        f.heading = 0.0
-        robot = [("AMR-01", layout.nodes["A9"].x + 1.6, layout.nodes["A9"].y, 0.45, 0.0)]
-        t = 0.0
-        for _ in range(250):                                  # 25 s
-            f.step(0.1, t, robot, [])
+    def truck(self, careless_p: float) -> Forklift:
+        f = Forklift("FL-1", self.loop, self.layout, random.Random(1))
+        f.careless_p = careless_p
+        f.heading = 0.0                                       # facing east at A9; the loop leaves heading south
+        return f
+
+    def test_driver_backs_off_lets_the_robot_go_and_then_turns(self):
+        f = self.truck(0.0)
+        robots, t, backed = [self.in_circle], 0.0, 0.0
+        for k in range(600):
+            if k == 300:
+                robots = []                                   # the robot drives off
+            f.step(0.1, t, robots, [])
             t += 0.1
+            backed = max(backed, f.back)
+        self.assertGreaterEqual(backed, 2.9)                   # it reversed about 3 m
+        self.assertEqual(f.backoffs, 1)
+        self.assertEqual(f.back, 0.0)
         self.assertEqual(f.careless_turns, 0)
-        self.assertEqual(f.reversals, 1)                      # it gave up the turn and went back
-        self.assertFalse(f.turning)
+        self.assertGreater(abs(math.remainder(f.heading - 0.0, 2 * math.pi)), 1.0)   # and made its turn
+
+    def test_careless_turn_only_when_it_cannot_back_off(self):
+        a9 = self.layout.nodes["A9"]
+        behind = ("AMR-02", a9.x - 3.0, a9.y, 0.45, 0.0)      # something right behind the truck
+        target = math.atan2(self.layout.nodes[self.loop[1]].y - a9.y, self.layout.nodes[self.loop[1]].x - a9.x)
+        for careless, expect_turn in ((0.0, False), (1.0, True)):
+            f = self.truck(careless)
+            t, turned_at = 0.0, None
+            for _ in range(500):                              # 50 s
+                f.step(0.1, t, [self.in_circle, behind], [])
+                t += 0.1
+                if turned_at is None and abs(math.remainder(f.heading - target, 2 * math.pi)) < 0.06:
+                    turned_at = t
+            self.assertEqual(f.backoffs, 0)
+            self.assertEqual(turned_at is not None, expect_turn, careless)
+            if expect_turn:
+                self.assertGreater(turned_at, 30.0)          # only after waiting 30 s
+                self.assertEqual(f.careless_turns, 1)
+            self.assertEqual(f.reversals, 0)                  # never backing out against the one-way flow
 
 
 class SafetyRuleTests(unittest.TestCase):
     def test_near_miss_rule(self):
-        self.assertFalse(near_miss(0.3, 0.25))       # reduced clearance at <= 0.3 m/s is allowed
-        self.assertTrue(near_miss(0.3, 0.15))        # but closer than 20 cm while moving is a close call
-        self.assertTrue(near_miss(1.0, 0.45))        # above 0.3 m/s the 0.5 m clearance applies
-        self.assertFalse(near_miss(1.0, 0.55))
+        # a person inside the distance the vehicle needs to stop (0.2 s reaction + braking + 5 cm)
+        self.assertFalse(near_miss(0.3, 0.15))       # a creeping vehicle stops within 14 cm
+        self.assertTrue(near_miss(0.3, 0.10))
+        self.assertTrue(near_miss(1.0, 0.50))        # at 1 m/s it needs 58 cm
+        self.assertFalse(near_miss(1.0, 0.60))
 
 
 if __name__ == "__main__":

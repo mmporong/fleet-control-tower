@@ -211,7 +211,8 @@
    ],
    "staticSpeed": 1.0,
    "humanSpeed": 0.4,
-   "locked": false
+   "locked": false,
+   "collaborative": false
   },
   {
    "id": "Z-OUT",
@@ -237,7 +238,8 @@
    ],
    "staticSpeed": 1.0,
    "humanSpeed": 0.4,
-   "locked": false
+   "locked": false,
+   "collaborative": false
   },
   {
    "id": "Z-WALK-W",
@@ -263,7 +265,8 @@
    ],
    "staticSpeed": null,
    "humanSpeed": 0.6,
-   "locked": false
+   "locked": false,
+   "collaborative": false
   },
   {
    "id": "Z-WALK-C",
@@ -289,7 +292,8 @@
    ],
    "staticSpeed": null,
    "humanSpeed": 0.6,
-   "locked": false
+   "locked": false,
+   "collaborative": false
   },
   {
    "id": "Z-WALK-E",
@@ -315,7 +319,8 @@
    ],
    "staticSpeed": null,
    "humanSpeed": 0.6,
-   "locked": false
+   "locked": false,
+   "collaborative": false
   },
   {
    "id": "Z-PICK-D",
@@ -341,7 +346,8 @@
    ],
    "staticSpeed": null,
    "humanSpeed": 0.5,
-   "locked": false
+   "locked": false,
+   "collaborative": false
   },
   {
    "id": "Z-PICK-G",
@@ -367,7 +373,8 @@
    ],
    "staticSpeed": null,
    "humanSpeed": 0.5,
-   "locked": false
+   "locked": false,
+   "collaborative": false
   },
   {
    "id": "Z-FORK",
@@ -393,7 +400,8 @@
    ],
    "staticSpeed": 1.2,
    "humanSpeed": null,
-   "locked": false
+   "locked": false,
+   "collaborative": false
   },
   {
    "id": "Z-CHG",
@@ -419,7 +427,8 @@
    ],
    "staticSpeed": null,
    "humanSpeed": null,
-   "locked": false
+   "locked": false,
+   "collaborative": false
   },
   {
    "id": "Z-B-S",
@@ -445,7 +454,8 @@
    ],
    "staticSpeed": null,
    "humanSpeed": null,
-   "locked": false
+   "locked": false,
+   "collaborative": false
   },
   {
    "id": "Z-B-N",
@@ -471,7 +481,8 @@
    ],
    "staticSpeed": null,
    "humanSpeed": null,
-   "locked": false
+   "locked": false,
+   "collaborative": false
   },
   {
    "id": "Z-C-S",
@@ -497,7 +508,8 @@
    ],
    "staticSpeed": null,
    "humanSpeed": null,
-   "locked": false
+   "locked": false,
+   "collaborative": false
   },
   {
    "id": "Z-C-N",
@@ -523,7 +535,8 @@
    ],
    "staticSpeed": null,
    "humanSpeed": null,
-   "locked": false
+   "locked": false,
+   "collaborative": false
   },
   {
    "id": "Z-D-S",
@@ -549,7 +562,8 @@
    ],
    "staticSpeed": null,
    "humanSpeed": null,
-   "locked": false
+   "locked": false,
+   "collaborative": false
   },
   {
    "id": "Z-D-N",
@@ -575,7 +589,8 @@
    ],
    "staticSpeed": null,
    "humanSpeed": null,
-   "locked": false
+   "locked": false,
+   "collaborative": false
   },
   {
    "id": "Z-E-S",
@@ -601,7 +616,8 @@
    ],
    "staticSpeed": null,
    "humanSpeed": null,
-   "locked": false
+   "locked": false,
+   "collaborative": false
   },
   {
    "id": "Z-E-N",
@@ -627,7 +643,8 @@
    ],
    "staticSpeed": null,
    "humanSpeed": null,
-   "locked": false
+   "locked": false,
+   "collaborative": false
   },
   {
    "id": "Z-F-S",
@@ -653,7 +670,8 @@
    ],
    "staticSpeed": null,
    "humanSpeed": null,
-   "locked": false
+   "locked": false,
+   "collaborative": false
   },
   {
    "id": "Z-F-N",
@@ -679,7 +697,8 @@
    ],
    "staticSpeed": null,
    "humanSpeed": null,
-   "locked": false
+   "locked": false,
+   "collaborative": false
   },
   {
    "id": "Z-G-S",
@@ -705,7 +724,8 @@
    ],
    "staticSpeed": null,
    "humanSpeed": null,
-   "locked": false
+   "locked": false,
+   "collaborative": false
   },
   {
    "id": "Z-G-N",
@@ -731,7 +751,8 @@
    ],
    "staticSpeed": null,
    "humanSpeed": null,
-   "locked": false
+   "locked": false,
+   "collaborative": false
   },
   {
    "id": "Z-H-S",
@@ -757,7 +778,8 @@
    ],
    "staticSpeed": null,
    "humanSpeed": null,
-   "locked": false
+   "locked": false,
+   "collaborative": false
   },
   {
    "id": "Z-H-N",
@@ -783,7 +805,8 @@
    ],
    "staticSpeed": null,
    "humanSpeed": null,
-   "locked": false
+   "locked": false,
+   "collaborative": false
   },
   {
    "id": "Z-I-S",
@@ -809,7 +832,8 @@
    ],
    "staticSpeed": null,
    "humanSpeed": null,
-   "locked": false
+   "locked": false,
+   "collaborative": false
   },
   {
    "id": "Z-I-N",
@@ -835,7 +859,8 @@
    ],
    "staticSpeed": null,
    "humanSpeed": null,
-   "locked": false
+   "locked": false,
+   "collaborative": false
   }
  ],
  "racks": [

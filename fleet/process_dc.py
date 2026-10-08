@@ -156,10 +156,18 @@ class DcProcess(Process):
 
     # ------------------------------------------------------------ task builders
     def _free_slot(self) -> tuple | None:
-        for s in self._slot_order:
-            if self.slots[s] is None and s not in self.slot_reserved:
-                return s
-        return None
+        """WMS slotting: the lowest free level first; among aisles with such a location, the one with the
+        fewest open tasks (spreads forklift traffic over the aisles), then the nearest to inbound."""
+        free = [s for s in self._slot_order if self.slots[s] is None and s not in self.slot_reserved]
+        if not free:
+            return None
+        lvl = free[0][2]
+        busy: dict[float, int] = {}
+        for s in self.slot_reserved:
+            x = self.layout.nodes[s[0]].x
+            busy[x] = busy.get(x, 0) + 1
+        candidates = [s for s in free if s[2] == lvl]
+        return min(candidates, key=lambda s: (busy.get(self.layout.nodes[s[0]].x, 0), self._slot_order.index(s)))
 
     def _rack_params(self, slot: tuple, pid: str) -> dict:
         n, side, lvl, _pos = slot

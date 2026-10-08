@@ -208,7 +208,8 @@ def export_site_extras(layout: Layout, layout_id: str | None = None,
         "noStop": sorted(layout.no_stop),
         "edges": overrides,
         "zones": [{"id": z.id, "name": z.name, "kind": z.kind, "polygon": _points(z.polygon),
-                   "staticSpeed": z.static_speed, "humanSpeed": z.human_speed, "locked": z.locked}
+                   "staticSpeed": z.static_speed, "humanSpeed": z.human_speed, "locked": z.locked,
+                   "collaborative": z.collaborative}
                   for z in layout.zones.values()],
         "racks": [_points(r) for r in layout.racks],
         "coverage": {k: _points(v) for k, v in layout.coverage.items()},
@@ -519,7 +520,8 @@ def import_lif(doc: dict, extras: dict | None = None, layout_id: str | None = No
 
     try:
         zones = {z["id"]: Zone(z["id"], z["name"], z["kind"], _tuples(z["polygon"]), z.get("staticSpeed"),
-                               z.get("humanSpeed"), bool(z.get("locked", False))) for z in extras.get("zones", [])}
+                               z.get("humanSpeed"), bool(z.get("locked", False)),
+                               collaborative=bool(z.get("collaborative", False))) for z in extras.get("zones", [])}
         doors = {d["id"]: DoorSpec(d["id"], d["name"], tuple(d["a"]), tuple(d["b"]), frozenset(d.get("lanes", [])))
                  for d in extras.get("doors", [])}
         racks = [_tuples(r) for r in extras.get("racks", [])]

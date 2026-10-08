@@ -155,7 +155,7 @@ class Operations:
             "deadlocks": [" → ".join(d["members"]) for d in m.deadlocks.values()],
             "tasks_queued": k["queued"], "tasks_active": k["active"],
             "kpi": {"throughput_h": k["throughput_h"], "traffic_wait_ratio": k["traffic_wait_ratio"],
-                    "contacts": k["contacts"], "close_calls": k.get("close_calls"), "alarms_per_h": k["alarms_per_h"]},
+                    "contacts": k["contacts"], "near_misses": k.get("near_misses"), "alarms_per_h": k["alarms_per_h"]},
         }
 
     def cmd_handover(self, a: dict) -> str:
@@ -169,15 +169,19 @@ class Operations:
 
     # ------------------------------------------------------------ fleet mode
     def cmd_fleet_hold(self, a: dict) -> str:
-        if self.sim.manager.mode == "ESTOP":
-            raise CommandError("비상정지 중: 먼저 해제하세요")
+        if self.sim.manager.mode in ("ESTOP", "FIRE"):
+            raise CommandError("일괄 정지·화재 경보 중에는 일시정지로 바꿀 수 없습니다")
         self.sim.manager.mode = "HOLD"
         self.sim.manager.event("fleet_hold", "fleet", "전체 일시정지", "warn")
         return "전체 일시정지"
 
     def cmd_fleet_resume(self, a: dict) -> str:
         if self.sim.manager.mode == "ESTOP":
-            raise CommandError("비상정지 중: 해제 후 재개하세요")
+            raise CommandError("일괄 정지 중: 해제 후 재개하세요")
+        if self.sim.manager.mode == "FIRE":
+            raise CommandError("화재 경보 중: 경보 해제와 현장 확인 뒤 재개하세요")
+        if self.sim.manager.mode == "RESYNC":
+            raise CommandError("재기동 재동기화 중: 끝나면 자동으로 정상 운영")
         self.sim.manager.mode = "RUNNING"
         self.sim.manager.event("fleet_resume", "fleet", "전체 재개", "info")
         return "전체 재개"
@@ -185,19 +189,19 @@ class Operations:
     def cmd_fleet_estop(self, a: dict) -> str:
         reason = str(a.get("reason", "")).strip()
         if not reason:
-            raise CommandError("비상정지 사유를 입력하세요(감사 로그와 사고 기록에 남음)")
+            raise CommandError("일괄 정지 사유를 입력하세요(감사 로그와 사고 기록에 남음)")
         self.sim.manager.mode = "ESTOP"
-        self.sim.manager.alarms.set("FLEET_ESTOP", "fleet", True, self.sim.now, f"비상정지: {reason}")
-        self.sim.manager.event("fleet_estop", "fleet", f"관제 비상정지: {reason}", "crit")
-        return "비상정지 명령 전송"
+        self.sim.manager.alarms.set("FLEET_ESTOP", "fleet", True, self.sim.now, f"일괄 정지: {reason}")
+        self.sim.manager.event("fleet_estop", "fleet", f"관제 일괄 정지(비안전): {reason}", "crit")
+        return "일괄 정지 명령 전송(무선 소프트웨어 정지: 차량 안전 기능을 대신하지 않음)"
 
     def cmd_fleet_estop_release(self, a: dict) -> str:
         if self.sim.manager.mode != "ESTOP":
-            raise CommandError("비상정지 상태가 아님")
+            raise CommandError("일괄 정지 상태가 아님")
         self.sim.manager.mode = "HOLD"      # release never restarts motion by itself
         self.sim.manager.alarms.set("FLEET_ESTOP", "fleet", False, self.sim.now)
-        self.sim.manager.event("fleet_estop_release", "fleet", "비상정지 해제 → 일시정지 유지", "warn")
-        return "비상정지 해제(일시정지 유지, 재개는 별도 명령)"
+        self.sim.manager.event("fleet_estop_release", "fleet", "일괄 정지 해제 → 일시정지 유지", "warn")
+        return "일괄 정지 해제(일시정지 유지, 재개는 별도 명령)"
 
     def cmd_resume_area(self, a: dict) -> str:
         n = len(self.sim.manager.area_paused)
@@ -405,6 +409,11 @@ class Operations:
         rec = self._robot(a)
         self.sim.drill_fault(rec.serial, str(a.get("fault", "DRIVE_FAULT")), bool(a.get("recoverable", True)))
         return f"[훈련] {rec.serial} {a.get('fault', 'DRIVE_FAULT')} 주입"
+
+    def cmd_drill_fire(self, a: dict) -> str:
+        on = bool(a.get("alarm", True))
+        self.sim.drill_fire(on)
+        return f"[훈련] 화재 경보 {'발령' if on else '해제'}"
 
     def cmd_drill_comms(self, a: dict) -> str:
         rec = self._robot(a)

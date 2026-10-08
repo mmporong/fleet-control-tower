@@ -18,7 +18,7 @@ from .process import GridProcess
 from .process_dc import DcProcess
 from .site_dc import AGF, AMR, PICK_AISLES, dc_layout, dock_spots
 from .bus import Bus
-from .control import FleetManager, ManagerConfig, clearance_violation, close_call
+from .control import FleetManager, ManagerConfig, clearance_violation, close_call, envelope_intrusion
 from .dispatcher import Dispatcher
 from .facility import DoorDevice
 from .geometry import box_gap, rect
@@ -29,6 +29,8 @@ from .vehicle import FAULT_TYPES, SPEC_GRID, Obstacle, Vehicle, VehicleSpec, agf
 from .vda5050 import topic
 
 FRAME_PERIOD = 0.5
+# besides every priority-1 alarm, these open an incident record with the 30 s before and 10 s after
+INCIDENT_TYPES = {"NEAR_MISS", "RESERVATION_MISMATCH", "DEADLOCK_UNRESOLVED"}
 FRAMES_BEFORE = 60      # 30 s before an incident
 FRAMES_AFTER = 20       # 10 s after
 
@@ -65,7 +67,8 @@ class Evaluator:
     def __init__(self) -> None:
         self.contacts: list[dict] = []
         self.clearance_violations = 0       # compliance: above creep speed inside the 0.5 m clearance
-        self.close_calls = 0                # outcome: moving and within 20 cm of a person
+        self.close_calls = 0                # proximity: moving and within 20 cm of a person
+        self.near_misses = 0                # outcome: a person inside the moving vehicle's stopping envelope
         self.near_miss_log: deque = deque(maxlen=200)
         self._pair_contact: set[tuple[str, str]] = set()
         self._pair_nm: dict[tuple[str, str, str], float] = {}
@@ -105,15 +108,18 @@ class Evaluator:
                     speed = abs(v.v)
                     if speed > 0.05:
                         self.min_gap_moving = min(self.min_gap_moving, gap)
-                    for what, hit in (("clearance", clearance_violation(speed, gap)), ("close", close_call(speed, gap))):
+                    for what, hit in (("clearance", clearance_violation(speed, gap)), ("close", close_call(speed, gap)),
+                                      ("envelope", envelope_intrusion(speed, gap, v.spec.stop_decel))):
                         if not hit:
                             continue
                         key = (v.serial, oid, what)
                         if now - self._pair_nm.get(key, -1e9) > 10.0:     # one event per pair per 10 s
                             if what == "clearance":
                                 self.clearance_violations += 1
-                            else:
+                            elif what == "close":
                                 self.close_calls += 1
+                            else:
+                                self.near_misses += 1
                             self.near_miss_log.append({"t": round(now, 1), "robot": v.serial, "human": oid,
                                                        "kind": what, "gap": round(max(gap, 0.0), 2),
                                                        "v": round(v.v, 2)})
@@ -362,7 +368,7 @@ class Simulation:
 
     # ------------------------------------------------------------ incidents
     def _on_alarm(self, event: str, alarm) -> None:
-        if event in ("raised", "reactivated") and (alarm.priority == 1 or alarm.type == "NEAR_MISS"):
+        if event in ("raised", "reactivated") and (alarm.priority == 1 or alarm.type in INCIDENT_TYPES):
             self._inc_seq += 1
             inc = Incident(f"INC-{self._inc_seq:03d}", alarm.type, alarm.source, alarm.priority,
                            alarm.message, self.now, frames=list(self.frames))
@@ -555,6 +561,10 @@ class Simulation:
             raise ValueError(f"unknown door {door_id}")
         self.doors[door_id].repair()
 
+    def drill_fire(self, alarm: bool = True) -> None:
+        """Fire panel signal for training (the panel publishes it like a door controller its state)."""
+        self.bus.publish("facility/v1/fire/state", {"alarm": bool(alarm), "stamp": round(self.now, 3)}, self.now)
+
     def drill_comms(self, serial: str, seconds: float) -> None:
         self.vehicle(serial)
         self.bus.link(serial).down_until = self.now + max(1.0, min(120.0, seconds))
@@ -599,6 +609,8 @@ class Simulation:
         m.repair_times.clear()
         m.alarms.total_activations = 0
         m.alarms.alerts = 0
+        m.alarms.by_priority = {1: 0, 2: 0, 3: 0, 4: 0}
+        m.alarms.by_type = {}
         for rec in m.robots.values():
             rec.busy_s = rec.wait_s = 0.0
         self.evaluator = Evaluator()
@@ -672,7 +684,8 @@ class Simulation:
             "contacts_static": len(ev.contacts) - len(moving_contacts),
             "contacts_human": sum(1 for x in ev.contacts if x["kind"] == "human"),
             "contacts_human_moving": sum(1 for x in moving_contacts if x["kind"] == "human"),
-            "close_calls": ev.close_calls, "clearance_violations": ev.clearance_violations,
+            "near_misses": ev.near_misses, "close_calls": ev.close_calls,
+            "clearance_violations": ev.clearance_violations,
             "min_gap_moving": None if ev.min_gap_moving == math.inf else round(max(0.0, ev.min_gap_moving), 2),
             "min_amr_gap": None if ev.min_amr_gap == math.inf else round(ev.min_amr_gap, 2),
             "tracking_ratio": round(ev.tracked_samples / ev.human_samples, 3) if ev.human_samples else None,
@@ -680,6 +693,9 @@ class Simulation:
             "resends": c["resends"],
             "mttr_s": round(sum(repairs) / len(repairs), 1) if repairs else None,
             "alarms_per_h": round(m.alarms.total_activations / hours, 1),
+            "alerts_per_h": round(m.alarms.alerts / hours, 1),
+            "alarms_by_priority_h": {p: round(n / hours, 2) for p, n in m.alarms.by_priority.items()},
+            "alarms_by_type": dict(sorted(m.alarms.by_type.items(), key=lambda kv: -kv[1])),
             "bus_dropped": self.bus.stats["dropped"], "bus_published": self.bus.stats["published"],
             "sim_hours": round(hours, 3),
             "careless_turns": sum(getattr(f, "careless_turns", 0) for f in self.forklifts) - self._forklift_careless0,

@@ -43,6 +43,7 @@ class Track:
     hits: int = 1
     sources: set[str] = field(default_factory=set)
     heading: float | None = None      # last direction of travel; a stopped truck keeps its orientation
+    votes: dict = field(default_factory=dict)    # class -> decayed count of detections that called it so
 
     @property
     def confirmed(self) -> bool:
@@ -98,11 +99,11 @@ class Tracker:
             px, py = tr.predict(now)
             gate = self.gate + tr.sigma(now)
             for j, d in enumerate(dets):
-                if d.cls != tr.cls:
-                    continue
                 dd = math.hypot(d.x - px, d.y - py)
                 if dd <= gate:
-                    pairs.append((dd, tid, j))
+                    # associate by position; a detection of the other class costs extra so that a person next
+                    # to a truck still goes to the person's track, but a misread class does not start a new one
+                    pairs.append((dd + (0.0 if d.cls == tr.cls else 0.8), tid, j))
         pairs.sort()
         used_t: set[str] = set()
         used_d: set[int] = set()
@@ -118,7 +119,7 @@ class Tracker:
             tid = f"T{self._next:04d}"
             self._next += 1
             self.tracks[tid] = Track(tid, d.cls, d.x, d.y, last_seen=now, first_seen=now,
-                                     sources=set(d.source.split(",")))
+                                     sources=set(d.source.split(",")), votes={d.cls: 1.0})
             events.append({"type": "track_new", "track": tid, "cls": d.cls})
         for tid in list(self.tracks):
             tr = self.tracks[tid]
@@ -126,7 +127,33 @@ class Tracker:
                 del self.tracks[tid]
                 ev = {"type": "track_lost", "track": tid, "cls": tr.cls, "x": round(tr.x, 1), "y": round(tr.y, 1)}
                 events.append(ev)
+        self._merge_duplicates()
         return events
+
+    def _merge_duplicates(self, radius: float = 0.8) -> None:
+        """Two tracks on one object (one started from a misread class): fold the younger into the older and
+        let the summed class votes decide what it is."""
+        ids = sorted(self.tracks, key=lambda t: self.tracks[t].first_seen)
+        gone: set[str] = set()
+        for i, a in enumerate(ids):
+            if a in gone:
+                continue
+            ta = self.tracks[a]
+            for b in ids[i + 1:]:
+                if b in gone:
+                    continue
+                tb = self.tracks[b]
+                if math.hypot(ta.x - tb.x, ta.y - tb.y) > radius:
+                    continue
+                for k, v in tb.votes.items():
+                    ta.votes[k] = ta.votes.get(k, 0.0) + v
+                ta.cls = max(ta.votes, key=ta.votes.get) if ta.votes else ta.cls
+                ta.hits += tb.hits
+                ta.last_seen = max(ta.last_seen, tb.last_seen)
+                ta.sources |= tb.sources
+                gone.add(b)
+        for b in gone:
+            del self.tracks[b]
 
     def prune(self, now: float) -> list[dict]:
         """Drop tracks not seen for ``max_age`` even when no sensor cycle arrives."""
@@ -138,6 +165,11 @@ class Tracker:
         return events
 
     def _correct(self, tr: Track, d: Detection, now: float) -> None:
+        # class by decayed majority vote: occasional misread detections do not flip a track
+        for k in tr.votes:
+            tr.votes[k] *= 0.9
+        tr.votes[d.cls] = tr.votes.get(d.cls, 0.0) + 1.0
+        tr.cls = max(tr.votes, key=tr.votes.get)
         dt = max(0.1, now - tr.last_seen)
         px, py = tr.predict(now)
         rx, ry = d.x - px, d.y - py

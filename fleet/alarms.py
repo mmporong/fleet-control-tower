@@ -10,6 +10,13 @@ alarm without a response is an event, not an alarm. States:
 
 Flood detection uses the standard's rule of thumb: more than 10 new alarms in
 10 minutes per operator position.
+
+Priorities follow consequence and the time the operator has (rationalised against ISA-18.2's
+guidance that most annunciated alarms are low priority): 1 people or the control system itself
+are at stake (contact, collision, fire, internal error); 2 the site's traffic integrity
+(reservation mismatch, unresolved deadlock, a failed door, no infrastructure feed); 3 one
+vehicle or task needs attention within 30 minutes; 4 alerts: informative, counted apart, no
+acknowledgement (congestion, short comms dropouts, the operator's own fleet stop).
 """
 from __future__ import annotations
 
@@ -50,40 +57,40 @@ ALARM_DEFS: dict[str, AlarmDef] = {
          "예약 불일치·통신 지연이 원인이면 해당 구간 봉쇄 후 보고"),
         ("field_service_done", "zone_lock")),
     "FLEET_ESTOP": AlarmDef(
-        1, "관제 비상정지 활성", "전체 로봇 정지 명령 전송",
-        ("비상정지 사유를 감사 로그에 기록",
+        4, "관제 일괄 정지 중(비안전)", "전체 로봇 정지 명령 전송",
+        ("운영자가 건 정지: 사유는 감사 로그에 기록됨",
          "현장 안전 확인(사람·지게차 동선)",
-         "비상정지 해제 후 일시정지 상태로 전환",
+         "일괄 정지 해제 후 일시정지 상태로 전환",
          "구역별로 순차 재개"),
         ("fleet_estop_release", "fleet_resume")),
     "RESERVATION_MISMATCH": AlarmDef(
-        1, "점유-예약 불일치", "해당 로봇 일시정지",
+        2, "점유-예약 불일치", "해당 로봇 일시정지",
         ("로봇 위치와 예약된 노드·레인 비교(지도 예약 레이어)",
          "통신 지연·상태 누락 여부 확인(메시지 검사기)",
          "위치가 맞으면 재개, 아니면 수동 모드로 노드 복귀 후 자동 전환"),
         ("resume_robot", "set_mode_manual")),
     "DEADLOCK_UNRESOLVED": AlarmDef(
-        1, "교착 자동 해소 실패", "교착 로봇 목록 고정, 신규 진입 차단 없음",
+        2, "교착 자동 해소 실패", "교착 로봇 목록 고정, 신규 진입 차단 없음",
         ("사이클에 포함된 로봇과 대기 자원 확인",
          "우선순위 낮은 로봇 1대를 작업 취소 또는 수동 이동",
          "해소 후 동일 지점 반복 여부 확인(혼잡 지도)"),
         ("cancel_task", "set_mode_manual", "send_to_park")),
     "ROBOT_FAULT": AlarmDef(
-        2, "로봇 고장", "로봇 자체 정지, 예약 유지",
+        3, "로봇 고장", "로봇 자체 정지, 예약 유지",
         ("고장 종류 확인: 구동부 과전류 같은 비안전 고장만 원격 리셋 1회 시도",
          "안전 스캐너 이상은 원격 리셋 불가: 현장 인원이 확인하고 차량에서 리셋",
          "리셋 실패나 현장 조치가 필요하면 작업 재할당, 적재물이 있으면 현장 회수 요청",
          "복구 후 자동 모드와 위치 확인"),
         ("reset_fault", "reassign_task", "field_service_done")),
     "LOCALIZATION_LOST": AlarmDef(
-        2, "위치 추정 실패", "로봇 정지, 주문 거부 상태",
+        3, "위치 추정 실패", "로봇 정지, 주문 거부 상태",
         ("마지막 확인 노드와 지도 위치 대조",
          "위치 재지정(initPosition) 실행: 노드 1 m 안이어야 성공",
          "실패 시 원격 조종으로 가까운 노드 0.6 m 안으로 옮긴 뒤 자동 전환, 또는 현장 인원이 옮기고 재위치 추정",
          "현장 조치를 마치면 '현장 조치 완료'로 복귀, 막고 있던 작업은 재할당"),
         ("init_position", "set_mode_manual", "field_service_done", "reassign_task")),
     "COMMS_LOST": AlarmDef(
-        2, "통신 두절(30초 이상)", "예약 유지, 적재 전 작업은 자동 재할당(로봇은 해제 구간 끝에서 자체 정지)",
+        3, "통신 두절(30초 이상)", "예약 유지, 적재 전 작업은 자동 재할당(로봇은 해제 구간 끝에서 자체 정지)",
         ("마지막 수신 위치와 해제 구간 확인",
          "무선 AP·로봇 전원 상태 현장 확인 요청",
          "적재 중이면 현장 회수 여부 판단",
@@ -110,20 +117,20 @@ ALARM_DEFS: dict[str, AlarmDef] = {
          "현장 조치 완료 후 '재시도'로 다시 열림을 요청해 정상 동작 확인"),
         ("door_disable", "door_retry")),
     "STANDOFF": AlarmDef(
-        2, "대치(보호정지 지속)", "로봇은 보호필드 정지 유지, 관제는 비켜서기 재시도",
+        3, "대치(보호정지 지속)", "로봇은 보호필드 정지 유지, 관제는 비켜서기 재시도",
         ("원인 유닛 확인: 사람·지게차·외부 로봇(지도·카메라)",
          "지게차면 운전자에게 무전으로 진로 양보 요청",
          "사람이면 현장 안내, 로봇 쪽 공간이 있으면 원격 조종으로 후진",
-         "20초 넘게 반복되는 지점은 동선 분리 검토"),
+         "같은 지점에서 반복되면 동선 분리 검토"),
         ("set_mode_manual", "cancel_task"), off_delay_s=30.0),
     "BATTERY_CRITICAL": AlarmDef(
-        2, "배터리 위험", "신규 작업 배정 중단",
+        3, "배터리 위험", "신규 작업 배정 중단",
         ("현재 작업 유지 가능 여부 확인",
          "불가하면 작업 재할당 후 충전 복귀",
          "충전기 점유 현황 확인"),
         ("send_to_charge", "reassign_task")),
     "BLOCKED_LONG": AlarmDef(
-        2, "장시간 정지", "우회 경로 재탐색 반복",
+        3, "장시간 정지", "우회 경로 재탐색 반복",
         ("대기 원인 확인(사람·고장 로봇·구역 봉쇄·외부 로봇)",
          "원인 제거 또는 작업 취소·재할당",
          "같은 지점이 반복되면 동선 설계 검토"),
@@ -141,7 +148,7 @@ ALARM_DEFS: dict[str, AlarmDef] = {
          "근접 사고 보고 작성"),
         ("zone_speed",)),
     "CONGESTION": AlarmDef(
-        3, "혼잡", "없음",
+        4, "혼잡", "없음",
         ("혼잡 지도에서 대기 집중 노드 확인",
          "작업 투입률 조정 또는 구역 속도·방향 검토"),
         ("set_task_rate",), off_delay_s=30.0),
@@ -151,10 +158,16 @@ ALARM_DEFS: dict[str, AlarmDef] = {
          "우선순위 조정 또는 수동 배정"),
         ("reprioritize_task",), off_delay_s=30.0),
     "ZONE_LOCK_WAITING": AlarmDef(
-        3, "봉쇄 구역 대기", "봉쇄 구역 신규 진입 차단",
+        4, "봉쇄 구역 대기", "봉쇄 구역 신규 진입 차단",
         ("봉쇄 사유가 끝났는지 확인",
          "필요하면 대기 로봇 작업 취소 또는 봉쇄 해제"),
         ("zone_unlock", "cancel_task"), off_delay_s=30.0),
+    "FIRE_ALARM": AlarmDef(
+        1, "화재 경보", "신규 해제·배정 중단, 차량은 해제 구간 끝(문턱·교차로 아님)에서 정지, 방화문 폐쇄",
+        ("대피 상황 확인: 피난로·방화문 앞에 정지한 차량이 있는지 지도에서 확인",
+         "방화문 문턱이나 피난로를 막은 차량이 있으면 원격 조종으로 비켜 세움",
+         "경보 해제 후 현장 확인을 마치고 전체 재개"),
+        ("set_mode_manual", "fleet_resume")),
     "FMS_INTERNAL_ERROR": AlarmDef(
         1, "관제 내부 오류", "전체 일시정지(차량은 해제 구간 끝에서 정지), 제어 주기는 계속",
         ("이벤트 기록과 서비스 로그의 오류 내용 확인",
@@ -162,7 +175,7 @@ ALARM_DEFS: dict[str, AlarmDef] = {
          "재기동은 재동기화(RESYNC)를 거쳐 예약을 복원함"),
         ("fleet_resume",)),
     "CHARGER_SHORTAGE": AlarmDef(
-        3, "충전기 부족", "충전 대기열 운영",
+        4, "충전기 부족", "충전 대기열 운영",
         ("충전기 고장·점유 로봇 확인",
          "충전 완료 로봇을 작업에 우선 배정"),
         (), off_delay_s=30.0),
@@ -208,6 +221,8 @@ class AlarmManager:
         self.activations: deque = deque()
         self.total_activations = 0
         self.alerts = 0
+        self.by_priority = {1: 0, 2: 0, 3: 0, 4: 0}
+        self.by_type: dict[str, int] = {}
         self.listeners: list = []   # called with (event, alarm)
 
     def _emit(self, event: str, alarm: Alarm) -> None:
@@ -264,6 +279,8 @@ class AlarmManager:
         return alarm
 
     def _activated(self, alarm: Alarm, now: float, how: str) -> None:
+        self.by_priority[alarm.priority] = self.by_priority.get(alarm.priority, 0) + 1
+        self.by_type[alarm.type] = self.by_type.get(alarm.type, 0) + 1
         if alarm.priority == ALERT:
             alarm.state = "ACKED"          # alerts are informational: no acknowledgement required
             self.alerts += 1

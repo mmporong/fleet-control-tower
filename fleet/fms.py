@@ -147,7 +147,7 @@ class Runtime:
                 "deadlocks": m.counters["deadlocks"], "deadlocks_resolved": m.counters["deadlocks_resolved"],
                 "protective_stops": m.counters["protective_stops"], "near_miss_fms": m.counters["near_miss"],
                 # ground truth does not exist outside the simulation
-                "close_calls": None, "clearance_violations": None, "contacts": None, "tracking_ratio": None,
+                "near_misses": None, "clearance_violations": None, "contacts": None, "tracking_ratio": None,
                 "invalid_msgs": m.counters["invalid_msgs"], "comms_lost": m.counters["comms_lost"],
                 "alarms_per_h": round(m.alarms.total_activations / hours, 1), "internal_errors": self.errors,
                 "sim_hours": round(hours, 3)}
@@ -161,7 +161,7 @@ class Runtime:
     def _sim_only(self, *_a, **_k):
         raise ValueError("훈련 주입은 시뮬레이션 전용입니다")
 
-    drill_fault = drill_comms = drill_door = drill_intruder = door_field_fix = _sim_only
+    drill_fault = drill_comms = drill_door = drill_intruder = drill_fire = door_field_fix = _sim_only
 
     def snapshot(self) -> dict:
         m = self.manager

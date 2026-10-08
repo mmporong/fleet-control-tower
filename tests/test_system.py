@@ -35,6 +35,7 @@ class GridInvariantTests(unittest.TestCase):
         sim, _ = sim_with_operator("grid-night")
         sim.run(600)
         kpi = sim.kpi()
+        self.assertEqual(kpi["near_misses"], 0)
         self.assertEqual(kpi["close_calls"], 0)
         self.assertEqual(kpi["clearance_violations"], 0)
         self.assertEqual(kpi["near_miss_fms"], 0)

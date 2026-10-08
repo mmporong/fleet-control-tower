@@ -29,12 +29,15 @@ from .vda5050 import HeaderIds, RouteEdge, RouteNode, action, build_instant_acti
 
 STRATEGIES = ("none", "locks", "locks+resolve")
 SWING_RADIUS = 1.9           # half the length of a 3.6 m counterbalance truck plus margin: its turning circle
+CLEARANCE_TURN = 1.0         # beyond the circle: half a robot body plus margin, so no part of a robot is inside
 LINK_WINDOW_S = 5.0          # window for the measured link quality shown per vehicle
 
 
 CLEARANCE_M = 0.5        # ISO 3691-4 Annex A (via TUV whitepaper): clearance a vehicle above 0.3 m/s must keep
 CREEP_SPEED = 0.3        # at or below this speed reduced clearance is allowed (operating hazard zone)
-CLOSE_CALL_M = 0.2       # outcome measure: a moving vehicle came this close to a person
+CLOSE_CALL_M = 0.2       # proximity measure: a moving vehicle came this close to a person
+NM_TRACK_MARGIN = 0.3    # control-room near miss: estimated gap must be this far inside the stopping envelope
+COLLAB_HOLD_M = 0.5      # in a collaborative picking zone a person holds a robot stop only when standing this close
 
 
 def clearance_violation(speed: float, gap: float, margin: float = 0.0) -> bool:
@@ -49,7 +52,8 @@ def clearance_violation(speed: float, gap: float, margin: float = 0.0) -> bool:
 
 
 def close_call(speed: float, gap: float) -> bool:
-    """An outcome, independent of any speed rule: the vehicle was moving and within 20 cm of a person.
+    """Raw proximity: the vehicle was moving and within 20 cm of a person. In a 2 m pick aisle every pass of a
+    picker at the shelf face (15 cm) counts, so it describes how close the work is, not how unsafe it was.
 
     >>> close_call(0.2, 0.15), close_call(0.0, 0.05), close_call(1.0, 0.3)
     (True, False, False)
@@ -57,9 +61,29 @@ def close_call(speed: float, gap: float) -> bool:
     return speed > 0.05 and gap < CLOSE_CALL_M
 
 
-def near_miss(speed: float, gap: float, margin: float = 0.0) -> bool:
-    """What the control room flags from its tracks: a clearance violation or a close call."""
-    return clearance_violation(speed, gap, margin) or (speed > 0.05 and gap < CLOSE_CALL_M - margin / 2)
+def stop_envelope(speed: float, decel: float, reaction_s: float = 0.2, margin: float = 0.05) -> float:
+    """Distance a vehicle needs to stop from ``speed``: reaction travel plus braking, plus a margin.
+
+    >>> round(stop_envelope(1.0, 1.5), 2), round(stop_envelope(0.3, 1.5), 2)
+    (0.58, 0.14)
+    """
+    return speed * reaction_s + speed * speed / (2.0 * decel) + margin
+
+
+def envelope_intrusion(speed: float, gap: float, decel: float) -> bool:
+    """The outcome measure of a near miss: a person was inside the distance the moving vehicle needed to stop,
+    so a step toward it could not have been avoided by braking. Physics, not a site speed rule, sets the line.
+
+    >>> envelope_intrusion(1.0, 0.45, 1.5), envelope_intrusion(0.3, 0.15, 1.5), envelope_intrusion(0.0, 0.0, 1.5)
+    (True, False, False)
+    """
+    return speed > 0.05 and gap < stop_envelope(speed, decel)
+
+
+def near_miss(speed: float, gap: float, margin: float = 0.0, decel: float = 1.5) -> bool:
+    """What the control room flags from its (noisy) tracks: a person inside the stopping envelope, with
+    ``margin`` taken off the gap threshold for the track's position uncertainty."""
+    return speed > 0.05 and gap < stop_envelope(speed, decel) - margin
 STATUS_LABEL = {
     "MOVING": "주행", "WAITING": "교통 대기", "BLOCKED": "차단 대기", "ACTION": "작업 동작",
     "CHARGING": "충전", "IDLE": "대기", "PARKED": "주차", "PAUSED": "일시정지", "ESTOP": "비상정지",
@@ -76,9 +100,11 @@ class ManagerConfig:
     deadlock_confirm_s: float = 2.0
     deadlock_alarm_s: float = 30.0
     reroute_after_s: float = 8.0
-    blocked_alarm_s: float = 60.0
-    # in a collaborative picking zone robots wait for people by design: alarm only when it lasts
-    collab_blocked_alarm_s: float = 180.0
+    # waits behind manual trucks at docks and aisle mouths last a minute or two in normal mixed traffic: an
+    # alarm (operator action) only past that; collaborative picking waits for people by design, longer still
+    blocked_alarm_s: float = 120.0
+    collab_blocked_alarm_s: float = 300.0
+    standoff_alarm_s: float = 60.0      # protective stop lasting this long: someone has to clear the vehicle's way
     comms_timeout_s: float = 3.0       # silence after which the vehicle counts as CONNECTIONBROKEN (alert)
     comms_alarm_s: float = 30.0        # silence that needs the operator (alarm); tasks are reassigned then too
     order_resend_s: float = 2.5
@@ -127,6 +153,7 @@ class RobotRecord:
     factsheet_asked: float = -1e9
     swing_since: float | None = None      # standing inside a stopped forklift's swept circle since
     escape_from: str | None = None        # track id of the truck whose circle this vehicle is leaving
+    prev_speed: float = 0.0               # speed before the latest protective stop
     state_nodes: list = field(default_factory=list)      # (nodeId, sequenceId, released) still ahead
     # ---- plan
     route: list = field(default_factory=list)
@@ -204,11 +231,12 @@ class FleetManager:
         self.events: deque = deque(maxlen=600)
         self.blocks: dict[str, tuple[str, str]] = {}
         self.external: dict[str, dict] = {}
-        self.mode = "RUNNING"           # RUNNING | HOLD | ESTOP
+        self.mode = "RUNNING"           # RUNNING | HOLD | ESTOP | FIRE | RESYNC
         self.area_paused: set[str] = set()
         self.robot_paused: set[str] = set()
         self.repair_times: list[float] = []
         self._nm_last: dict[str, float] = {}
+        self._nm_pending: set[tuple[str, str]] = set()
         self.infra_last: float | None = None    # last infrastructure detection cycle
         self.infra_lost = False
         self.zone_speed_override: dict[str, float] = {}
@@ -230,12 +258,19 @@ class FleetManager:
         bus.subscribe("uagv/v2/+/+/visualization", self._on_vis)
         bus.subscribe("uagv/v2/+/+/connection", self._on_connection)
         bus.subscribe("uagv/v2/+/+/factsheet", self._on_factsheet)
+        bus.subscribe("facility/v1/fire/state", self._on_fire)
         self.doors = DoorSupervisor(layout.doors, bus, self.alarms, self.event) if layout.doors else None
         self._zone_nodes: dict[str, list[str]] = {}
         for nid, zones in layout.node_zones.items():
             for zid in zones:
                 self._zone_nodes.setdefault(zid, []).append(nid)
         self._edge_zone_cache: dict[str, list[str]] = {}
+        self._fl_still_since: dict[str, float] = {}
+        # aisles a manual truck may work: the rack aisles (pick aisles are tote-AMR and picker space)
+        self._aisle_zones = [z for z in layout.zones.values() if z.kind == "aisle"
+                             and any(self.layout.edges[e].classes and "CARRIER" not in self.layout.edges[e].classes
+                                     for nid in self._zone_nodes.get(z.id, ()) for e in
+                                     [x.id for x in layout.out_edges[nid]])]
 
     # ================================================================ events
     def event(self, kind: str, source: str, msg: str, level: str = "info", **data) -> None:
@@ -273,6 +308,18 @@ class FleetManager:
         rec.vclass = msg["typeSpecification"]["agvClass"]
         rec.length = float(msg["physicalParameters"]["length"])
         rec.width = float(msg["physicalParameters"]["width"])
+
+    def _on_fire(self, _t: str, msg: dict) -> None:
+        """Fire panel. On alarm nothing new is released or assigned: every vehicle stops at the end of what
+        it already has, which is never a door threshold or an intersection, so fire doors can close."""
+        alarm = bool(msg.get("alarm"))
+        if alarm and self.mode != "FIRE":
+            self.mode = "FIRE"
+            self.event("fire", "facility", "화재 경보: 신규 해제·배정 중단, 차량은 해제 구간 끝에서 정지", "crit")
+        elif not alarm and self.mode == "FIRE":
+            self.mode = "HOLD"           # all clear: the operator resumes once the site is checked
+            self.event("fire_clear", "facility", "화재 경보 해제: 전체 일시정지 유지, 현장 확인 후 재개", "warn")
+        self.alarms.set("FIRE_ALARM", "facility", alarm, self.now, "화재 경보 수신" if alarm else "")
 
     def supports(self, rec: RobotRecord, action_type: str) -> bool:
         """What the factsheet declares. Without a factsheet only the standard actions are assumed."""
@@ -914,13 +961,18 @@ class FleetManager:
     def _update_blocks(self) -> None:
         blocks: dict[str, tuple[str, str]] = {}
         horizon = {"human": self.cfg.human_horizon_s, "forklift": self.cfg.forklift_horizon_s}
-        collab = [z.polygon for z in self.layout.zones.values() if z.kind == "picking"]
+        collab = [z.polygon for z in self.layout.zones.values() if z.collaborative]
         if self.cfg.strategy != "none":
             for tid, cls, x, y, r in self.tracker.predicted_discs(self.now, horizon):
                 if cls == "human" and any(point_in_polygon((x, y), poly) for poly in collab):
-                    # collaborative picking zone: people and robots share the aisle by design; block only when
-                    # the person stands in the robot's corridor, slow passes are left to the safety fields
-                    r -= 0.25
+                    # collaborative picking zone: people and robots share the aisle by design. A person holds
+                    # only the robot stop they stand on; passing them is left to the aisle's 0.3 m/s limit and
+                    # the vehicle's narrow field set
+                    for kind, ident in self._query(x, y, COLLAB_HOLD_M):
+                        if kind == "N" and math.hypot(self.layout.nodes[ident].x - x,
+                                                      self.layout.nodes[ident].y - y) <= COLLAB_HOLD_M:
+                            blocks.setdefault(node_res(ident), (cls, tid))
+                    continue
                 for kind, ident in self._query(x, y, r):
                     if kind == "N":
                         n = self.layout.nodes[ident]
@@ -930,8 +982,28 @@ class FleetManager:
                         a, b = self._lane_points(ident)
                         if seg_point_dist((x, y), a, b) <= r - 0.25:
                             blocks.setdefault(lane_res(ident), (cls, tid))
+            # turn zones ahead of a moving truck: a counterbalance truck may turn at any intersection it reaches
+            # within its horizon, sweeping a 1.9 m circle; robots must not be standing in that circle when it
+            # arrives (a robot inside stops the truck, and the truck in its field stops the robot)
+            for tr in self.tracker.tracks.values():
+                if tr.cls != "forklift" or not tr.confirmed or tr.speed < 0.3:
+                    continue
+                ux, uy = tr.vx / tr.speed, tr.vy / tr.speed
+                reach = tr.speed * self.cfg.forklift_horizon_s + 1.0
+                for kind, ident in self._query(tr.x + ux * reach / 2, tr.y + uy * reach / 2, reach / 2 + 1.0):
+                    if kind != "N" or not self.layout.is_intersection(ident):
+                        continue
+                    n = self.layout.nodes[ident]
+                    along = (n.x - tr.x) * ux + (n.y - tr.y) * uy
+                    if not (0.0 <= along <= reach) or abs(-(n.x - tr.x) * uy + (n.y - tr.y) * ux) > 1.0:
+                        continue
+                    zone_r = SWING_RADIUS + CLEARANCE_TURN
+                    for k2, i2 in self._query(n.x, n.y, zone_r):
+                        if k2 == "N" and math.hypot(self.layout.nodes[i2].x - n.x, self.layout.nodes[i2].y - n.y) <= zone_r:
+                            blocks.setdefault(node_res(i2), ("forklift", tr.id))
             # aisle signal: while a manual truck works a narrow aisle no robot enters it (robots already
             # inside finish their move); a truck and a robot meeting in a 4 m aisle cannot pass each other
+            still = {}
             for tr in self.tracker.tracks.values():
                 if tr.cls != "forklift":
                     continue
@@ -939,6 +1011,22 @@ class FleetManager:
                     if z.kind == "aisle":
                         for nid in self._zone_nodes.get(z.id, ()):
                             blocks.setdefault(node_res(nid), ("forklift", tr.id))
+                # aisle request: a truck stopped at an aisle mouth for 3 s is waiting to go in. New robots are
+                # held out (those inside finish and leave), otherwise a busy aisle never gets free for the truck
+                if not tr.confirmed or tr.speed >= 0.3:
+                    continue
+                still[tr.id] = self._fl_still_since.get(tr.id, self.now)
+                if self.now - still[tr.id] < 3.0:
+                    continue
+                for z in self._aisle_zones:
+                    xs, ys = [p[0] for p in z.polygon], [p[1] for p in z.polygon]
+                    dx = max(min(xs) - tr.x, 0.0, tr.x - max(xs))
+                    dy = max(min(ys) - tr.y, 0.0, tr.y - max(ys))
+                    if 0.0 < math.hypot(dx, dy) <= 4.5:
+                        for nid in self._zone_nodes.get(z.id, ()):
+                            if self.locks.holder_of(node_res(nid)) is None:
+                                blocks.setdefault(node_res(nid), ("forklift", tr.id))
+            self._fl_still_since = still
         for z in self.layout.zones.values():
             if z.locked:
                 for nid, zones in self.layout.node_zones.items():
@@ -1099,6 +1187,8 @@ class FleetManager:
     def _extend(self, rec: RobotRecord) -> None:
         if not rec.route or rec.mode != "AUTOMATIC" or rec.connection != "ONLINE" or rec.fatal:
             return
+        if self.mode == "FIRE":
+            return                    # fire alarm: release nothing beyond what each vehicle already has
         if rec.last_order is None or rec.last_order["orderId"] != rec.order_id:
             if not rec.order_pending or not self.can_take_route_now(rec):
                 return
@@ -1586,24 +1676,48 @@ class FleetManager:
                 self.alarms.set("RESERVATION_MISMATCH", rec.serial, False, self.now)
 
     def _near_misses(self) -> None:
+        """Near misses the control room can know of.
+
+        - the vehicle reports a protective stop caused by a person while it was driving faster than creep
+          speed (it had to stop for someone in its way: the event safety teams log);
+        - a confirmed person track inside the vehicle's stopping envelope on two consecutive cycles (one noisy
+          camera frame is not enough).
+        """
+        seen_now: set[tuple[str, str]] = set()
         for rec in self.robots.values():
-            if abs(rec.v) < 0.1 or rec.connection != "ONLINE":
+            if rec.connection != "ONLINE":
                 continue
+            stopped_for_person = rec.safety_field == "PROTECTIVE" and rec.field_cause.startswith("human") \
+                and rec.prev_speed > CREEP_SPEED
+            if stopped_for_person:
+                self._flag_near_miss(rec, f"{rec.serial} {rec.prev_speed:.1f} m/s에서 사람 때문에 보호정지")
+            rec.prev_speed = abs(rec.v) if rec.safety_field != "PROTECTIVE" else 0.0
+            if abs(rec.v) < 0.1:
+                continue
+            decel = float(((rec.factsheet or {}).get("physicalParameters") or {}).get("decelerationMax") or 1.0)
             for tr in self.tracker.tracks.values():
                 if tr.cls != "human" or not tr.confirmed:
                     continue
                 if abs(tr.x - rec.x) > 3 or abs(tr.y - rec.y) > 3:
                     continue
                 gap = box_gap((tr.x, tr.y), 0.3, (rec.x, rec.y), rec.theta, rec.length / 2, rec.width / 2)
-                if near_miss(abs(rec.v), gap, margin=0.1):
-                    key = rec.serial
-                    if self.now - self._nm_last.get(key, -1e9) > 20.0:
-                        self._nm_last[key] = self.now
-                        self.counters["near_miss"] += 1
-                        self.alarms.set("NEAR_MISS", key, True, self.now,
-                                        f"{rec.serial} {abs(rec.v):.1f} m/s 주행 중 사람 {max(gap, 0):.2f} m",
-                                        {"x": round(rec.x, 1), "y": round(rec.y, 1)})
-                        self.alarms.set("NEAR_MISS", key, False, self.now)
+                # the margin is the camera track's position uncertainty (about 1.2 sigma of 0.25 m): the control
+                # room only claims a near miss its own estimate can support
+                if near_miss(abs(rec.v), gap, margin=NM_TRACK_MARGIN, decel=decel):
+                    key = (rec.serial, tr.id)
+                    seen_now.add(key)
+                    if key in self._nm_pending:
+                        self._flag_near_miss(rec, f"{rec.serial} {abs(rec.v):.1f} m/s 주행 중 추적된 사람 "
+                                                  f"{max(gap, 0):.2f} m(정지거리 안)")
+        self._nm_pending = seen_now
+
+    def _flag_near_miss(self, rec: RobotRecord, msg: str) -> None:
+        if self.now - self._nm_last.get(rec.serial, -1e9) <= 20.0:
+            return
+        self._nm_last[rec.serial] = self.now
+        self.counters["near_miss"] += 1
+        self.alarms.set("NEAR_MISS", rec.serial, True, self.now, msg, {"x": round(rec.x, 1), "y": round(rec.y, 1)})
+        self.alarms.set("NEAR_MISS", rec.serial, False, self.now)
 
     def wait_chains(self) -> dict[str, list[str]]:
         """Root robot -> robots queued behind it (directly or transitively)."""
@@ -1640,8 +1754,11 @@ class FleetManager:
                 w is None and bool(behind) and rec.status in ("PROTECTIVE", "FAULT", "PAUSED", "OFFLINE", "MANUAL"))
             since = w.since if w is not None else (rec.protective_since or rec.fault_since or self.now)
             limit = self.cfg.blocked_alarm_s
-            if (w is not None and w.kind == "human" or rec.field_cause.startswith("human")) and \
-                    any(z.kind == "picking" for z in self.layout.zones_at((rec.x, rec.y))):
+            # waiting for a person or a manual truck is expected and clears by itself; only a long one needs the
+            # operator (collaborative zones wait for people by design)
+            if w is not None and w.kind in ("human", "forklift") or \
+                    rec.field_cause.startswith("human") and \
+                    any(z.collaborative for z in self.layout.zones_at((rec.x, rec.y))):
                 limit = self.cfg.collab_blocked_alarm_s
             long_block = root_stopped and self.now - since >= limit
             note = ""
@@ -1658,7 +1775,7 @@ class FleetManager:
                 rec.protective_since = rec.protective_since if rec.protective_since is not None else self.now
             else:
                 rec.protective_since = None
-            standoff = rec.protective_since is not None and self.now - rec.protective_since >= 20.0
+            standoff = rec.protective_since is not None and self.now - rec.protective_since >= self.cfg.standoff_alarm_s
             self.alarms.set("STANDOFF", rec.serial, standoff, self.now,
                             f"{rec.serial} {rec.reason} {self.now - (rec.protective_since or self.now):.0f}초"
                             if standoff else "")

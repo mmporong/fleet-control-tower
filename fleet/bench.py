@@ -29,7 +29,7 @@ from .sim import Simulation
 KEY_METRICS = ("done", "throughput_h", "cycle_avg", "cycle_p90", "wait_avg", "exec_avg", "traffic_wait_ratio",
                "utilization", "deadlocks", "deadlocks_resolved", "reroutes", "evasions", "protective_stops",
                "protective_human", "near_miss_fms", "contacts", "contacts_moving", "contacts_struck",
-               "contacts_static", "contacts_human", "contacts_human_moving", "close_calls", "clearance_violations",
+               "contacts_static", "contacts_human", "contacts_human_moving", "near_misses", "close_calls", "clearance_violations",
                "min_gap_moving", "min_amr_gap", "careless_turns", "tracking_ratio", "mismatch", "alarms_per_h",
                "mttr_s", "mtta_s", "interventions", "queued", "site_putaway_h", "site_shipped_h", "site_tote_h",
                "site_picks", "site_units", "site_dock_to_stock_avg", "site_dock_to_stock_p90", "site_picker_wait_s",
@@ -168,7 +168,7 @@ def main(argv: list[str] | None = None) -> int:
                 f"d2s {m('site_dock_to_stock_avg')}") if "site_putaway_h" in row else ""
         print(f"{label:40s} thr/h {m('throughput_h'):>14} wait {m('traffic_wait_ratio'):>11} "
               f"deadlock {m('deadlocks'):>11} resolved {m('deadlocks_resolved'):>11} "
-              f"contact {m('contacts'):>9} close {m('close_calls'):>11}{site}")
+              f"contact {m('contacts'):>9} nearmiss {m('near_misses'):>11}{site}")
     if args.out:
         Path(args.out).parent.mkdir(parents=True, exist_ok=True)
         Path(args.out).write_text(json.dumps(doc, ensure_ascii=False, indent=1))

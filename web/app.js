@@ -251,7 +251,7 @@
   }
 
   function renderRibbon(s) {
-    const mode = { RUNNING: ['정상 운영', 'ok', ''], HOLD: ['전체 일시정지', 'warn', 'hold'], ESTOP: ['일괄 정지(비안전)', 'danger', 'estop'] }[s.mode] || [s.mode, '', ''];
+    const mode = { RUNNING: ['정상 운영', 'ok', ''], HOLD: ['전체 일시정지', 'warn', 'hold'], ESTOP: ['일괄 정지(비안전)', 'danger', 'estop'], FIRE: ['화재 경보', 'danger', 'estop'], RESYNC: ['재기동 재동기화', 'warn', 'hold'] }[s.mode] || [s.mode, '', ''];
     $('mode').textContent = mode[0] + (s.paused.length && s.mode === 'RUNNING' ? ` · 개별 정지 ${s.paused.length}대` : '');
     $('mode').className = `val ${mode[1]}`;
     $('ribbon').className = `ribbon ${mode[2]}`;
@@ -301,10 +301,10 @@
       ['교착', `${k.deadlocks}`, `해소 ${k.deadlocks_resolved} · 활성 ${k.deadlocks_active}`, k.deadlocks_active ? 'danger' : ''],
       ...(dc ? [] : [['우회·비켜서기', `${k.reroutes + k.evasions}`, `우회 ${k.reroutes} · 비켜서기 ${k.evasions}`, '']]),
       ['보호정지', `${k.protective_stops}`, `사람 원인 ${k.protective_human}`, ''],
-      ['근접 감지(관제)', `${k.near_miss_fms}`, '추적 위치 기준 · ISO 여유 위반·20 cm 이내', k.near_miss_fms > 0 ? 'warn' : ''],
+      ['근접 감지(관제)', `${k.near_miss_fms}`, '추적 위치가 정지거리 안', k.near_miss_fms > 0 ? 'warn' : ''],
       ...(S.layers.truth && k.contacts != null ? [
         ['평가: 접촉', `${k.contacts}`, `주행 중 ${k.contacts_moving} · 정지 중 피격 ${k.contacts_struck} · 사람 ${k.contacts_human}`, k.contacts > 0 ? 'danger' : ''],
-        ['평가: 근접 20 cm', `${k.close_calls}`, `ISO 여유 위반 ${k.clearance_violations} · 최소 ${k.min_gap_moving ?? '—'} m`, k.close_calls > 0 ? 'warn' : ''],
+        ['평가: 근접사고', `${k.near_misses}`, `정지거리 안 진입 · 20 cm 이내 ${k.close_calls} · ISO 여유 위반 ${k.clearance_violations}`, k.near_misses > 0 ? 'warn' : ''],
         ['평가: 추적률', pct(k.tracking_ratio), '실제 대비(사각지대 포함)', k.tracking_ratio != null && k.tracking_ratio < 0.8 ? 'warn' : ''],
       ] : []),
       ['알람/시간', L.fmtNum(k.alarms_per_h, 0), `최근 10분 ${s.alarm_counts.last10min} · ${load.label}`, load.tone === 'danger' ? 'danger' : load.tone === 'warn' ? 'warn' : ''],

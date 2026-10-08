@@ -77,10 +77,10 @@ class Scenario:
 
 PRESETS: dict[str, Scenario] = {s.name: s for s in (
     Scenario("standard", "표준 교대", "물류센터 · 자율 지게차 10 · 토트 AMR 16 · 피커 6 · 수동 지게차 4 · 측정 용량 안의 기본 수요",
-             fault_mtbf_h=8.0, comms_mtbf_h=6.0),
+             fault_mtbf_h=24.0, comms_mtbf_h=6.0),
     Scenario("peak", "피크 출고", "자율 지게차 12 · 토트 AMR 22 · 피커 9 · 출고 24팔레트/h · 토트 70건/h(용량 근처)",
              agf=12, amr=22, pickers=9, trucks_h=2.5, out_pallets_h=24.0, tote_orders_h=70.0,
-             fault_mtbf_h=8.0, comms_mtbf_h=6.0),
+             fault_mtbf_h=24.0, comms_mtbf_h=6.0),
     Scenario("crowded", "사람 밀집", "피커 12 · 도크 작업자 6 · 보행자 6 · 타사 청소 로봇: 협업 피킹과 사람 구역 감속",
              pickers=12, dock_workers=6, walkers=6, packers=6, external=1),
     Scenario("faults", "장애 훈련", "고장·통신 두절이 잦은 교대(로봇당 평균 1시간), 메시지 손실 2%, 고속문 고장",

@@ -214,17 +214,18 @@ def dc_layout(pick_limit: str = "aisle") -> Layout:
 
     zones: dict[str, Zone] = {}
 
-    def zone(zid: str, name: str, kind: str, poly: list[Point], static=None, human=None) -> None:
-        zones[zid] = Zone(zid, name, kind, poly, static, human)
+    def zone(zid: str, name: str, kind: str, poly: list[Point], static=None, human=None,
+             collaborative: bool = False) -> None:
+        zones[zid] = Zone(zid, name, kind, poly, static, human, collaborative=collaborative)
 
     zone("Z-IN", "입고 도크·스테이징", "human_work", rect(0, 8.0, 8.6, 39.0), static=0.8, human=0.3)
     zone("Z-OUT", "출고 스테이징·도크", "human_work", rect(80.6, 8.0, WIDTH, 39.0), static=0.8, human=0.3)
-    zone("Z-PACK", "패킹 스테이션", "human_work", rect(71.8, 9.0, 76.0, 40.0), human=0.3)
+    zone("Z-PACK", "패킹 스테이션", "human_work", rect(71.8, 9.0, 76.0, 40.0), human=0.3, collaborative=True)
     zone("Z-RACK", "팔레트 랙(자율·수동 지게차)", "forklift_lane", rect(12.0, 8.4, 46.0, 41.6), static=1.0, human=0.5)
     # people in the aisle: 0.3 m/s, the ISO 3691-4 speed that allows passing closer than the normal clearance;
     # where it applies depends on pick_limit (whole hall, the occupied aisle only, or the vehicles' own fields)
     zone("Z-PICK", "협업 피킹 존", "picking", rect(48.0, 8.4, 68.0, 41.6), static=1.0,
-         human=0.3 if pick_limit == "zone" else None)
+         human=0.3 if pick_limit == "zone" else None, collaborative=True)
     aisle_human = 0.3 if pick_limit == "aisle" else None
     zone("Z-PICK-END-S", "피킹 통로 끝(남)", "walkway", rect(48.0, 8.4, 68.0, 9.6), human=aisle_human)
     zone("Z-PICK-END-N", "피킹 통로 끝(북)", "walkway", rect(48.0, 40.4, 68.0, 41.6), human=aisle_human)

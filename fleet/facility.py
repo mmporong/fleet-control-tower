@@ -23,6 +23,7 @@ import math
 from .geometry import Point, seg_point_dist
 
 DOOR_TOPIC = "facility/v1/door"
+FIRE_TOPIC = "facility/v1/fire/state"      # the fire panel: {"alarm": bool}
 OPEN_S = 3.0            # rapid-roll door, 4.5 m high curtain (nominal, see docs/SITE.md)
 CLOSE_S = 3.0
 CLOSE_DELAY_S = 5.0     # stays open this long after the last request
@@ -59,7 +60,12 @@ class DoorDevice:
         self.repair_at: float | None = None        # random faults: when the field team has fixed it
         self._next_state = 0.0
         self._last_sent: str | None = None
+        self.fire = False                          # fire alarm: close as soon as the opening is clear, stay shut
         bus.subscribe(f"{DOOR_TOPIC}/{spec.id}/request", self._on_request)
+        bus.subscribe(FIRE_TOPIC, self._on_fire)
+
+    def _on_fire(self, _topic: str, msg: dict) -> None:
+        self.fire = bool(msg.get("alarm"))
 
     def inject(self, fault: str, repair_at: float | None = None) -> None:
         """A curtain fault (JAM, MOTOR) strikes on the next close, so it never drops onto a vehicle;
@@ -88,7 +94,7 @@ class DoorDevice:
         return "MOVING"
 
     def _on_request(self, _topic: str, msg: dict) -> None:
-        if self.fault:
+        if self.fault or self.fire:
             return
         if msg["mode"] == "OPEN":
             self.last_request = self.bus.now
@@ -101,7 +107,7 @@ class DoorDevice:
         if self.fault in ("JAM", "MOTOR"):
             self.moving = 0
             return
-        want_open = now - self.last_request < CLOSE_DELAY_S
+        want_open = now - self.last_request < CLOSE_DELAY_S and not self.fire
         if want_open and self.progress < 1.0:
             self.moving = 1
         elif not want_open and self.progress > 0.0:
@@ -131,7 +137,7 @@ class DoorDevice:
             self._last_sent = self.mode
             self.bus.publish(f"{DOOR_TOPIC}/{self.spec.id}/state", {
                 "doorName": self.spec.id, "currentMode": self.mode, "stamp": round(now, 3),
-                "fault": "MOTOR_OVERCURRENT" if self.fault == "MOTOR" else "",
+                "fault": "MOTOR_OVERCURRENT" if self.fault == "MOTOR" else "", "fire": self.fire,
                 "requesters": sorted(self.requesters)}, now)
 
 

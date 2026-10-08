@@ -375,6 +375,9 @@ class Forklift:
     turn_wait_since: float | None = None
     turn_committed: bool = False
     turning: bool = False
+    turn_decided: bool = False      # the careless-turn draw for the current blocked turn was made
+    back: float = 0.0               # backed off this far behind the turning node (letting a robot pass)
+    backoffs: int = 0
     # a standing vehicle in the circle the truck sweeps: after 10 s most drivers back out the way they came,
     # this share turns anyway (a rule violation; swept in the benchmark)
     careless_p: float = 0.1
@@ -492,6 +495,8 @@ class Forklift:
         turn = math.remainder(heading - self.heading, 2 * math.pi)
         if abs(turn) > 0.05 and self.lat == 0.0:
             inside = [rv for _i, rx, ry, rr, rv in robots if math.hypot(rx - self.bx, ry - self.by) < 1.9 + rr + 0.2]
+            if self._back_off(dt, now, inside, robots, humans):
+                return
             if not self.turn_committed:
                 # a vehicle driving through the circle is always let past; one standing in it is waited for
                 if any(abs(v) > 0.05 for v in inside) or inside and (
@@ -501,18 +506,23 @@ class Forklift:
                     self.turning = False
                     return
                 if inside:
-                    # waited 10 s for a vehicle that does not move: most drivers back out, some turn anyway
+                    # waited for a vehicle that does not move. A driver does not back out against the one-way
+                    # flow of a main aisle: they back off a few metres if they can (above) or keep waiting (the
+                    # control room moves the robot within seconds); a driver who could not back off turns anyway
+                    # after 30 s in a share of cases, decided once per blocked turn
+                    if self.back > 0.0 or now - self.turn_wait_since < 30.0 or self.turn_decided:
+                        self.v = 0.0
+                        self.turning = False
+                        return
+                    self.turn_decided = True
                     if self.rng.random() >= self.careless_p:
-                        if now - self.reversed_at > 30.0:
-                            self.reversed_at = now
-                            self._reverse()
-                        self.turn_wait_since = now
                         self.v = 0.0
                         self.turning = False
                         return
                     self.careless_turns += 1
                 self.turn_committed = True       # once started, the turn is finished in one go
             self.turn_wait_since = None
+            self.turn_decided = False
             self.turning = True
             # the truck turns at walking pace on the spot: its 3.6 m body sweeps the next lane gradually,
             # so the vehicles there see it coming instead of it appearing across their lane
@@ -545,6 +555,30 @@ class Forklift:
             self.by += (tn.y - self.by) / d * step
         self._place(heading)
 
+    def _back_off(self, dt: float, now: float, inside: list, robots, humans) -> bool:
+        """A robot stands in the circle the truck must sweep, and the truck in that robot's field: after 10 s
+        the driver reverses up to 3 m along the way they came (if clear behind), lets the robot go, and drives
+        back to the turning point. Returns True while that manoeuvre moves the truck."""
+        waited = self.turn_wait_since is not None and now - self.turn_wait_since >= 10.0
+        if inside and waited and not self.turn_committed and self.back < 3.0:
+            cx, cy = math.cos(self.heading), math.sin(self.heading)
+            rear = (self.x - cx * 2.4, self.y - cy * 2.4)
+            clear = all(math.hypot(rx - rear[0], ry - rear[1]) > rr + 1.0 for _i, rx, ry, rr, _v in robots) and \
+                all(math.hypot(h.x - rear[0], h.y - rear[1]) > 1.2 for h in humans)
+            if clear:
+                if self.back == 0.0:
+                    self.backoffs += 1
+                self.back = min(3.0, self.back + 0.5 * dt)
+                self.v = -0.5
+                self._place(self.heading)
+                return True
+        if not inside and self.back > 0.0:
+            self.back = max(0.0, self.back - 0.8 * dt)        # robot gone: drive back up to the turning point
+            self.v = 0.8
+            self._place(self.heading)
+            return True
+        return False
+
     def _aisle_occupied(self, target, robots) -> bool:
         """Entering a narrow aisle (zone kind "aisle") that a robot is inside."""
         ahead = [z for z in self.layout.zones_at(target.pos) if z.kind == "aisle"]
@@ -563,8 +597,8 @@ class Forklift:
             self._reverse()
 
     def _place(self, heading: float) -> None:
-        self.x = self.bx - math.sin(heading) * self.lat
-        self.y = self.by + math.cos(heading) * self.lat
+        self.x = self.bx - math.sin(heading) * self.lat - math.cos(self.heading) * self.back
+        self.y = self.by + math.cos(heading) * self.lat - math.sin(self.heading) * self.back
 
     def next_nodes(self, count: int = 4) -> list[str]:
         return [self.loop[(self.idx + k * self.direction) % len(self.loop)] for k in range(1, count + 1)]

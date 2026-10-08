@@ -61,6 +61,9 @@ class Zone:
     static_speed: float | None = None     # always applies to AMRs inside
     human_speed: float | None = None      # applies while a person is tracked inside
     locked: bool = False                  # operator lockdown: no new entry
+    # people and robots work side by side here by design (collaborative picking, pack stations): a person holds
+    # only the robot stop they stand on, and long waits for people are normal
+    collaborative: bool = False
 
 
 @dataclass
@@ -252,7 +255,8 @@ class Layout:
                       for e in self.edges.values()],
             "racks": self.racks,
             "zones": [{"id": z.id, "name": z.name, "kind": z.kind, "polygon": z.polygon,
-                       "static_speed": z.static_speed, "human_speed": z.human_speed}
+                       "static_speed": z.static_speed, "human_speed": z.human_speed,
+                       "collaborative": z.collaborative}
                       for z in self.zones.values()],
             "coverage": [{"id": k, "polygon": v} for k, v in self.coverage.items()],
             "doors": [d.to_json() for d in self.doors.values()],

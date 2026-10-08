@@ -45,7 +45,8 @@ MAX_BODY = 64 * 1024
 SPEEDS = (0.5, 1.0, 2.0, 5.0, 10.0)
 DEFAULT_DB = Path.home() / ".local" / "state" / "fleet-control-tower" / "server.sqlite3"
 # commands that only a supervisor may give: training drills inject faults into the simulation
-SUPERVISOR_COMMANDS = {"drill_fault", "drill_comms", "drill_intruder", "drill_door", "door_field_fix", "set_task_rate"}
+SUPERVISOR_COMMANDS = {"drill_fault", "drill_comms", "drill_intruder", "drill_door", "drill_fire", "door_field_fix",
+                       "set_task_rate"}
 
 
 class IdemTable:
@@ -143,7 +144,7 @@ class Runner(threading.Thread):
         self.history.append({"t": round(self.sim.now), "done": k["done"], "thr": k["throughput_h"],
                              "wait": k["traffic_wait_ratio"], "queued": k["queued"], "working": k["working"],
                              "alarms": c["p1"] + c["p2"] + c["p3"], "pstop": k["protective_stops"],
-                             "nm": k["close_calls"]})
+                             "nm": k["near_misses"]})
 
     def snapshot(self) -> dict:
         now = time.monotonic()
