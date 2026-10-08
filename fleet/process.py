@@ -120,3 +120,35 @@ class GridProcess(Process):
             if t.dest in load and t.state == "ACTIVE":
                 load[t.dest] += 1
         return min(self.outbound, key=lambda d: (load[d], self.d.planner.travel_time(near, d)))
+
+
+class TransportProcess(Process):
+    """Runtime site process: work comes only from the upper system (WMS) as transport orders.
+
+    TRANSPORT picks at a station node and drops at another; MOVE sends a vehicle to a node with no action.
+    Station nodes are the layout's stops (LIF stations); the vehicle's own sensors decide whether a pick or
+    drop succeeds, and a failure goes back to the WMS as an exception event.
+    """
+
+    task_kinds = [
+        {"kind": "TRANSPORT", "label": "TRANSPORT · 적재→하역", "src": None, "dst": None},
+        {"kind": "MOVE", "label": "MOVE · 이동", "src": None, "dst": None, "dst_optional": True},
+    ]
+
+    def __init__(self, dispatcher: Dispatcher, rng: random.Random) -> None:
+        super().__init__(dispatcher, rng, 0.0)
+
+    def make_task(self, kind: str, source: str, dest: str | None, priority: int) -> Task:
+        nodes = self.layout.nodes
+        if source not in nodes or (dest is not None and dest not in nodes):
+            raise ValueError("source·dest는 레이아웃 노드여야 함")
+        if kind == "TRANSPORT":
+            if dest is None:
+                raise ValueError("TRANSPORT에는 dest가 필요함")
+            stops = [Stop(source, "pick", {"stationName": source}, source),
+                     Stop(dest, "drop", {"stationName": dest}, dest)]
+        elif kind == "MOVE":
+            stops = [Stop(source, "", {}, source)]
+        else:
+            raise ValueError("kind는 TRANSPORT 또는 MOVE")
+        return Task(self.d.next_id(), kind, None, stops, priority, self.d.m.now)

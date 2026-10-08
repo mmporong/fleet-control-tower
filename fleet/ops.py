@@ -439,13 +439,15 @@ class Operations:
             raise CommandError(f"kind는 {', '.join(kinds)} 중 하나")
         spec = kinds[body["kind"]]
         layout = self.sim.layout
-        if body["source"] not in layout.nodes or layout.nodes[body["source"]].kind not in spec["src"]:
-            raise CommandError(f"source는 {'/'.join(spec['src'])} 노드여야 함")
+        # src/dst None: any layout node (the runtime's transport orders name stations by node id)
+        if body["source"] not in layout.nodes or \
+                spec["src"] is not None and layout.nodes[body["source"]].kind not in spec["src"]:
+            raise CommandError(f"source는 {'/'.join(spec['src'] or ['레이아웃'])} 노드여야 함")
         if body["dest"] is None and not spec.get("dst_optional"):
             raise CommandError("dest가 필요함")
-        if body["dest"] is not None and (body["dest"] not in layout.nodes
-                                         or layout.nodes[body["dest"]].kind not in spec["dst"]):
-            raise CommandError(f"dest는 {'/'.join(spec['dst'])} 노드여야 함")
+        if body["dest"] is not None and (body["dest"] not in layout.nodes or spec["dst"] is not None
+                                         and layout.nodes[body["dest"]].kind not in spec["dst"]):
+            raise CommandError(f"dest는 {'/'.join(spec['dst'] or ['레이아웃'])} 노드여야 함")
         t = self.sim.dispatcher.add_task(body["kind"], body["source"], body["dest"], body["priority"], ref=oid)
         t.note = f"WMS {oid}"
         seen[oid] = {"body": body, "task": t.id}

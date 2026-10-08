@@ -5,7 +5,10 @@ from __future__ import annotations
 import doctest
 import unittest
 
+from fleet import auth as auth_mod
 from fleet import clock as clock_mod
+from fleet import dispatcher as dispatcher_mod
+from fleet import store as store_mod
 from fleet.dispatcher import Task
 from fleet.layout import warehouse_layout
 from fleet.ops import Operations
@@ -19,7 +22,8 @@ from tests.helpers import MiniWorld
 
 
 def load_tests(loader, tests, ignore):
-    tests.addTests(doctest.DocTestSuite(clock_mod))
+    for mod in (clock_mod, auth_mod, dispatcher_mod, store_mod):
+        tests.addTests(doctest.DocTestSuite(mod))
     return tests
 
 

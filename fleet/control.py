@@ -104,6 +104,7 @@ class RobotRecord:
     rx: deque = field(default_factory=lambda: deque(maxlen=120))   # (received at, latency s) of state/vis
     has_state: bool = False
     action_results: dict = field(default_factory=dict)   # actionId -> resultDescription of failed actions
+    factsheet_asked: float = -1e9
     state_nodes: list = field(default_factory=list)      # (nodeId, sequenceId, released) still ahead
     # ---- plan
     route: list = field(default_factory=list)
@@ -165,6 +166,10 @@ class FleetManager:
         self.clock = clock or SimClock()
         self.validator = validator
         self._invalid_logged: dict = {}
+        # runtime: prefixes order and action ids so a restarted manager never reuses an id a vehicle has seen
+        self.run_id = ""
+        self.resync_until: float | None = None       # RESYNC mode: rebuilding the picture after a restart
+        self._restored: dict[str, dict] = {}         # serial -> snapshot waiting for the vehicle's first state
         self.planner = Planner(layout)
         self.locks = LockTable()
         self.tracker = Tracker()
@@ -448,7 +453,7 @@ class FleetManager:
     # ================================================================ outbound
     def _aid(self, kind: str) -> str:
         self._action_seq += 1
-        return f"{kind}-{self._action_seq}"
+        return f"{self.run_id}{kind}-{self._action_seq}"
 
     def _instant(self, rec: RobotRecord, actions: list[dict]) -> None:
         t = topic(rec.manufacturer, rec.serial, "instantActions")
@@ -524,6 +529,107 @@ class FleetManager:
             gaps.append("원격 리셋 없음 → 현장 조치")
         return gaps
 
+    # ================================================================ restart: snapshot, restore, resync
+    def robot_snapshot(self, rec: RobotRecord) -> dict:
+        """What a restarted manager needs to take a vehicle back without releasing anything twice."""
+        return {"serial": rec.serial, "manufacturer": rec.manufacturer, "route": list(rec.route),
+                "order_id": rec.order_id, "update_id": rec.update_id, "base_end": rec.base_end,
+                "cur_idx": rec.cur_idx, "sent_base_end": rec.sent_base_end, "purpose": rec.purpose,
+                "task_id": rec.task_id, "last_node": rec.last_node, "last_order": rec.last_order,
+                "goal_actions": {str(k): v for k, v in rec.goal_actions.items()},
+                "resume": list(rec.resume) if rec.resume else None}
+
+    def restore(self, snapshots: dict[str, dict], resync_s: float = 15.0) -> None:
+        """Start in RESYNC: hold every reservation the vehicles may still be driving on, assign nothing new.
+
+        Each vehicle's own state decides what is kept (``_reconcile``); a vehicle that never reports keeps its
+        reservations (as for any vehicle that has gone silent) and the mode returns to RUNNING after ``resync_s``.
+        """
+        for serial, snap in snapshots.items():
+            rec = self.register(serial, snap.get("manufacturer"))
+            rec.route = list(snap.get("route") or [])
+            rec.order_id = snap.get("order_id", "")
+            rec.update_id = int(snap.get("update_id", 0))
+            rec.base_end = int(snap.get("base_end", 0))
+            rec.cur_idx = int(snap.get("cur_idx", 0))
+            rec.sent_base_end = int(snap.get("sent_base_end", 0))
+            rec.purpose = snap.get("purpose", "")
+            rec.task_id = snap.get("task_id")
+            rec.last_node = snap.get("last_node")
+            rec.last_order = snap.get("last_order")
+            rec.last_order_at = self.now
+            rec.last_seen = self.now          # silence is counted from the restart, not from the epoch
+            rec.goal_actions = {int(k): v for k, v in (snap.get("goal_actions") or {}).items()}
+            rec.resume = tuple(snap["resume"]) if snap.get("resume") else None
+            rec.order_pending = False
+            held = []
+            if rec.route:
+                for i in range(rec.cur_idx, min(rec.base_end, len(rec.route) - 1) + 1):
+                    held.append(node_res(rec.route[i]))
+                    if i < rec.base_end:
+                        held.append(lane_res(self.layout.edge_between(rec.route[i], rec.route[i + 1]).lane))
+            elif rec.last_node:
+                held.append(node_res(rec.last_node))
+            for r in held:
+                self.locks.force(serial, r)
+            self._restored[serial] = snap
+        self.mode = "RESYNC"
+        self.resync_until = self.now + resync_s
+        self.event("resync", "fleet", f"재기동: 차량 {len(snapshots)}대 상태 재동기화 중(신규 배정 보류)", "warn")
+
+    def _reconcile(self, rec: RobotRecord) -> None:
+        """First state after a restart: keep the restored order if the vehicle is still on it."""
+        snap = self._restored.pop(rec.serial, None)
+        if snap is None or not snap.get("route") and not rec.task_id:
+            return                          # nothing was in progress: the vehicle's own state is all there is
+        if rec.route and rec.state_order_id == rec.order_id:
+            self.event("resync_ok", rec.serial, f"재동기화: 주문 {rec.order_id} 이어서 진행", "info")
+            return
+        unsent = rec.last_order is None or rec.last_order.get("orderId") != rec.order_id
+        if rec.route and unsent and rec.state_remaining == 0 and rec.last_node == rec.route[0]:
+            # the manager stopped between planning the next leg and sending it: the vehicle waits at its start
+            rec.order_pending = True
+            self.event("resync_ok", rec.serial, f"재동기화: 보내지 못한 주문 {rec.order_id} 전송", "info")
+            return
+        task = rec.task_id
+        if rec.state_remaining == 0:
+            # the vehicle has finished whatever it had: it stands at its last node with nothing released
+            self.clear_route(rec)
+            self.locks.retain_only(rec.serial, {node_res(rec.last_node)} if rec.last_node else set())
+            why = "재기동 사이 주문 종료"
+        else:
+            # an order the snapshot does not know: stop it at its next node and start from there
+            self.instant(rec.serial, "cancelOrder")
+            rec.route = rec.route[: rec.base_end + 1] if rec.route else []
+            rec.purpose = "recover"
+            rec.task_id = None
+            why = "알 수 없는 주문 진행 중: 취소 후 재배정"
+        if task and self.dispatcher is not None:
+            self.dispatcher.reconcile_task(task, rec, why)
+        self.event("resync_mismatch", rec.serial, why, "warn")
+
+    def _check_resync(self) -> None:
+        if self.mode != "RESYNC":
+            return
+        for rec in self.robots.values():
+            if rec.serial in self._restored and rec.has_state:
+                self._reconcile(rec)
+        if not self._restored or self.now >= (self.resync_until or 0.0):
+            silent = sorted(self._restored)
+            self._restored.clear()
+            self.mode = "RUNNING"
+            self.resync_until = None
+            self.event("resync_done", "fleet", "재동기화 완료" + (f" · 무응답 {', '.join(silent)}(예약 유지)"
+                                                               if silent else ""), "warn" if silent else "info")
+
+    def _request_factsheets(self) -> None:
+        """A vehicle whose factsheet did not arrive (connected before us) is asked for it (VDA 5050 2.0)."""
+        for rec in self.robots.values():
+            if rec.factsheet is None and rec.has_state and rec.connection == "ONLINE" \
+                    and self.now - rec.factsheet_asked > 5.0:
+                rec.factsheet_asked = self.now
+                self._instant(rec, [action("factsheetRequest", self._aid("factsheet"), "NONE")])
+
     # ================================================================ routes
     def can_take_route(self, rec: RobotRecord) -> bool:
         if rec.mode != "AUTOMATIC" or rec.fatal or rec.connection != "ONLINE" or not rec.has_state:
@@ -566,7 +672,7 @@ class FleetManager:
         self._order_seq += 1
         rec.route = path
         rec.rot_zone = {}
-        rec.order_id = f"{rec.serial}-O{self._order_seq}"
+        rec.order_id = f"{rec.serial}-{self.run_id}O{self._order_seq}"
         rec.update_id = 0
         rec.base_end = 0
         rec.cur_idx = 0
@@ -651,6 +757,8 @@ class FleetManager:
     def tick(self, now: float, dt: float) -> None:
         self.now = now
         self._check_connections()
+        self._check_resync()
+        self._request_factsheets()
         for ev in self.tracker.prune(now):
             self.event("track_lost", ev["track"], f"추적 만료 ({ev['x']}, {ev['y']})", "warn")
         self._check_infra()

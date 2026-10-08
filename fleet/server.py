@@ -414,6 +414,9 @@ def make_handler(runner: Runner, jdamr: JdamrReadOnly | None, auth: Auth | None,
 
         def _control(self, body: dict, sess: Session) -> None:
             action = body.get("action")
+            if not getattr(runner, "simulated", True):
+                self._json({"ok": False, "msg": "실운영 관제에는 시뮬레이션 제어(배속·재시작)가 없습니다"}, 400)
+                return
             try:
                 if action == "speed":
                     value = float(body.get("value", 1.0))

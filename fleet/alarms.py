@@ -155,6 +155,12 @@ ALARM_DEFS: dict[str, AlarmDef] = {
         ("봉쇄 사유가 끝났는지 확인",
          "필요하면 대기 로봇 작업 취소 또는 봉쇄 해제"),
         ("zone_unlock", "cancel_task"), off_delay_s=30.0),
+    "FMS_INTERNAL_ERROR": AlarmDef(
+        1, "관제 내부 오류", "전체 일시정지(차량은 해제 구간 끝에서 정지), 제어 주기는 계속",
+        ("이벤트 기록과 서비스 로그의 오류 내용 확인",
+         "현장 안전 확인 후 원인이 해소됐으면 전체 재개, 반복되면 관제 서비스 재기동",
+         "재기동은 재동기화(RESYNC)를 거쳐 예약을 복원함"),
+        ("fleet_resume",)),
     "CHARGER_SHORTAGE": AlarmDef(
         3, "충전기 부족", "충전 대기열 운영",
         ("충전기 고장·점유 로봇 확인",

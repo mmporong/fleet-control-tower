@@ -80,13 +80,51 @@ class Task:
                 "note": self.note}
 
 
+def _jsonable(value):
+    """Task meta for the store: tuples (rack slots) become lists, dicts and lists are walked."""
+    if isinstance(value, tuple):
+        return [_jsonable(v) for v in value]
+    if isinstance(value, list):
+        return [_jsonable(v) for v in value]
+    if isinstance(value, dict):
+        return {str(k): _jsonable(v) for k, v in value.items()}
+    return value
+
+
+def task_to_json(t: Task) -> dict:
+    """Everything needed to rebuild the task after a restart (``task_from_json``)."""
+    return {"id": t.id, "kind": t.kind, "vclass": t.vclass, "priority": t.priority, "created": t.created,
+            "state": t.state, "robot": t.robot, "leg": t.leg, "assigned_at": t.assigned_at,
+            "started_at": t.started_at, "done_at": t.done_at, "attempts": t.attempts, "note": t.note,
+            "meta": _jsonable(t.meta),
+            "stops": [{"node": s.node, "action": s.action, "params": _jsonable(s.params), "label": s.label}
+                      for s in t.stops]}
+
+
+def task_from_json(d: dict) -> Task:
+    """
+    >>> t = Task("T00001", "TRANSPORT", None, [Stop("A", "pick", {"stationName": "A"}, "A")], 1, 5.0,
+    ...          meta={"slot": ("R1-01", "L", 0, 1)})
+    >>> back = task_from_json(task_to_json(t))
+    >>> back.stops[0].params, back.meta["slot"]
+    ({'stationName': 'A'}, ['R1-01', 'L', 0, 1])
+    """
+    stops = [Stop(s["node"], s["action"], dict(s.get("params") or {}), s.get("label", "")) for s in d["stops"]]
+    t = Task(d["id"], d["kind"], d.get("vclass"), stops, int(d.get("priority", 0)), float(d.get("created", 0.0)),
+             state=d.get("state", "QUEUED"), robot=d.get("robot"), leg=int(d.get("leg", 0)),
+             assigned_at=d.get("assigned_at"), started_at=d.get("started_at"), done_at=d.get("done_at"),
+             attempts=int(d.get("attempts", 0)), note=d.get("note", ""), meta=dict(d.get("meta") or {}))
+    return t
+
+
 class Dispatcher:
     AGE_CREDIT_S = 0.25          # cost credit per second a task has waited (aging keeps old tasks from starving)
     PRIORITY_CREDIT_S = 90.0     # cost credit per priority level
 
     def __init__(self, manager: FleetManager, rng: random.Random, process=None, charge_low: float = 30.0,
                  charge_full: float = 90.0, reserve: float = 12.0, overdue_s: float = 600.0,
-                 policy: str = "cost") -> None:
+                 policy: str = "cost", run_id: str = "") -> None:
+        """``run_id`` (runtime) prefixes action ids, so ids issued after a restart never repeat earlier ones."""
         if policy not in ("cost", "fifo"):
             raise ValueError("policy must be cost or fifo")
         self.m = manager
@@ -111,7 +149,8 @@ class Dispatcher:
         self.process = process
         self.outbox: deque = deque(maxlen=5000)     # WMS-facing task events, read with a cursor
         self._evseq = 0
-        self.sinks: list = []                       # e.g. the persistent store
+        self.sinks: list = []                       # called with (event, task), e.g. the persistent store
+        self.run_id = run_id
         manager.dispatcher = self
 
     # ------------------------------------------------------------ WMS event outbox
@@ -125,7 +164,7 @@ class Dispatcher:
             self.m.event("task_exception", task.id, f"{task.id} 예외 {data.get('code', '')}: "
                          f"{data.get('detail', '')}", "warn")
         for sink in self.sinks:
-            sink(ev)
+            sink(ev, task)
         return ev
 
     def events_after(self, seq: int, limit: int = 200) -> list[dict]:
@@ -151,7 +190,19 @@ class Dispatcher:
 
     def aid(self, kind: str) -> str:
         self._aseq += 1
-        return f"{kind}-{self._aseq}"
+        return f"{self.run_id}{kind}-{self._aseq}"
+
+    def restore(self, tasks: list[dict], last_event_seq: int = 0) -> list[Task]:
+        """Bring back queued and active tasks after a restart; ids and the outbox cursor continue after them."""
+        out = []
+        for d in tasks:
+            t = task_from_json(d)
+            self.tasks[t.id] = t
+            out.append(t)
+            if t.id.startswith("T") and t.id[1:].isdigit():
+                self._seq = max(self._seq, int(t.id[1:]))
+        self._evseq = max(self._evseq, last_event_seq)
+        return out
 
     _aid = aid
 
@@ -198,9 +249,12 @@ class Dispatcher:
         self.m.alarms.set("CHARGER_SHORTAGE", "chargers", bool(starving), now,
                           f"충전 대기 {len(starving)}대: {', '.join(starving[:5])}" if starving else "")
 
-    def _stop_action(self, task: Task, idx: int) -> dict:
+    def _stop_actions(self, task: Task, idx: int) -> list[dict]:
+        """The node action of a stop (none for a plain move)."""
         st = task.stops[idx]
-        return action(st.action, self.aid(f"{task.id}-{idx}-{st.action}"), "HARD", st.params)
+        if not st.action:
+            return []
+        return [action(st.action, self.aid(f"{task.id}-{idx}-{st.action}"), "HARD", st.params)]
 
     def _purpose(self, task: Task) -> str:
         return "pickup" if task.leg == 0 else "dropoff" if task.leg == len(task.stops) - 1 else "stop"
@@ -217,18 +271,19 @@ class Dispatcher:
                 return
             if self.process:
                 self.process.on_stop_done(task, task.leg, now, rec.serial)
-            stop = task.stops[task.leg]
-            self.emit("STOP_DONE", task, now, stop=task.leg, location=stop.label or stop.node, action=stop.action)
+            done_leg, stop = task.leg, task.stops[task.leg]
             if task.leg == 0:
                 task.started_at = now
             task.leg += 1
+            # emitted after the task changed, so the stored copy already shows the load on board
+            self.emit("STOP_DONE", task, now, stop=done_leg, location=stop.label or stop.node, action=stop.action)
             if task.leg >= len(task.stops):
                 self._end(task, "DONE", now)
                 self.m.clear_route(rec)
                 self.m.event("task_done", rec.serial, f"{task.id} {task.kind} 완료 {now - task.created:.0f}초", "info")
                 return
             nxt = task.stops[task.leg]
-            if not self.m.assign_route(rec, nxt.node, self._purpose(task), [self._stop_action(task, task.leg)],
+            if not self.m.assign_route(rec, nxt.node, self._purpose(task), self._stop_actions(task, task.leg),
                                        task.id):
                 self._end(task, "FAILED", now, f"{nxt.node} 경로 없음")
                 self.m.clear_route(rec)
@@ -258,7 +313,7 @@ class Dispatcher:
         self.m.clear_route(rec)
         if verdict in ("retry", "redirect"):
             nxt = task.stops[task.leg]
-            if self.m.assign_route(rec, nxt.node, self._purpose(task), [self._stop_action(task, task.leg)], task.id):
+            if self.m.assign_route(rec, nxt.node, self._purpose(task), self._stop_actions(task, task.leg), task.id):
                 return
             verdict, note = ("requeue" if task.started_at is None else "fail"), f"{note} · 경로 없음"
         if verdict == "requeue" and task.started_at is None:
@@ -303,7 +358,7 @@ class Dispatcher:
     def _eligible(self, rec: RobotRecord, task: Task) -> bool:
         if task.vclass is not None and rec.vclass not in (task.vclass, None):
             return False
-        if not all(self.m.supports(rec, s.action) for s in task.stops):
+        if not all(self.m.supports(rec, s.action) for s in task.stops if s.action):
             return False
         return self._feasible(rec, task)
 
@@ -353,7 +408,7 @@ class Dispatcher:
         if best.charging:
             start_actions.append(action("stopCharging", self.aid(f"{best.serial}-stopchg"), "HARD"))
         task.leg = 0
-        if not self.m.assign_route(best, task.source, "pickup", [self._stop_action(task, 0)], task.id,
+        if not self.m.assign_route(best, task.source, "pickup", self._stop_actions(task, 0), task.id,
                                    start_actions=start_actions):
             return False
         self._release_spots(best.serial)
@@ -469,6 +524,8 @@ class Dispatcher:
         self.m.instant(rec.serial, "cancelOrder")
 
     def _fault_requeue(self, now: float) -> None:
+        if self.m.mode == "RESYNC":
+            return                  # after a restart a silent vehicle may simply not have reported yet
         for rec in self.m.robots.values():
             task = self.tasks.get(rec.task_id) if rec.task_id else None
             if task is None or task.started_at is not None:
@@ -477,6 +534,16 @@ class Dispatcher:
             offline_long = rec.connection != "ONLINE" and now - rec.last_seen > 30.0
             if fault_long or offline_long:
                 self.detach(rec, "고장 장기화" if fault_long else "통신 두절 30초")
+
+    def reconcile_task(self, task_id: str, rec: RobotRecord, why: str) -> None:
+        """After a restart the vehicle no longer runs the task's order: requeue it, or fail it if loaded."""
+        task = self.tasks.get(task_id)
+        if task is None or task.state != "ACTIVE":
+            return
+        if task.started_at is None:
+            self._requeue(task, f"재기동 재동기화: {why}")
+        else:
+            self._end(task, "FAILED", self.m.now, f"재기동 재동기화: {why} · 적재물 현장 확인")
 
     def cancel(self, task_id: str) -> str:
         task = self.tasks[task_id]
