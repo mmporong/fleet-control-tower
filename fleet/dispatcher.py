@@ -161,11 +161,16 @@ class Dispatcher:
         self.emit("CREATED", task, self.m.now)
         return task
 
-    def add_task(self, kind: str, source: str, dest: str | None = None, priority: int = 0) -> Task:
-        """Operator / WMS entry: the site process validates and builds the stops."""
+    def add_task(self, kind: str, source: str, dest: str | None = None, priority: int = 0,
+                 ref: str | None = None) -> Task:
+        """Operator / WMS entry: the site process validates and builds the stops; ``ref`` is the upper
+        system's order id, carried by every outbox event of the task."""
         if self.process is None:
             raise ValueError("no site process")
-        return self.submit(self.process.make_task(kind, source, dest, max(0, min(2, int(priority)))))
+        task = self.process.make_task(kind, source, dest, max(0, min(2, int(priority))))
+        if ref:
+            task.meta["ref"] = ref
+        return self.submit(task)
 
     def spots_for(self, kind: str, vclass: str | None) -> list[str]:
         """Chargers or parking bays this vehicle class may enter."""

@@ -78,11 +78,16 @@ class SimClock(Clock):
 
 
 class WallClock(Clock):
-    """Real time: ``now()`` is monotonic seconds since construction, stamps are wall-clock UTC."""
+    """Real time: ``now()`` is monotonic seconds since construction, stamps are wall-clock UTC.
 
-    def __init__(self) -> None:
+    ``scale`` > 1 runs faster than real time; only for tests that run manager and vehicles in one process
+    with one shared clock (stamps are then virtual and not comparable with another process's clock).
+    """
+
+    def __init__(self, scale: float = 1.0) -> None:
         self._mono0 = time.monotonic()
+        self.scale = scale
         super().__init__(time.time())
 
     def now(self) -> float:
-        return time.monotonic() - self._mono0
+        return (time.monotonic() - self._mono0) * self.scale

@@ -1,0 +1,113 @@
+"""The fleet manager's bus over a real MQTT broker (runtime), with the interface of ``fleet.bus.Bus``.
+
+``FleetManager``, ``DoorSupervisor`` and the vehicle simulator only call
+``subscribe``, ``publish`` and ``deliver_due`` and read ``now``, so the same
+control code runs in the deterministic simulation and against a broker:
+
+- messages are JSON over MQTT; ``connection`` goes out at QoS 1 and retained
+  (VDA 5050: the broker keeps each vehicle's last connection state, the Last Will
+  sets it to CONNECTIONBROKEN), everything else at QoS 0;
+- MQTT callbacks run on the client's network thread; they only queue the
+  message. ``deliver_due`` hands queued messages to the handlers on the caller's
+  thread, so the manager stays single-threaded as in the simulation;
+- a payload that is not a JSON object is counted and dropped here; schema
+  checks are the manager's ``validator``.
+"""
+from __future__ import annotations
+
+from collections import deque
+import json
+import queue
+from typing import Callable
+
+from .bus import LinkQuality
+from .clock import WallClock
+from .mqtt import MqttClient, topic_matches
+from .vda5050 import split_topic
+
+Handler = Callable[[str, dict], None]
+
+
+def qos_retain(topic: str) -> tuple[int, bool]:
+    """Delivery rules per topic (VDA 5050 2.x section 6: connection QoS 1 retained, the rest QoS 0)."""
+    if topic.endswith("/connection"):
+        return 1, True
+    if topic.startswith("facility/") and topic.endswith("/state"):
+        return 0, True                    # the latest door state is there for anyone who subscribes later
+    return 0, False
+
+
+class MqttBus:
+    def __init__(self, client: MqttClient, clock: WallClock, log_depth: int = 30) -> None:
+        self.client = client
+        self.clock = clock
+        self._subs: list[tuple[str, Handler]] = []
+        self._inbox: queue.SimpleQueue = queue.SimpleQueue()
+        self.now = 0.0
+        self.stats = {"published": 0, "delivered": 0, "dropped": 0, "bytes": 0, "invalid_json": 0}
+        self.links: dict[str, LinkQuality] = {}     # the simulation's link model has no meaning here
+        self.log: dict[str, deque] = {}
+        self._log_depth = log_depth
+        client.on_message = self._on_message
+
+    # ------------------------------------------------------------ Bus interface
+    def subscribe(self, pattern: str, handler: Handler) -> None:
+        self._subs.append((pattern, handler))
+        if not any(p == pattern for p, _ in self._subs[:-1]):
+            # without a network thread or connection yet the client keeps it and subscribes on connect
+            self.client.subscribe(pattern, qos=1 if pattern.endswith("/connection") else 0, timeout=None)
+
+    def publish(self, topic: str, payload: dict, now: float, retain: bool | None = None) -> bool:
+        data = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+        qos, keep = qos_retain(topic)
+        ok = self.client.publish(topic, data, qos=qos, retain=keep if retain is None else retain)
+        self.stats["published"] += 1
+        self.stats["bytes"] += len(data)
+        if not ok:
+            self.stats["dropped"] += 1
+        self._record(topic, payload, now, dropped=not ok)
+        return ok
+
+    def deliver_due(self, now: float) -> int:
+        """Hand every message received so far to its handlers (on the caller's thread)."""
+        self.now = now
+        delivered = 0
+        while True:
+            try:
+                topic, raw = self._inbox.get_nowait()
+            except queue.Empty:
+                break
+            try:
+                payload = json.loads(raw.decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError):
+                payload = None
+            if not isinstance(payload, dict):
+                self.stats["invalid_json"] += 1
+                continue
+            self._record(topic, payload, now, dropped=False, inbound=True)
+            for pattern, handler in self._subs:
+                if topic_matches(pattern, topic):
+                    handler(topic, payload)
+            delivered += 1
+        self.stats["delivered"] += delivered
+        return delivered
+
+    def link(self, serial: str) -> LinkQuality:
+        return self.links.setdefault(serial, LinkQuality())
+
+    def recent(self, serial: str, limit: int = 12) -> list[dict]:
+        return list(self.log.get(serial, ()))[-limit:]
+
+    # ------------------------------------------------------------ internals
+    def _on_message(self, topic: str, payload: bytes, retain: bool) -> None:
+        self._inbox.put((topic, payload))
+
+    def _record(self, topic: str, payload: dict, now: float, dropped: bool, inbound: bool = False) -> None:
+        parsed = split_topic(topic)
+        if parsed is None or parsed[2] == "visualization":
+            return
+        serial = parsed[1]
+        if serial not in self.log:
+            self.log[serial] = deque(maxlen=self._log_depth)
+        self.log[serial].append({"t": round(now, 2), "topic": topic, "dropped": dropped, "in": inbound,
+                                 "payload": payload})

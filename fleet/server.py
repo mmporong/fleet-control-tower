@@ -1,30 +1,41 @@
 """Control room web server: runs the simulation in real time and serves the UI.
 
-Standard library only. Binds to loopback by default. Commands go through
-``Operations`` (validated + audited); ``--read-only`` turns the whole server
-into an observation console.
+Standard library only. Binds to loopback by default. Every API call needs a
+signed-in account (``fleet.auth``): viewers read, operators command, supervisors
+also control the simulation. Upper systems use an API key for the WMS endpoints.
+Commands go through ``Operations`` (validated, audited with the account name,
+hash-chained in the SQLite store); ``--read-only`` turns the whole server into
+an observation console.
 
     python3 -m fleet.server --scenario standard --port 8095
+    python3 -m fleet.server --add-user kim:operator      # password from the prompt or FCT_NEW_PASSWORD
+    python3 -m fleet.server --create-api-key wms-1       # prints the key once
 """
 from __future__ import annotations
 
 import argparse
 from collections import deque
+import getpass
+import ipaddress
 import json
 import math
+import os
 from pathlib import Path
 import random
+import socket
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import parse_qs, unquote, urlparse
+from urllib.parse import parse_qs, urlparse
 
+from .auth import Auth, AuthError, Session, at_least, check_state_change, cookie_token, session_cookie
 from .autoop import AutoOperator
 from .control import STRATEGIES
 from .jdamr import DEFAULT_URL, JdamrReadOnly
 from .ops import Operations
 from .scenario import PRESETS, get
 from .sim import Simulation
+from .store import Store
 
 WEB = Path(__file__).resolve().parents[1] / "web"
 STATIC = {"/": ("index.html", "text/html; charset=utf-8"),
@@ -32,15 +43,38 @@ STATIC = {"/": ("index.html", "text/html; charset=utf-8"),
           "/logic.js": ("logic.js", "text/javascript; charset=utf-8")}
 MAX_BODY = 64 * 1024
 SPEEDS = (0.5, 1.0, 2.0, 5.0, 10.0)
+DEFAULT_DB = Path.home() / ".local" / "state" / "fleet-control-tower" / "server.sqlite3"
+# commands that only a supervisor may give: training drills inject faults into the simulation
+SUPERVISOR_COMMANDS = {"drill_fault", "drill_comms", "drill_intruder", "drill_door", "door_field_fix", "set_task_rate"}
+
+
+class IdemTable:
+    """WMS idempotency keys in the store, with the dict interface ``Operations.submit_wms_order`` uses."""
+
+    def __init__(self, store: Store) -> None:
+        self.store = store
+
+    def __contains__(self, oid: str) -> bool:
+        return self.store.idem_get(oid) is not None
+
+    def __getitem__(self, oid: str) -> dict:
+        row = self.store.idem_get(oid)
+        if row is None:
+            raise KeyError(oid)
+        return row
+
+    def __setitem__(self, oid: str, value: dict) -> None:
+        self.store.idem_put(oid, value["body"], value["task"])
 
 
 class Runner(threading.Thread):
     """Advances the simulation against wall time and keeps a snapshot cache."""
 
     def __init__(self, scenario: str, seed: int, strategy: str, speed: float, auto_operator: bool,
-                 read_only: bool) -> None:
+                 read_only: bool, store: Store | None = None) -> None:
         super().__init__(daemon=True, name="sim-runner")
         self.lock = threading.RLock()
+        self.store = store or Store()
         self.read_only = read_only
         self.auto_operator = auto_operator
         self.speed = speed
@@ -49,23 +83,20 @@ class Runner(threading.Thread):
         self._stop = threading.Event()
         self._snap: dict | None = None
         self._snap_at = 0.0
-        self.wms_seen: dict = {}
         self.reset(scenario, seed, strategy)
 
     def reset(self, scenario: str, seed: int, strategy: str) -> None:
         if strategy not in STRATEGIES:
             raise ValueError(f"strategy must be one of {', '.join(STRATEGIES)}")
         with self.lock:
-            prev_audit = list(self.ops.audit) if hasattr(self, "ops") else []
             self.sim = Simulation(get(scenario), seed=seed, strategy=strategy)
-            self.ops = Operations(self.sim, read_only=self.read_only)
-            self.ops.audit.extend(prev_audit[-200:])
+            self.ops = Operations(self.sim, read_only=self.read_only, store=self.store)
             self.autoop = AutoOperator(self.ops, random.Random(seed + 99))
             if self.auto_operator:
                 self.sim.tick_hooks.append(self.autoop.tick)
             self.history: deque = deque(maxlen=720)
             self._next_sample = 0.0
-            self.wms_seen = {}
+            self.wms_seen = IdemTable(self.store)
             self._snap = None
 
     def set_auto_operator(self, on: bool) -> None:
@@ -154,20 +185,25 @@ class Runner(threading.Thread):
         self._stop.set()
 
 
-def make_handler(runner: Runner, jdamr: JdamrReadOnly | None):
+def make_handler(runner: Runner, jdamr: JdamrReadOnly | None, auth: Auth | None, secure_cookie: bool = False):
+    """``auth`` None turns authentication off (``--no-auth``, loopback development only)."""
+    open_session = Session("local", "supervisor", "")
+
     class Handler(BaseHTTPRequestHandler):
-        server_version = "FleetControlTower/0.1"
+        server_version = "FleetControlTower/0.2"
 
         def log_message(self, fmt: str, *args) -> None:   # keep the console quiet
             return
 
         # ---------------------------------------------------------- helpers
-        def _json(self, obj, status: int = 200) -> None:
+        def _json(self, obj, status: int = 200, headers: dict | None = None) -> None:
             body = json.dumps(obj, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
             self.send_response(status)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.send_header("Content-Length", str(len(body)))
             self.send_header("Cache-Control", "no-store")
+            for k, v in (headers or {}).items():
+                self.send_header(k, v)
             self.end_headers()
             self.wfile.write(body)
 
@@ -181,9 +217,33 @@ def make_handler(runner: Runner, jdamr: JdamrReadOnly | None):
                 raise ValueError("JSON 객체가 필요합니다")
             return data
 
-        def _operator(self) -> str:
-            name = unquote((self.headers.get("X-Operator") or "operator").strip())
-            return "".join(ch for ch in name if ch.isprintable())[:40] or "operator"
+        def _session(self) -> Session | None:
+            if auth is None:
+                return open_session
+            return auth.session(cookie_token(self.headers.get("Cookie")))
+
+        def _api_key(self) -> Session | None:
+            header = self.headers.get("Authorization") or ""
+            if auth is None:
+                return open_session
+            return auth.api_key(header[7:].strip()) if header.startswith("Bearer ") else None
+
+        def _require(self, role: str, state_change: bool = False) -> Session | None:
+            """The signed-in session with at least ``role``; answers 401/403 and returns None otherwise."""
+            sess = self._session()
+            if sess is None:
+                self._json({"ok": False, "msg": "로그인이 필요합니다", "login": True}, 401)
+                return None
+            if not at_least(sess.role, role):
+                self._json({"ok": False, "msg": f"권한 부족: {role} 이상 필요 (현재 {sess.role})"}, 403)
+                return None
+            if state_change and auth is not None:
+                try:
+                    check_state_change(self.headers, sess, self.headers.get("Host"))
+                except AuthError as exc:
+                    self._json({"ok": False, "msg": str(exc)}, exc.status)
+                    return None
+            return sess
 
         # ---------------------------------------------------------- GET
         def do_GET(self) -> None:
@@ -201,7 +261,25 @@ def make_handler(runner: Runner, jdamr: JdamrReadOnly | None):
                 return
             if path == "/health":
                 self._json({"ok": True, "sim_t": runner.sim.now})
-            elif path == "/api/layout":
+                return
+            if path == "/api/me":
+                sess = self._session()
+                if sess is None:
+                    self._json({"ok": False, "login": True}, 401)
+                else:
+                    self._json({"ok": True, "name": sess.name, "role": sess.role, "csrf": sess.csrf,
+                                "auth": auth is not None})
+                return
+            if path == "/api/wms/events":
+                if self._api_key() is None and self._require("operator") is None:
+                    return
+                after = int((parse_qs(url.query).get("after") or ["0"])[0])
+                with runner.lock:
+                    self._json(runner.sim.dispatcher.events_after(after))
+                return
+            if self._require("viewer") is None:
+                return
+            if path == "/api/layout":
                 with runner.lock:
                     self._json(runner.sim.layout.to_json())
             elif path == "/api/meta":
@@ -217,6 +295,8 @@ def make_handler(runner: Runner, jdamr: JdamrReadOnly | None):
             elif path == "/api/audit":
                 with runner.lock:
                     self._json(list(runner.ops.audit))
+            elif path == "/api/audit/verify":
+                self._json({"problems": runner.store.verify_audit()})
             elif path.startswith("/api/incident/"):
                 try:
                     with runner.lock:
@@ -250,8 +330,13 @@ def make_handler(runner: Runner, jdamr: JdamrReadOnly | None):
             self.send_header("Cache-Control", "no-store")
             self.send_header("Connection", "keep-alive")
             self.end_headers()
+            token = cookie_token(self.headers.get("Cookie"))
             try:
                 while True:
+                    if auth is not None and auth.session(token) is None:
+                        self.wfile.write(b"event: logout\ndata: {}\n\n")      # session ended: stop streaming
+                        self.wfile.flush()
+                        return
                     snap = runner.snapshot()
                     if jdamr:
                         snap = {**snap, "jdamr": jdamr.status()}
@@ -270,35 +355,64 @@ def make_handler(runner: Runner, jdamr: JdamrReadOnly | None):
             except (ValueError, json.JSONDecodeError) as exc:
                 self._json({"ok": False, "msg": f"잘못된 요청: {exc}"}, 400)
                 return
-            if path == "/api/command":
-                if runner.read_only:
-                    with runner.lock:
-                        res = runner.ops.execute(body, self._operator())
-                    self._json(res, 403)
+            if path == "/api/login":
+                self._login(body)
+            elif path == "/api/logout":
+                if auth is not None:
+                    auth.logout(cookie_token(self.headers.get("Cookie")))
+                self._json({"ok": True}, headers={"Set-Cookie": session_cookie("", secure_cookie, clear=True)})
+            elif path == "/api/command":
+                name = str(body.get("cmd", ""))
+                sess = self._require("supervisor" if name in SUPERVISOR_COMMANDS else "operator", state_change=True)
+                if sess is None:
                     return
                 with runner.lock:
-                    res = runner.ops.execute(body, self._operator())
+                    res = runner.ops.execute(body, sess.name)
                     runner._snap = None
-                self._json(res, 200 if res["ok"] else 400)
+                self._json(res, 403 if runner.read_only else 200 if res["ok"] else 400)
             elif path == "/api/wms/orders":
+                key = self._api_key()
+                sess = key if key is not None and key.role == "wms" else \
+                    self._require("supervisor", state_change=True)
+                if sess is None:
+                    return
                 if runner.read_only:
                     self._json({"ok": False, "msg": "관찰 전용 모드"}, 403)
                     return
                 try:
                     with runner.lock:
-                        res = runner.ops.submit_wms_order(body, runner.wms_seen)
+                        res = runner.ops.submit_wms_order(body, runner.wms_seen, operator=f"WMS:{sess.name}")
                     self._json(res, 200 if res.get("duplicate") else 201)
                 except ValueError as exc:
                     self._json({"ok": False, "msg": str(exc)}, 400 if "이미" not in str(exc) else 409)
             elif path == "/api/control":
+                sess = self._require("supervisor", state_change=True)
+                if sess is None:
+                    return
                 if runner.read_only:
                     self._json({"ok": False, "msg": "관찰 전용 모드"}, 403)
                     return
-                self._control(body)
+                self._control(body, sess)
             else:
                 self._json({"error": "not found"}, 404)
 
-        def _control(self, body: dict) -> None:
+        def _login(self, body: dict) -> None:
+            if auth is None:
+                self._json({"ok": True, "name": "local", "role": "supervisor", "csrf": "", "auth": False})
+                return
+            try:
+                token, sess = auth.login(str(body.get("name", "")), str(body.get("password", "")))
+            except AuthError as exc:
+                self._json({"ok": False, "msg": str(exc)}, exc.status)
+                return
+            with runner.lock:
+                runner.ops.record({"t": round(runner.sim.now, 1), "wall": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                                   "operator": sess.name, "cmd": "login", "args": {"role": sess.role},
+                                   "ok": True, "msg": "로그인"})
+            self._json({"ok": True, "name": sess.name, "role": sess.role, "csrf": sess.csrf, "auth": True},
+                       headers={"Set-Cookie": session_cookie(token, secure_cookie)})
+
+        def _control(self, body: dict, sess: Session) -> None:
             action = body.get("action")
             try:
                 if action == "speed":
@@ -317,9 +431,9 @@ def make_handler(runner: Runner, jdamr: JdamrReadOnly | None):
                     runner.reset(scenario, int(body.get("seed", runner.sim.seed)),
                                  str(body.get("strategy", runner.sim.manager.cfg.strategy)))
                     with runner.lock:
-                        runner.ops.audit.append({"t": 0.0, "wall": time.strftime("%Y-%m-%dT%H:%M:%S"),
-                                                 "operator": self._operator(), "cmd": "reset",
-                                                 "args": {"scenario": scenario}, "ok": True, "msg": "시뮬레이션 재시작"})
+                        runner.ops.record({"t": 0.0, "wall": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                                           "operator": sess.name, "cmd": "reset",
+                                           "args": {"scenario": scenario}, "ok": True, "msg": "시뮬레이션 재시작"})
                 else:
                     raise ValueError("알 수 없는 제어")
                 runner._snap = None
@@ -330,6 +444,29 @@ def make_handler(runner: Runner, jdamr: JdamrReadOnly | None):
     return Handler
 
 
+def account_commands(args, store: Store) -> int | None:
+    """--add-user / --create-api-key: change accounts and exit (no server)."""
+    auth = Auth(store)
+    if args.add_user:
+        name, _, role = args.add_user.partition(":")
+        password = os.environ.get("FCT_NEW_PASSWORD") or getpass.getpass(f"{name} 비밀번호(10자 이상): ")
+        auth.create_user(name, password, role or "operator")
+        print(f"계정 {name} ({role or 'operator'}) 저장: {store.path}")
+        return 0
+    if args.create_api_key:
+        key = auth.create_api_key(args.create_api_key)
+        print(f"WMS API 키({args.create_api_key}) — 한 번만 표시합니다:\n{key}")
+        return 0
+    return None
+
+
+def is_loopback(host: str) -> bool:
+    try:
+        return ipaddress.ip_address(socket.gethostbyname(host)).is_loopback
+    except (OSError, ValueError):
+        return False
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="AMR 관제탑 웹 서버")
     ap.add_argument("--scenario", default="standard", choices=sorted(PRESETS))
@@ -338,13 +475,29 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--speed", type=float, default=1.0, choices=SPEEDS)
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8095)
+    ap.add_argument("--db", default=str(DEFAULT_DB), help="계정·세션·감사 로그·WMS 멱등 키 저장소(SQLite)")
+    ap.add_argument("--no-auth", action="store_true", help="개발용: 인증 끄기(루프백 바인딩에서만 허용)")
+    ap.add_argument("--add-user", metavar="NAME:ROLE", help="계정 추가 후 종료(ROLE: viewer|operator|supervisor)")
+    ap.add_argument("--create-api-key", metavar="NAME", help="WMS API 키 발급 후 종료")
     ap.add_argument("--read-only", action="store_true", help="관찰 전용: 모든 명령 거부")
     ap.add_argument("--auto-operator", action="store_true", help="가상 운영자가 SOP대로 알람에 대응")
     ap.add_argument("--jdamr-url", default=DEFAULT_URL, help="실물 JD-AMR 읽기 전용 상태 URL (루프백만)")
     ap.add_argument("--no-jdamr", action="store_true")
     args = ap.parse_args(argv)
 
-    runner = Runner(args.scenario, args.seed, args.strategy, args.speed, args.auto_operator, args.read_only)
+    store = Store(args.db)
+    done = account_commands(args, store)
+    if done is not None:
+        return done
+    if args.no_auth and not is_loopback(args.host):
+        print("--no-auth는 루프백 주소에서만 쓸 수 있습니다", flush=True)
+        return 2
+    auth = None if args.no_auth else Auth(store)
+    if auth is not None:
+        generated = auth.bootstrap(os.environ.get("FCT_ADMIN_PASSWORD"))
+        if generated:
+            print(f"첫 실행: 감독자 계정 admin을 만들었습니다. 비밀번호(한 번만 표시): {generated}", flush=True)
+    runner = Runner(args.scenario, args.seed, args.strategy, args.speed, args.auto_operator, args.read_only, store)
     problems = runner.sim.layout.check()          # refuse to run on a broken site (unreachable nodes, classes)
     if problems:
         print("레이아웃 검증 실패:\n  " + "\n  ".join(problems[:10]), flush=True)
@@ -353,10 +506,10 @@ def main(argv: list[str] | None = None) -> int:
     runner.start()
     if jdamr:
         jdamr.start()
-    server = ThreadingHTTPServer((args.host, args.port), make_handler(runner, jdamr))
+    server = ThreadingHTTPServer((args.host, args.port), make_handler(runner, jdamr, auth))
     server.daemon_threads = True
     print(f"AMR 관제탑: http://{args.host}:{args.port}  (시나리오 {args.scenario}, 전략 {args.strategy}"
-          f"{', 관찰 전용' if args.read_only else ''})", flush=True)
+          f"{', 관찰 전용' if args.read_only else ''}{', 인증 꺼짐(개발용)' if auth is None else ''})", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
@@ -366,6 +519,7 @@ def main(argv: list[str] | None = None) -> int:
         if jdamr:
             jdamr.stop()
         server.server_close()
+        store.close()
     return 0
 
 

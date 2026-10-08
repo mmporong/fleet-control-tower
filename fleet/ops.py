@@ -28,11 +28,21 @@ class Operations:
                "zone_lock", "set_mode_manual"}
     QUIET = {"teleop"}   # high-rate commands: audited when mode changes, not per packet
 
-    def __init__(self, sim: Simulation, read_only: bool = False) -> None:
+    def __init__(self, sim: Simulation, read_only: bool = False, store=None) -> None:
+        """``store`` (fleet.store.Store) keeps the audit log durable and hash-chained; without it the log is
+        only the in-memory tail (benchmarks, tests)."""
         self.sim = sim
         self.read_only = read_only
-        self.audit: deque = deque(maxlen=2000)
+        self.store = store
+        self.audit: deque = deque(store.audit_tail(200) if store is not None else (), maxlen=2000)
         self.counts = {"commands": 0, "interventions": 0}
+
+    def record(self, entry: dict) -> dict:
+        """Append to the audit log (durable when a store is attached)."""
+        if self.store is not None:
+            entry = self.store.append_audit(entry)
+        self.audit.append(entry)
+        return entry
 
     # ------------------------------------------------------------ helpers
     def _robot(self, args: dict):
@@ -81,7 +91,7 @@ class Operations:
             msg, ok = str(exc).strip("'\""), False
         entry.update(ok=ok, msg=msg)
         if name not in self.QUIET or not ok:
-            self.audit.append(entry)
+            self.record(entry)
         if ok:
             self.counts["commands"] += 1
             if not name.startswith(("ack_", "shelve_", "close_")) and name not in self.QUIET:
@@ -408,7 +418,7 @@ class Operations:
         return f"[훈련] {zone.name}에 사람 {hid} 진입"
 
     # ------------------------------------------------------------ WMS-facing API
-    def submit_wms_order(self, order: dict, seen: dict) -> dict:
+    def submit_wms_order(self, order: dict, seen, operator: str = "WMS") -> dict:
         """Idempotent task intake for an upper system (WMS/WCS).
 
         ``order_id`` is the idempotency key: the same id with the same content
@@ -436,10 +446,10 @@ class Operations:
         if body["dest"] is not None and (body["dest"] not in layout.nodes
                                          or layout.nodes[body["dest"]].kind not in spec["dst"]):
             raise CommandError(f"dest는 {'/'.join(spec['dst'])} 노드여야 함")
-        t = self.sim.dispatcher.add_task(body["kind"], body["source"], body["dest"], body["priority"])
+        t = self.sim.dispatcher.add_task(body["kind"], body["source"], body["dest"], body["priority"], ref=oid)
         t.note = f"WMS {oid}"
         seen[oid] = {"body": body, "task": t.id}
-        self.audit.append({"t": round(self.sim.now, 1), "wall": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-                           "operator": "WMS", "cmd": "wms_order", "args": {"order_id": oid, **body},
-                           "ok": True, "msg": t.id})
+        self.record({"t": round(self.sim.now, 1), "wall": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                     "operator": operator, "cmd": "wms_order", "args": {"order_id": oid, **body},
+                     "ok": True, "msg": t.id})
         return {"ok": True, "duplicate": False, "task": t.id}

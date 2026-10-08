@@ -26,24 +26,51 @@
     zone_lock: '구역 봉쇄', zone_unlock: '구역 봉쇄 해제', set_mode_manual: '원격 조종 인계', set_mode_auto: '자동 복귀',
     field_service_done: '현장 조치 완료', resume_area: '주변 재개', reset_fault: '원격 리셋', resume_robot: '로봇 재개',
     cancel_task: '작업 취소', send_to_park: '주차 보내기', send_to_charge: '충전 보내기', reassign_task: '작업 재할당',
-    init_position: '위치 재지정', fleet_estop_release: '비상정지 해제', fleet_resume: '전체 재개', fleet_hold: '전체 일시정지',
+    init_position: '위치 재지정', fleet_estop_release: '일괄 정지 해제', fleet_resume: '전체 재개', fleet_hold: '전체 일시정지',
     zone_speed: '구역 속도(구역 탭)', set_task_rate: '투입률(작업 탭)', reprioritize_task: '우선순위(작업 탭)',
     door_disable: '문 사용 중지', door_retry: '문 재시도', door_field_fix: '[현장 모의] 문 수리',
   };
   const CONFIRM = new Set(['fleet_estop', 'fleet_estop_release', 'fleet_hold', 'fleet_resume', 'zone_evacuate', 'zone_lock', 'set_mode_manual']);
 
   // ------------------------------------------------------------------ network
+  // session: the server sets an HttpOnly cookie at login and hands out a CSRF token for state changes
+  const ME = { name: '', role: '', csrf: '' };
+
   async function api(path, opts) {
-    const res = await fetch(path, Object.assign({ cache: 'no-store' }, opts || {}));
+    const o = Object.assign({ cache: 'no-store', credentials: 'same-origin' }, opts || {});
+    if (o.method && o.method !== 'GET') o.headers = Object.assign({ 'X-CSRF-Token': ME.csrf }, o.headers || {});
+    const res = await fetch(path, o);
     let body = null;
     try { body = await res.json(); } catch (e) { body = null; }
+    if (res.status === 401 && path !== '/api/login' && path !== '/api/me') showLogin();
     return { ok: res.ok, status: res.status, body };
+  }
+
+  function setMe(me) {
+    ME.name = me.name; ME.role = me.role; ME.csrf = me.csrf || '';
+    const label = { viewer: '조회', operator: '운영', supervisor: '감독' }[me.role] || me.role;
+    $('account').textContent = me.auth === false ? '인증 꺼짐(개발용)' : `${me.name} · ${label}`;
+    document.body.classList.toggle('role-viewer', me.role === 'viewer');
+    document.body.classList.toggle('role-supervisor', me.role === 'supervisor');
+  }
+
+  function showLogin(msg) {
+    $('login-veil').hidden = false;
+    $('login-error').textContent = msg || '';
+    setTimeout(() => $('login-name').focus(), 0);
+  }
+
+  async function ensureSession() {
+    const r = await api('/api/me');
+    if (r.ok && r.body && r.body.ok) { setMe(r.body); return true; }
+    showLogin();
+    return false;
   }
 
   async function command(cmd, args, confirmed) {
     const payload = Object.assign({ cmd }, args || {});
     if (confirmed) payload.confirm = true;
-    const r = await api('/api/command', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Operator': opHeader() }, body: JSON.stringify(payload) });
+    const r = await api('/api/command', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     const msg = r.body && r.body.msg ? r.body.msg : `HTTP ${r.status}`;
     toast(msg, !(r.body && r.body.ok));
     return r.body && r.body.ok;
@@ -61,7 +88,7 @@
   function confirmText(cmd, args) {
     return ({
       fleet_estop: '모든 로봇에 원격 정지를 보냅니다. 해제해도 자동으로 다시 움직이지 않습니다.',
-      fleet_estop_release: '비상정지를 해제하고 전체 일시정지 상태로 둡니다. 재개는 따로 합니다.',
+      fleet_estop_release: '일괄 정지를 해제하고 전체 일시정지 상태로 둡니다. 재개는 따로 합니다.',
       fleet_hold: '모든 로봇을 일시정지합니다.', fleet_resume: '일시정지한 로봇을 모두 재개합니다.',
       zone_evacuate: `${args && args.zone} 구역을 봉쇄하고 안의 로봇을 밖으로 이동시킵니다.`,
       zone_lock: `${args && args.zone} 구역의 신규 진입을 막습니다.`,
@@ -70,22 +97,21 @@
   }
 
   async function control(action, value, extra) {
-    const r = await api('/api/control', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Operator': opHeader() }, body: JSON.stringify(Object.assign({ action, value }, extra || {})) });
+    const r = await api('/api/control', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.assign({ action, value }, extra || {})) });
     if (!r.ok) toast((r.body && r.body.msg) || '실패', true);
     return r.ok;
   }
 
+  // the account the server signed in; the audit log takes the name from the session, not from the page
   function operator() {
-    return ($('operator').value || 'operator').trim().slice(0, 40);
-  }
-
-  // HTTP header values must be ISO-8859-1: Korean operator names travel percent-encoded
-  function opHeader() {
-    return encodeURIComponent(operator());
+    return ME.name || 'operator';
   }
 
   function connect() {
+    if (S.es) S.es.close();
     const es = new EventSource('/api/stream');
+    S.es = es;
+    es.addEventListener('logout', () => { es.close(); showLogin('세션이 끝났습니다. 다시 로그인하세요'); });
     es.addEventListener('snapshot', (ev) => {
       let snap;
       try { snap = JSON.parse(ev.data); } catch (e) { return; }
@@ -101,6 +127,7 @@
       $('mode').textContent = '서버 연결 끊김 · 재접속 중';
       $('mode').className = 'val danger';
       $('ribbon').className = 'ribbon estop';
+      ensureSession();          // a 401 behind the stream shows the login form
     };
   }
 
@@ -158,8 +185,22 @@
   }
 
   $('pause-sim').onclick = () => control('pause', !(S.snap && S.snap.run && S.snap.run.paused));
-  $('operator').value = store.get('fct.operator', '관제사');
-  $('operator').onchange = () => store.set('fct.operator', $('operator').value);
+  $('login-form').onsubmit = async (ev) => {
+    ev.preventDefault();
+    const r = await api('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: $('login-name').value.trim(), password: $('login-pass').value }) });
+    if (!r.ok) { $('login-error').textContent = (r.body && r.body.msg) || `로그인 실패 (HTTP ${r.status})`; return; }
+    $('login-pass').value = '';
+    $('login-veil').hidden = true;
+    setMe(r.body);
+    start();
+  };
+  $('logout').onclick = async () => {
+    await api('/api/logout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    ME.csrf = '';
+    if (S.es) S.es.close();
+    showLogin('로그아웃했습니다');
+  };
   $('fleet-hold').onclick = () => run('fleet_hold');
   $('fleet-resume').onclick = () => run(S.snap && S.snap.mode === 'ESTOP' ? 'fleet_estop_release' : 'fleet_resume');
   $('fleet-estop').onclick = () => run('fleet_estop');
@@ -210,11 +251,11 @@
   }
 
   function renderRibbon(s) {
-    const mode = { RUNNING: ['정상 운영', 'ok', ''], HOLD: ['전체 일시정지', 'warn', 'hold'], ESTOP: ['비상정지', 'danger', 'estop'] }[s.mode] || [s.mode, '', ''];
+    const mode = { RUNNING: ['정상 운영', 'ok', ''], HOLD: ['전체 일시정지', 'warn', 'hold'], ESTOP: ['일괄 정지(비안전)', 'danger', 'estop'] }[s.mode] || [s.mode, '', ''];
     $('mode').textContent = mode[0] + (s.paused.length && s.mode === 'RUNNING' ? ` · 개별 정지 ${s.paused.length}대` : '');
     $('mode').className = `val ${mode[1]}`;
     $('ribbon').className = `ribbon ${mode[2]}`;
-    $('fleet-resume').textContent = s.mode === 'ESTOP' ? '비상정지 해제' : '전체 재개';
+    $('fleet-resume').textContent = s.mode === 'ESTOP' ? '일괄 정지 해제' : '전체 재개';
     const c = s.alarm_counts;
     $('alarm-sum').textContent = `${c.p1} · ${c.p2} · ${c.p3} · 미확인 ${c.unack}`;
     $('alarm-sum').className = `val ${c.p1 ? 'danger' : c.p2 ? 'warn' : ''}`;
@@ -495,7 +536,7 @@
     let vx = 0;
     let om = 0;
     for (const k of S.teleop.keys) { vx += DIRS[k][0]; om += DIRS[k][1]; }
-    api('/api/command', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Operator': opHeader() }, body: JSON.stringify({ cmd: 'teleop', robot: r.id, vx, omega: om }) });
+    api('/api/command', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cmd: 'teleop', robot: r.id, vx, omega: om }) });
   }
   function teleopStart(d) {
     S.teleop.keys.add(d);
@@ -1232,7 +1273,13 @@
   setInterval(() => { if (S.tab === 'trend') loadHistory(); }, 5000);
 
   // ------------------------------------------------------------------ start
+  let started = false;
+  function start() {
+    if (started) { connect(); return; }
+    started = true;
+    initMeta().then(connect);
+  }
   selectTab(S.tab);
-  initMeta().then(connect);
+  ensureSession().then((ok) => { if (ok) start(); });
   requestAnimationFrame(drawMap);
 })();
