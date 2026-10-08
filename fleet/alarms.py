@@ -122,7 +122,7 @@ ALARM_DEFS: dict[str, AlarmDef] = {
          "지게차면 운전자에게 무전으로 진로 양보 요청",
          "사람이면 현장 안내, 로봇 쪽 공간이 있으면 원격 조종으로 후진",
          "같은 지점에서 반복되면 동선 분리 검토"),
-        ("set_mode_manual", "cancel_task"), off_delay_s=30.0),
+        ("radio_yield", "set_mode_manual", "cancel_task"), off_delay_s=30.0),
     "BATTERY_CRITICAL": AlarmDef(
         3, "배터리 위험", "신규 작업 배정 중단",
         ("현재 작업 유지 가능 여부 확인",

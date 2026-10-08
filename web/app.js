@@ -28,7 +28,7 @@
     cancel_task: '작업 취소', send_to_park: '주차 보내기', send_to_charge: '충전 보내기', reassign_task: '작업 재할당',
     init_position: '위치 재지정', fleet_estop_release: '일괄 정지 해제', fleet_resume: '전체 재개', fleet_hold: '전체 일시정지',
     zone_speed: '구역 속도(구역 탭)', set_task_rate: '투입률(작업 탭)', reprioritize_task: '우선순위(작업 탭)',
-    door_disable: '문 사용 중지', door_retry: '문 재시도', door_field_fix: '[현장 모의] 문 수리',
+    door_disable: '문 사용 중지', door_retry: '문 재시도', door_field_fix: '[현장 모의] 문 수리', radio_yield: '지게차 양보 무전',
   };
   // commands only a supervisor may give (fleet/server.py SUPERVISOR_COMMANDS): not offered to other roles
   const SUPERVISOR_ONLY = new Set(['set_task_rate', 'door_field_fix', 'drill_fault', 'drill_comms', 'drill_intruder', 'drill_door', 'drill_fire']);

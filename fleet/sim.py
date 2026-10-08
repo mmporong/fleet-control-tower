@@ -357,6 +357,9 @@ class Simulation:
                                lane_kinds)
             self.forklifts.append(Forklift("FL-R1", loop, L, random.Random(self.seed * 62),
                                            dwell_nodes=("R1-05", "R2-05")))
+            if self.manager.cfg.strategy != "none":
+                # signal lights at the rack aisle mouths, driven by the control room (ANT locator style)
+                self.forklifts[-1].aisle_signal = self.manager.aisle_free
         for k in range(sc.external):
             # floor scrubber of another vendor: south main aisle along the rack block (AGF-only segments)
             loop = expand_loop(L, ["SE10", "SE42_6", "SW42_6", "SW10"], {"cross", "queue"})
@@ -593,6 +596,15 @@ class Simulation:
             if v.serial == serial:
                 return v
         raise KeyError(serial)
+
+    def radio_yield(self, serial: str) -> str:
+        """The control room radios the driver of the manual truck nearest to a robot to give way."""
+        v = self.vehicle(serial)
+        trucks = [f for f in self.forklifts if hasattr(f, "radio_yield") and math.hypot(f.x - v.x, f.y - v.y) < 8.0]
+        if not trucks:
+            return "근처에 수동 지게차 없음"
+        f = min(trucks, key=lambda f: math.hypot(f.x - v.x, f.y - v.y))
+        return f"{f.id} 운전자: {f.radio_yield(self.now)}"
 
     def field_service(self, serial: str) -> None:
         """The field team at the vehicle: its own reset (the only way a safety fault is cleared)."""

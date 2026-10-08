@@ -97,6 +97,40 @@ class StoppedTruckTests(unittest.TestCase):
         self.assertEqual(f.loop[f._target()], "A1")
 
 
+class AisleLightTests(unittest.TestCase):
+    def test_the_light_is_red_while_a_robot_holds_a_place_in_the_aisle(self):
+        sim = quiet_dc()
+        m = sim.manager
+        self.assertTrue(m.aisle_free("Z-R1"))
+        m.locks.force("AGF-01", node_res(m._zone_nodes["Z-R1"][0]))
+        self.assertFalse(m.aisle_free("Z-R1"))
+
+    def test_on_red_the_truck_stops_short_of_the_junction(self):
+        from fleet.agents import Forklift
+        sim = quiet_dc()
+        L = sim.layout
+        f = Forklift("F", ["qSW16_2SW22_8", "SW16_2", "R1-01", "R1-02"], L, random.Random(1), idx=0)
+        n = L.nodes["qSW16_2SW22_8"]
+        f.bx, f.by = n.x, n.y
+        f.aisle_signal = lambda zone_id: False
+        self.assertTrue(f._red_beyond(L.nodes["SW16_2"], L.nodes["R1-01"]))
+        f.aisle_signal = lambda zone_id: True
+        self.assertFalse(f._red_beyond(L.nodes["SW16_2"], L.nodes["R1-01"]))
+
+    def test_a_radioed_driver_turns_back_outside_an_aisle_but_not_inside(self):
+        from fleet.agents import Forklift
+        sim = quiet_dc()
+        L = sim.layout
+        f = Forklift("F", ["qSW16_2SW22_8", "SW16_2", "R1-01", "R1-02"], L, random.Random(1), idx=0)
+        f.bx, f.by = L.nodes["qSW16_2SW22_8"].pos
+        f.radio_yield(100.0)
+        self.assertEqual(f.direction, -1)
+        g = Forklift("G", ["R1-01", "R1-02", "R1-03"], L, random.Random(2), idx=1)
+        g.bx, g.by = L.nodes["R1-02"].pos
+        g.radio_yield(100.0)
+        self.assertEqual(g.direction, 1)                    # inside the aisle: backs off, does not turn round
+
+
 class ReleaseTests(unittest.TestCase):
     def test_tote_trips_are_released_up_to_the_cap(self):
         sim = quiet_dc(amr=4)

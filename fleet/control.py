@@ -1121,10 +1121,14 @@ class FleetManager:
                     if point_in_polygon((tr.x, tr.y), z.polygon):
                         for nid in self._zone_nodes.get(z.id, ()):
                             put(node_res(nid), "forklift", tr.id, "aisle")
-                # aisle request: a truck stopped at an aisle mouth for 3 s is waiting to go in. New robots are
-                # held out of that aisle; robots already in it are not (they finish and leave), otherwise a
-                # robot inside and the truck outside would wait for each other
+                # aisle request: a truck stopped at an aisle mouth for 3 s is waiting to go in, and one driving
+                # up to a mouth is about to. New robots are held out of that aisle; robots already in it are not
+                # (they finish and leave), otherwise a robot inside and the truck outside would wait for each other
                 if tr.speed >= 0.3:
+                    z = self._aisle_at_mouth(tr.x, tr.y, toward=(tr.vx, tr.vy))
+                    if z is not None:
+                        for nid in self._zone_nodes.get(z.id, ()):
+                            requests.setdefault(node_res(nid), (z.id, tr.id))
                     continue
                 still[tr.id] = self._fl_still_since.get(tr.id, self.now)
                 if self.now - still[tr.id] < 3.0:
@@ -1147,6 +1151,11 @@ class FleetManager:
                         if k2 == "N" and math.hypot(self.layout.nodes[i2].x - n.x,
                                                     self.layout.nodes[i2].y - n.y) <= zone_r:
                             put(node_res(i2), "forklift", tr.id, "turn")
+                    # the junction leads into a rack aisle: the truck may be waiting for that aisle's light
+                    for z in self._aisle_zones:
+                        if any(m in self._zone_nodes.get(z.id, ()) for m in self.layout.neighbors[turn_at]):
+                            for nid in self._zone_nodes.get(z.id, ()):
+                                requests.setdefault(node_res(nid), (z.id, tr.id))
             self._fl_still_since = still
         for z in self.layout.zones.values():
             if z.locked:
@@ -1158,20 +1167,26 @@ class FleetManager:
         self.block_src = src
         self.aisle_requests = requests
 
-    def _aisle_at_mouth(self, x: float, y: float) -> Zone | None:
+    def _aisle_at_mouth(self, x: float, y: float, toward: tuple[float, float] | None = None) -> Zone | None:
         """The rack aisle whose end (short side) a truck at (x, y) stands in front of, within 4.5 m.
 
-        A truck that stops on the cross aisle beside an aisle, or between two aisles, is not at a mouth.
+        A truck that stops on the cross aisle beside an aisle, or between two aisles, is not at a mouth. With
+        ``toward`` (a velocity) the truck must also be heading into that aisle.
         """
         for z in self._aisle_zones:
             x0, y0, x1, y1 = bbox(z.polygon)
             if (y1 - y0) >= (x1 - x0):          # aisle runs north-south: its mouths face y
                 lateral_ok = x0 - 0.5 <= x <= x1 + 0.5
                 gap = (y0 - y) if y < y0 else (y - y1) if y > y1 else -1.0
+                inward = (1.0 if y < y0 else -1.0) * (toward[1] if toward else 1.0)
+                speed = abs(toward[1]) if toward else 1.0
             else:
                 lateral_ok = y0 - 0.5 <= y <= y1 + 0.5
                 gap = (x0 - x) if x < x0 else (x - x1) if x > x1 else -1.0
-            if lateral_ok and 0.0 < gap <= 4.5:
+                inward = (1.0 if x < x0 else -1.0) * (toward[0] if toward else 1.0)
+                speed = abs(toward[0]) if toward else 1.0
+            heading_in = toward is None or (inward > 0 and speed > 0.7 * math.hypot(*toward))
+            if lateral_ok and 0.0 < gap <= 4.5 and heading_in:
                 return z
         return None
 
@@ -1209,6 +1224,17 @@ class FleetManager:
             if z.kind == "aisle" and z not in self._aisle_zones:
                 return z
         return None
+
+    def aisle_free(self, zone_id: str) -> bool:
+        """The signal light at a rack aisle mouth for a manual truck: green when no robot is in the aisle or
+        holds a reservation in it (a robot about to enter counts, so truck and robot never enter together)."""
+        zone = self.layout.zones.get(zone_id)
+        if zone is None:
+            return True
+        for nid in self._zone_nodes.get(zone_id, ()):
+            if self.locks.holder_of(node_res(nid)) in self.robots:
+                return False
+        return not any(point_in_polygon((r.x, r.y), zone.polygon) for r in self.robots.values())
 
     def _inside_aisle(self, rec: RobotRecord, zone_id: str) -> bool:
         zone = self.layout.zones[zone_id]

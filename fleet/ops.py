@@ -227,6 +227,14 @@ class Operations:
         self.sim.manager.event("fleet_estop_release", "fleet", "일괄 정지 해제 → 일시정지 유지", "warn")
         return "일괄 정지 해제(일시정지 유지, 재개는 별도 명령)"
 
+    def cmd_radio_yield(self, a: dict) -> str:
+        """Ask the driver of the manual truck next to a robot, over the radio, to give way (standoff SOP)."""
+        rec = self._robot(a)
+        radio = getattr(self.sim, "radio_yield", None)
+        if radio is None:
+            return f"{rec.serial} 근처 지게차 운전자에게 무전 양보 요청(기록)"
+        return f"{rec.serial} 근처 무전 양보 요청: {radio(rec.serial)}"
+
     def cmd_resume_area(self, a: dict) -> str:
         n = len(self.sim.manager.area_paused)
         self.sim.manager.area_paused.clear()

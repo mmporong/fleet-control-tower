@@ -118,6 +118,11 @@ class AutoOperator:
                 victim = min(unloaded, key=lambda r: m.dispatcher.task_priority(r.task_id))
                 self._do("cancel_task", task=victim.task_id)
             plan["act_at"] = now + 90.0
+        elif t == "STANDOFF" and rec is not None:
+            # SOP: a truck in the way is asked over the radio to give way; a person is asked on site (not modelled)
+            if rec.field_cause.startswith("forklift"):
+                self._do("radio_yield", robot=src)
+            plan["act_at"] = now + 60.0
         elif t == "FACILITY_FAULT":
             # SOP: take the door out of use, call the facility technician, retry after the fix
             if src not in self.door_plans:
