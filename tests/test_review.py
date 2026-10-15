@@ -483,6 +483,30 @@ class FieldDeadlockTests(unittest.TestCase):
         self.assertIsNone(m._field_blocker(b))
 
 
+class TurnZoneRepeatabilityTests(unittest.TestCase):
+    def test_turn_zone_order_and_first_blocker_do_not_follow_query_iteration_order(self):
+        from fleet.traffic import LockTable
+
+        sim = quiet_dc()
+        manager = sim.manager
+        rec = manager.robots["AGF-01"]
+        rec.route = ["SE50"]
+        nearby = [("N", "qSE50SE54"), ("N", "SW50")]
+        holders = {node_res("qSE50SE54"): "BLOCK-Q", node_res("SW50"): "BLOCK-SW"}
+        outcomes = []
+
+        for query_order in (nearby, list(reversed(nearby))):
+            manager._query = lambda *_args, query_order=query_order: query_order
+            resources = manager._turn_zone(rec, 0)
+            locks = LockTable()
+            for resource in resources:
+                locks.force(holders[resource], resource)
+            outcomes.append((resources, locks.try_acquire(rec.serial, resources)))
+
+        self.assertEqual(set(outcomes[0][0]), set(outcomes[1][0]))
+        self.assertEqual(outcomes[0], outcomes[1])
+
+
 class StandoffEvasionTests(unittest.TestCase):
     @staticmethod
     def ready_at_base_end(rec):

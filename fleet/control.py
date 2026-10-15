@@ -1845,7 +1845,7 @@ class FleetManager:
         sweep = math.hypot(rec.length, rec.width) / 2 + 0.2
         big = max(self.robots.values(), key=lambda r: r.length, default=rec)
         out = []
-        for kind, ident in self._query(node.x, node.y, radius):
+        for kind, ident in sorted(self._query(node.x, node.y, radius)):
             if kind != "N" or ident == node.id:
                 continue
             other = self.layout.nodes[ident]
