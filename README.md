@@ -43,7 +43,7 @@
 | 5 | 표준 메시징과 API | `fleet/vda5050.py`, `fleet/schema.py`, `fleet/mqtt.py`, `fleet/server.py` |
 | 6 | 상위 시스템·설비 연동과 실패 주입 | WMS API, `fleet/facility.py`, 문 고장 훈련 |
 | 7 | 데이터와 KPI | 화면 KPI와 추세, `fleet/bench.py`, 결과 JSON |
-| 8 | 결함 주입 기반 검증 | 훈련 명령, Python 340개·Node 7개 시험, [BENCHMARK.md](docs/BENCHMARK.md) |
+| 8 | 결함 주입 기반 검증 | 훈련 명령, Python 343개·Node 7개 시험, [BENCHMARK.md](docs/BENCHMARK.md) |
 | 9 | 배포와 운영성 | `Dockerfile`, 인증·권한, 헬스체크, 읽기 전용 모드 |
 | 10 | 사고 조사와 문서화 | 사고 재생, 보고서·인계 양식, 비상 계획표([RUNBOOK.md](docs/RUNBOOK.md)) |
 
@@ -97,7 +97,7 @@ docker run --rm -p 127.0.0.1:8095:8095 -v fct-data:/data fleet-control-tower
 
 | 확인 항목 | 현재 상태 |
 |---|---|
-| Python 동작 시험 | 현재 코드에서 340개 통과. 단위·시스템·HTTP·MQTT·런타임 회귀를 포함 |
+| Python 동작 시험 | 현재 코드에서 343개 통과. 단위·시스템·HTTP·MQTT·런타임 회귀를 포함 |
 | 화면 계산 시험 | Node 시험 7개 통과 |
 | MQTT·Docker 종단 시험 | `2370edf`에서 MQTT 상호운용 9개 통과. 운송 완료·문 열림·무효 메시지 거부·감사 체인을 확인했고 정상 처리의 내부 오류와 감사 문제는 0개 |
 | 브라우저 UI | `2370edf`에서 로그인·지도·KPI·CSRF·로그아웃 점검 15개 통과 |
@@ -147,7 +147,7 @@ results/          벤치마크 결과 JSON
 
 ```bash
 cd ~/fleet-control-tower
-python3 -m unittest discover -s tests -t .  # Python 340개(doctest 포함)
+python3 -m unittest discover -s tests -t .  # Python 343개(doctest 포함)
 node --test tests/test_logic.cjs             # 화면 계산 함수 7개
 bash tools/benchmarks.sh shift               # 8시간 교대 시나리오
 ```

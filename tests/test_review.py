@@ -22,7 +22,7 @@ from fleet.perception import Detection, Tracker
 from fleet.server import Runner
 from fleet.store import Store, chain_hash
 from fleet.traffic import node_res
-from fleet.vehicle import Vehicle
+from fleet.vehicle import ActionState, Vehicle
 from tests.test_readiness import quiet_dc
 from tests.test_server import Client, serve
 
@@ -1351,6 +1351,117 @@ class SafetyFaultRadioTests(unittest.TestCase):
         self.assertEqual(v.fault, "SENSOR_FAULT")
         v.local_reset()
         self.assertIsNone(v.fault)
+
+
+class LocalizationRecoveryTests(unittest.TestCase):
+    def test_field_service_relocalizes_in_place_without_finishing_the_edge(self):
+        """The 1.3--1.5 m field fix must not jump onto either end of an occupied edge."""
+        from fleet.site_dc import dc_layout
+
+        layout = dc_layout()
+        edge = layout.edge_between("K4-05", "K4-04")
+        for progress in (1.335, 1.665):
+            for loaded in (False, True):
+                with self.subTest(progress=progress, loaded=loaded):
+                    v = Vehicle("AMR-10", layout, "K4-05", random.Random(1))
+                    v.order_id, v.order_update_id = "AMR-10-O1", 3
+                    v.nodes = [v._node_msg("K4-05", 0, True), v._node_msg("K4-04", 2, True)]
+                    v.edges = [{"edgeId": edge.id, "sequenceId": 1, "released": True,
+                                "startNodeId": edge.start, "endNodeId": edge.end, "actions": []}]
+                    v.progress = progress
+                    v.x, v.y, v.theta = 62.0, 22.0 - v.progress, -math.pi / 2
+                    v.load = loaded
+                    v.load_info = {"loadId": "TOTE-417", "loadType": "TOTE", "weight": 17.5}
+                    v.paused, v.estop = True, True
+                    v.actions = [ActionState("drop-1", "x_toteDrop",
+                                             params={"_node": "K4-04", "_seq": 2})]
+                    v.pending_cancel = ActionState("cancel-1", "cancelOrder", "RUNNING")
+                    before = (v.x, v.y, v.theta, v.progress, v.last_node_id, v.order_id,
+                              v.order_update_id, list(v.nodes), list(v.edges), v.load,
+                              dict(v.load_info), v.paused, v.estop)
+                    action, pending_cancel = v.actions[0], v.pending_cancel
+
+                    v.set_fault("LOCALIZATION_LOST")
+                    v.on_instant_actions({"actions": [{"actionType": "x_fieldServiceDone",
+                                                        "actionId": "field-1"}]}, 11921.5)
+
+                    self.assertIsNone(v.fault)
+                    self.assertTrue(v.position_initialized)
+                    self.assertEqual((v.x, v.y, v.theta, v.progress, v.last_node_id, v.order_id,
+                                      v.order_update_id, v.nodes, v.edges, v.load,
+                                      v.load_info, v.paused, v.estop), before)
+                    self.assertEqual(v.actions, [action])
+                    self.assertEqual(action.status, "WAITING")
+                    self.assertIs(v.pending_cancel, pending_cancel)
+
+    def test_cancel_after_relocalization_finishes_once_at_the_next_node_without_running_its_action(self):
+        from fleet.site_dc import dc_layout
+
+        layout = dc_layout()
+        edge = layout.edge_between("K4-05", "K4-04")
+        v = Vehicle("AMR-10", layout, "K4-05", random.Random(1))
+        v.perf = 1.0
+        v.order_id = "AMR-10-O1"
+        v.nodes = [v._node_msg("K4-05", 0, True), v._node_msg("K4-04", 2, True)]
+        v.edges = [{"edgeId": edge.id, "sequenceId": 1, "released": True,
+                    "startNodeId": edge.start, "endNodeId": edge.end, "maxSpeed": edge.max_speed,
+                    "actions": []}]
+        v.progress = 1.335
+        v.x, v.y, v.theta = 62.0, 20.665, -math.pi / 2
+        v.load = True
+        v.load_info = {"loadId": "TOTE-417", "loadType": "TOTE"}
+        drop = ActionState("drop-1", "drop", params={"_node": "K4-04", "_seq": 2})
+        v.actions = [drop]
+        v.on_instant_actions({"actions": [{"actionType": "cancelOrder", "actionId": "cancel-1"}]}, 11920.0)
+        cancel = v.pending_cancel
+        v.set_fault("LOCALIZATION_LOST")
+        v.local_reset()
+
+        self.assertEqual((v.progress, v.x, v.y), (1.335, 62.0, 20.665))
+        for tick in range(100):
+            v.step(0.1, 11921.5 + tick * 0.1, [])
+            if v.pending_cancel is None:
+                break
+
+        self.assertIsNone(v.pending_cancel)
+        self.assertEqual(v.last_node_id, "K4-04")
+        self.assertEqual([(a.action_id, a.status) for a in v.finished_actions].count(("cancel-1", "FINISHED")), 1)
+        self.assertIsNotNone(cancel)
+        self.assertEqual(cancel.status, "FINISHED")
+        self.assertEqual((drop.status, drop.result), ("FAILED", "cancelOrder"))
+        self.assertTrue(v.load)
+        self.assertEqual(v.load_info, {"loadId": "TOTE-417", "loadType": "TOTE"})
+
+    def test_order_after_relocalization_continues_from_the_same_progress_and_runs_its_action_once(self):
+        from fleet.site_dc import dc_layout
+
+        layout = dc_layout()
+        edge = layout.edge_between("K4-05", "K4-04")
+        v = Vehicle("AMR-10", layout, "K4-05", random.Random(1))
+        v.perf = 1.0
+        v.order_id = "AMR-10-O1"
+        v.nodes = [v._node_msg("K4-05", 0, True), v._node_msg("K4-04", 2, True)]
+        v.edges = [{"edgeId": edge.id, "sequenceId": 1, "released": True,
+                    "startNodeId": edge.start, "endNodeId": edge.end, "maxSpeed": edge.max_speed,
+                    "actions": []}]
+        v.progress = 1.335
+        v.x, v.y, v.theta = 62.0, 20.665, -math.pi / 2
+        v.load = True
+        drop = ActionState("drop-1", "drop", params={"_node": "K4-04", "_seq": 2})
+        v.actions = [drop]
+        v.set_fault("LOCALIZATION_LOST")
+        v.local_reset()
+
+        self.assertEqual((v.progress, v.x, v.y), (1.335, 62.0, 20.665))
+        for tick in range(150):
+            v.step(0.1, 11921.5 + tick * 0.1, [])
+            if drop.status == "FINISHED":
+                break
+
+        self.assertEqual(v.last_node_id, "K4-04")
+        self.assertEqual(drop.status, "FINISHED")
+        self.assertEqual([a.action_id for a in v.finished_actions].count("drop-1"), 1)
+        self.assertFalse(v.load)
 
 
 class MeasurementWindowTests(unittest.TestCase):

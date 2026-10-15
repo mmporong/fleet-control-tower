@@ -430,18 +430,12 @@ class Vehicle:
     def local_reset(self) -> None:
         """A technician at the vehicle: fixes the cause and resets it from the vehicle's own controls.
 
-        Drive and safety faults are cleared; a lost vehicle is driven onto the nearer node of its current
-        edge and re-localized there; a depleted one is pushed to a charger and charged to 30 %.
+        Drive and safety faults are cleared; a lost vehicle is re-localized at its observed pose without
+        changing its route progress; a depleted one is charged to 30 %.
         """
         if self.fault in ("DRIVE_FAULT", "SENSOR_FAULT", "BUMPER"):
             self._clear_fault()
         elif self.fault == "LOCALIZATION_LOST":
-            if self.edges and self.progress > 0.0 and self.progress >= self._edge_len(self.edges[0]) / 2:
-                self._arrive()
-            elif self.edges:
-                start = self.layout.nodes[self.edges[0]["startNodeId"]]
-                self.progress, self.x, self.y = 0.0, start.x, start.y
-            self.position_initialized = True
             self._clear_fault()
         elif self.fault == "BATTERY_DEPLETED":
             self.battery = max(self.battery, 30.0)

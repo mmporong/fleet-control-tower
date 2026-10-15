@@ -77,8 +77,8 @@ class AutoOperator:
                     self._do("field_service_done", robot=src)
                     plan["act_at"] = now + 120.0
         elif t == "LOCALIZATION_LOST" and rec is not None:
-            # SOP: re-localize remotely at the nearest node; when it is too far from one, the field team
-            # drives it onto a node and re-localizes there
+            # SOP: try remote localization against a nearby node; if that fails, the field team
+            # restores localization at the current pose without moving the vehicle or its order progress.
             if stage == 0 and self._do("init_position", robot=src)["ok"]:
                 plan["act_at"] = now + 60.0
             elif stage == 0:
