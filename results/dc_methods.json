@@ -1,0 +1,6486 @@
+{
+ "created": "2026-10-15T23:38:29+0900",
+ "git": "07ac6b5",
+ "python": "3.12.3",
+ "scenario": {
+  "name": "standard",
+  "title": "표준 교대",
+  "description": "물류센터 · 자율 지게차 10 · 토트 AMR 14 · 피커 7 · 수동 지게차 4 · 설계 평균 수요",
+  "site": "dc",
+  "agf": 10,
+  "amr": 14,
+  "trucks_h": 2.4,
+  "out_pallets_h": 31.0,
+  "tote_orders_h": 82.0,
+  "pickers": 7,
+  "packers": 4,
+  "dock_workers": 3,
+  "walkers": 2,
+  "dock_forklifts_in": 2,
+  "dock_forklifts_out": 1,
+  "rack_forklift": 1,
+  "pick_limit": "aisle",
+  "tote_batch": 3,
+  "dispatch": "cost",
+  "handling_fail_p": 0.01,
+  "inventory_error_p": 0.01,
+  "violation_p": 0.02,
+  "careless_p": 0.1,
+  "infra": "partial",
+  "cam_latency_s": 0.3,
+  "cam_sigma": 0.25,
+  "cam_detect_p": 0.95,
+  "cam_misclass_p": 0.03,
+  "cam_fp_p": 0.01,
+  "robots": 30,
+  "workers": 4,
+  "forklifts": 2,
+  "rate_per_h": 120.0,
+  "two_way": false,
+  "external": 0,
+  "fault_mtbf_h": 24.0,
+  "comms_mtbf_h": 6.0,
+  "comms_loss": 0.0,
+  "door_mtbf_h": 0.0
+ },
+ "duration_s": 7200.0,
+ "warmup_s": 1800.0,
+ "seeds": [
+  1,
+  2,
+  3
+ ],
+ "wall_s": 1348.0,
+ "summary": {
+  "none/base": {
+   "runs": 3,
+   "done": {
+    "mean": 2.333,
+    "sd": 3.215,
+    "ci95": 7.986,
+    "min": 0,
+    "max": 6
+   },
+   "throughput_h": {
+    "mean": 1.167,
+    "sd": 1.607,
+    "ci95": 3.993,
+    "min": 0.0,
+    "max": 3.0
+   },
+   "cycle_avg": {
+    "mean": 1049.4,
+    "sd": 198.273,
+    "ci95": 1781.381,
+    "min": 909.2,
+    "max": 1189.6
+   },
+   "cycle_p90": {
+    "mean": 1211.1,
+    "sd": 426.951,
+    "ci95": 3835.941,
+    "min": 909.2,
+    "max": 1513.0
+   },
+   "wait_avg": {
+    "mean": 518.7,
+    "sd": 10.041,
+    "ci95": 90.213,
+    "min": 511.6,
+    "max": 525.8
+   },
+   "exec_avg": {
+    "mean": 530.7,
+    "sd": 208.314,
+    "ci95": 1871.594,
+    "min": 383.4,
+    "max": 678.0
+   },
+   "traffic_wait_ratio": {
+    "mean": 0.0,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 0.0,
+    "max": 0.0
+   },
+   "utilization": {
+    "mean": 0.83,
+    "sd": 0.014,
+    "ci95": 0.036,
+    "min": 0.814,
+    "max": 0.842
+   },
+   "deadlocks": {
+    "mean": 0,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "deadlocks_resolved": {
+    "mean": 0,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "reroutes": {
+    "mean": 0,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "evasions": {
+    "mean": 0,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "protective_stops": {
+    "mean": 18.667,
+    "sd": 20.133,
+    "ci95": 50.017,
+    "min": 0,
+    "max": 40
+   },
+   "protective_human": {
+    "mean": 0,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "near_miss_fms": {
+    "mean": 0,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "contacts": {
+    "mean": 0.667,
+    "sd": 1.155,
+    "ci95": 2.869,
+    "min": 0,
+    "max": 2
+   },
+   "contacts_moving": {
+    "mean": 0,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "contacts_struck": {
+    "mean": 0.667,
+    "sd": 1.155,
+    "ci95": 2.869,
+    "min": 0,
+    "max": 2
+   },
+   "contacts_static": {
+    "mean": 0,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "contacts_human": {
+    "mean": 0,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "contacts_human_moving": {
+    "mean": 0,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "near_misses": {
+    "mean": 0,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "close_calls": {
+    "mean": 3,
+    "sd": 5.196,
+    "ci95": 12.909,
+    "min": 0,
+    "max": 9
+   },
+   "clearance_violations": {
+    "mean": 0,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "min_gap_moving": {
+    "mean": 0.545,
+    "sd": 0.559,
+    "ci95": 5.019,
+    "min": 0.15,
+    "max": 0.94
+   },
+   "min_amr_gap": {
+    "mean": 0.223,
+    "sd": 0.095,
+    "ci95": 0.236,
+    "min": 0.13,
+    "max": 0.32
+   },
+   "careless_turns": {
+    "mean": 0,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "tracking_ratio": {
+    "mean": 0.561,
+    "sd": 0.041,
+    "ci95": 0.101,
+    "min": 0.535,
+    "max": 0.608
+   },
+   "mismatch": {
+    "mean": 0,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "alarms_per_h": {
+    "mean": 8.667,
+    "sd": 4.481,
+    "ci95": 11.133,
+    "min": 3.5,
+    "max": 11.5
+   },
+   "mttr_s": {
+    "mean": 276.35,
+    "sd": 72.478,
+    "ci95": 651.183,
+    "min": 225.1,
+    "max": 327.6
+   },
+   "mtta_s": {
+    "mean": 25.167,
+    "sd": 1.617,
+    "ci95": 4.016,
+    "min": 23.7,
+    "max": 26.9
+   },
+   "interventions": {
+    "mean": 3,
+    "sd": 3.0,
+    "ci95": 7.453,
+    "min": 0,
+    "max": 6
+   },
+   "queued": {
+    "mean": 136.333,
+    "sd": 8.145,
+    "ci95": 20.234,
+    "min": 127,
+    "max": 142
+   },
+   "site_putaway_h": {
+    "mean": 0.5,
+    "sd": 0.5,
+    "ci95": 1.242,
+    "min": 0.0,
+    "max": 1.0
+   },
+   "site_shipped_h": {
+    "mean": 0.0,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 0.0,
+    "max": 0.0
+   },
+   "site_tote_h": {
+    "mean": 0.833,
+    "sd": 1.443,
+    "ci95": 3.586,
+    "min": 0.0,
+    "max": 2.5
+   },
+   "site_picks": {
+    "mean": 1.333,
+    "sd": 2.309,
+    "ci95": 5.737,
+    "min": 0,
+    "max": 4
+   },
+   "site_units": {
+    "mean": 3,
+    "sd": 5.196,
+    "ci95": 12.909,
+    "min": 0,
+    "max": 9
+   },
+   "site_dock_to_stock_avg": {
+    "mean": 1145.25,
+    "sd": 333.825,
+    "ci95": 2999.251,
+    "min": 909.2,
+    "max": 1381.3
+   },
+   "site_dock_to_stock_p90": {
+    "mean": 1079.4,
+    "sd": 240.699,
+    "ci95": 2162.561,
+    "min": 909.2,
+    "max": 1249.6
+   },
+   "site_picker_wait_s": {
+    "mean": 5.667,
+    "sd": 9.815,
+    "ci95": 24.384,
+    "min": 0.0,
+    "max": 17.0
+   },
+   "site_staged_in": {
+    "mean": 22,
+    "sd": 1.732,
+    "ci95": 4.303,
+    "min": 21,
+    "max": 24
+   },
+   "site_tote_backlog": {
+    "mean": 0.667,
+    "sd": 0.577,
+    "ci95": 1.434,
+    "min": 0,
+    "max": 1
+   },
+   "site_exceptions": {
+    "mean": 0,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "site_rack_fill": {
+    "mean": 0.702,
+    "sd": 0.016,
+    "ci95": 0.041,
+    "min": 0.69,
+    "max": 0.721
+   },
+   "agf_moves_per_vehicle_h": {
+    "mean": 0.05,
+    "sd": 0.05,
+    "ci95": 0.124,
+    "min": 0.0,
+    "max": 0.1
+   },
+   "agf_m_per_move": {
+    "mean": 270.0,
+    "sd": 70.711,
+    "ci95": 635.3,
+    "min": 220.0,
+    "max": 320.0
+   },
+   "amr_orders_per_vehicle_h": {
+    "mean": 0.06,
+    "sd": 0.104,
+    "ci95": 0.258,
+    "min": 0.0,
+    "max": 0.18
+   },
+   "picker_lph": {
+    "mean": 0.1,
+    "sd": 0.173,
+    "ci95": 0.43,
+    "min": 0.0,
+    "max": 0.3
+   },
+   "picker_uph": {
+    "mean": 0.2,
+    "sd": 0.346,
+    "ci95": 0.861,
+    "min": 0.0,
+    "max": 0.6
+   }
+  },
+  "locks/base": {
+   "runs": 3,
+   "done": {
+    "mean": 190.667,
+    "sd": 16.258,
+    "ci95": 40.391,
+    "min": 173,
+    "max": 205
+   },
+   "throughput_h": {
+    "mean": 95.333,
+    "sd": 8.129,
+    "ci95": 20.196,
+    "min": 86.5,
+    "max": 102.5
+   },
+   "cycle_avg": {
+    "mean": 832.833,
+    "sd": 63.972,
+    "ci95": 158.929,
+    "min": 766.7,
+    "max": 894.4
+   },
+   "cycle_p90": {
+    "mean": 1404.333,
+    "sd": 11.669,
+    "ci95": 28.991,
+    "min": 1397.2,
+    "max": 1417.8
+   },
+   "wait_avg": {
+    "mean": 98.7,
+    "sd": 61.825,
+    "ci95": 153.594,
+    "min": 58.6,
+    "max": 169.9
+   },
+   "exec_avg": {
+    "mean": 734.167,
+    "sd": 31.917,
+    "ci95": 79.294,
+    "min": 708.2,
+    "max": 769.8
+   },
+   "traffic_wait_ratio": {
+    "mean": 0.12,
+    "sd": 0.024,
+    "ci95": 0.061,
+    "min": 0.093,
+    "max": 0.141
+   },
+   "utilization": {
+    "mean": 0.794,
+    "sd": 0.041,
+    "ci95": 0.102,
+    "min": 0.748,
+    "max": 0.827
+   },
+   "deadlocks": {
+    "mean": 0,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "deadlocks_resolved": {
+    "mean": 0,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "reroutes": {
+    "mean": 54,
+    "sd": 6.083,
+    "ci95": 15.112,
+    "min": 47,
+    "max": 58
+   },
+   "evasions": {
+    "mean": 1.667,
+    "sd": 2.082,
+    "ci95": 5.172,
+    "min": 0,
+    "max": 4
+   },
+   "protective_stops": {
+    "mean": 64.333,
+    "sd": 5.132,
+    "ci95": 12.749,
+    "min": 60,
+    "max": 70
+   },
+   "protective_human": {
+    "mean": 5.333,
+    "sd": 1.528,
+    "ci95": 3.795,
+    "min": 4,
+    "max": 7
+   },
+   "near_miss_fms": {
+    "mean": 3,
+    "sd": 1.732,
+    "ci95": 4.303,
+    "min": 1,
+    "max": 4
+   },
+   "contacts": {
+    "mean": 9.333,
+    "sd": 13.65,
+    "ci95": 33.912,
+    "min": 0,
+    "max": 25
+   },
+   "contacts_moving": {
+    "mean": 0.333,
+    "sd": 0.577,
+    "ci95": 1.434,
+    "min": 0,
+    "max": 1
+   },
+   "contacts_struck": {
+    "mean": 9,
+    "sd": 13.892,
+    "ci95": 34.514,
+    "min": 0,
+    "max": 25
+   },
+   "contacts_static": {
+    "mean": 0,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "contacts_human": {
+    "mean": 8.333,
+    "sd": 14.434,
+    "ci95": 35.858,
+    "min": 0,
+    "max": 25
+   },
+   "contacts_human_moving": {
+    "mean": 0,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "near_misses": {
+    "mean": 0,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "close_calls": {
+    "mean": 1260.333,
+    "sd": 78.258,
+    "ci95": 194.42,
+    "min": 1172,
+    "max": 1321
+   },
+   "clearance_violations": {
+    "mean": 1,
+    "sd": 1.0,
+    "ci95": 2.484,
+    "min": 0,
+    "max": 2
+   },
+   "min_gap_moving": {
+    "mean": 0.12,
+    "sd": 0.02,
+    "ci95": 0.05,
+    "min": 0.1,
+    "max": 0.14
+   },
+   "min_amr_gap": {
+    "mean": 0.297,
+    "sd": 0.058,
+    "ci95": 0.143,
+    "min": 0.23,
+    "max": 0.33
+   },
+   "careless_turns": {
+    "mean": 0,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "tracking_ratio": {
+    "mean": 0.754,
+    "sd": 0.01,
+    "ci95": 0.025,
+    "min": 0.743,
+    "max": 0.761
+   },
+   "mismatch": {
+    "mean": 0,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "alarms_per_h": {
+    "mean": 3.333,
+    "sd": 2.93,
+    "ci95": 7.278,
+    "min": 0.0,
+    "max": 5.5
+   },
+   "mttr_s": {
+    "mean": 241.25,
+    "sd": 24.678,
+    "ci95": 221.72,
+    "min": 223.8,
+    "max": 258.7
+   },
+   "mtta_s": {
+    "mean": 23.25,
+    "sd": 3.606,
+    "ci95": 32.4,
+    "min": 20.7,
+    "max": 25.8
+   },
+   "interventions": {
+    "mean": 5,
+    "sd": 5.0,
+    "ci95": 12.422,
+    "min": 0,
+    "max": 10
+   },
+   "queued": {
+    "mean": 3.667,
+    "sd": 2.517,
+    "ci95": 6.252,
+    "min": 1,
+    "max": 6
+   },
+   "site_putaway_h": {
+    "mean": 22.0,
+    "sd": 12.757,
+    "ci95": 31.694,
+    "min": 7.5,
+    "max": 31.5
+   },
+   "site_shipped_h": {
+    "mean": 26.0,
+    "sd": 12.135,
+    "ci95": 30.147,
+    "min": 12.0,
+    "max": 33.5
+   },
+   "site_tote_h": {
+    "mean": 80.667,
+    "sd": 7.182,
+    "ci95": 17.843,
+    "min": 72.5,
+    "max": 86.0
+   },
+   "site_picks": {
+    "mean": 368.667,
+    "sd": 16.289,
+    "ci95": 40.468,
+    "min": 350,
+    "max": 380
+   },
+   "site_units": {
+    "mean": 944.667,
+    "sd": 40.452,
+    "ci95": 100.495,
+    "min": 899,
+    "max": 976
+   },
+   "site_dock_to_stock_avg": {
+    "mean": 617.6,
+    "sd": 113.584,
+    "ci95": 282.18,
+    "min": 498.2,
+    "max": 724.3
+   },
+   "site_dock_to_stock_p90": {
+    "mean": 952.1,
+    "sd": 185.335,
+    "ci95": 460.434,
+    "min": 744.1,
+    "max": 1099.7
+   },
+   "site_picker_wait_s": {
+    "mean": 3982.833,
+    "sd": 479.923,
+    "ci95": 1192.292,
+    "min": 3444.4,
+    "max": 4365.6
+   },
+   "site_staged_in": {
+    "mean": 5.667,
+    "sd": 2.082,
+    "ci95": 5.172,
+    "min": 4,
+    "max": 8
+   },
+   "site_tote_backlog": {
+    "mean": 1,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 1,
+    "max": 1
+   },
+   "site_exceptions": {
+    "mean": 1.667,
+    "sd": 0.577,
+    "ci95": 1.434,
+    "min": 1,
+    "max": 2
+   },
+   "site_rack_fill": {
+    "mean": 0.68,
+    "sd": 0.027,
+    "ci95": 0.066,
+    "min": 0.654,
+    "max": 0.707
+   },
+   "agf_moves_per_vehicle_h": {
+    "mean": 4.8,
+    "sd": 1.004,
+    "ci95": 2.494,
+    "min": 4.1,
+    "max": 5.95
+   },
+   "agf_m_per_move": {
+    "mean": 281.0,
+    "sd": 22.224,
+    "ci95": 55.213,
+    "min": 255.8,
+    "max": 297.8
+   },
+   "amr_orders_per_vehicle_h": {
+    "mean": 5.76,
+    "sd": 0.51,
+    "ci95": 1.268,
+    "min": 5.18,
+    "max": 6.14
+   },
+   "picker_lph": {
+    "mean": 26.333,
+    "sd": 1.159,
+    "ci95": 2.879,
+    "min": 25.0,
+    "max": 27.1
+   },
+   "picker_uph": {
+    "mean": 67.467,
+    "sd": 2.892,
+    "ci95": 7.185,
+    "min": 64.2,
+    "max": 69.7
+   }
+  },
+  "locks+resolve/base": {
+   "runs": 3,
+   "done": {
+    "mean": 193.667,
+    "sd": 17.926,
+    "ci95": 44.534,
+    "min": 173,
+    "max": 205
+   },
+   "throughput_h": {
+    "mean": 96.833,
+    "sd": 8.963,
+    "ci95": 22.267,
+    "min": 86.5,
+    "max": 102.5
+   },
+   "cycle_avg": {
+    "mean": 891.1,
+    "sd": 52.128,
+    "ci95": 129.505,
+    "min": 837.4,
+    "max": 941.5
+   },
+   "cycle_p90": {
+    "mean": 1463.6,
+    "sd": 114.316,
+    "ci95": 284.0,
+    "min": 1397.2,
+    "max": 1595.6
+   },
+   "wait_avg": {
+    "mean": 147.733,
+    "sd": 71.669,
+    "ci95": 178.05,
+    "min": 67.6,
+    "max": 205.7
+   },
+   "exec_avg": {
+    "mean": 743.367,
+    "sd": 23.579,
+    "ci95": 58.578,
+    "min": 724.5,
+    "max": 769.8
+   },
+   "traffic_wait_ratio": {
+    "mean": 0.138,
+    "sd": 0.043,
+    "ci95": 0.107,
+    "min": 0.093,
+    "max": 0.179
+   },
+   "utilization": {
+    "mean": 0.816,
+    "sd": 0.063,
+    "ci95": 0.157,
+    "min": 0.748,
+    "max": 0.873
+   },
+   "deadlocks": {
+    "mean": 0.333,
+    "sd": 0.577,
+    "ci95": 1.434,
+    "min": 0,
+    "max": 1
+   },
+   "deadlocks_resolved": {
+    "mean": 0.333,
+    "sd": 0.577,
+    "ci95": 1.434,
+    "min": 0,
+    "max": 1
+   },
+   "reroutes": {
+    "mean": 62.333,
+    "sd": 18.583,
+    "ci95": 46.167,
+    "min": 47,
+    "max": 83
+   },
+   "evasions": {
+    "mean": 1.333,
+    "sd": 2.309,
+    "ci95": 5.737,
+    "min": 0,
+    "max": 4
+   },
+   "protective_stops": {
+    "mean": 75.333,
+    "sd": 18.583,
+    "ci95": 46.167,
+    "min": 60,
+    "max": 96
+   },
+   "protective_human": {
+    "mean": 5.667,
+    "sd": 1.528,
+    "ci95": 3.795,
+    "min": 4,
+    "max": 7
+   },
+   "near_miss_fms": {
+    "mean": 4.667,
+    "sd": 1.155,
+    "ci95": 2.869,
+    "min": 4,
+    "max": 6
+   },
+   "contacts": {
+    "mean": 3,
+    "sd": 3.0,
+    "ci95": 7.453,
+    "min": 0,
+    "max": 6
+   },
+   "contacts_moving": {
+    "mean": 0.333,
+    "sd": 0.577,
+    "ci95": 1.434,
+    "min": 0,
+    "max": 1
+   },
+   "contacts_struck": {
+    "mean": 2.667,
+    "sd": 3.055,
+    "ci95": 7.59,
+    "min": 0,
+    "max": 6
+   },
+   "contacts_static": {
+    "mean": 0,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "contacts_human": {
+    "mean": 1.667,
+    "sd": 2.887,
+    "ci95": 7.172,
+    "min": 0,
+    "max": 5
+   },
+   "contacts_human_moving": {
+    "mean": 0,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "near_misses": {
+    "mean": 0,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "close_calls": {
+    "mean": 1281.667,
+    "sd": 42.852,
+    "ci95": 106.46,
+    "min": 1236,
+    "max": 1321
+   },
+   "clearance_violations": {
+    "mean": 1.333,
+    "sd": 1.528,
+    "ci95": 3.795,
+    "min": 0,
+    "max": 3
+   },
+   "min_gap_moving": {
+    "mean": 0.107,
+    "sd": 0.031,
+    "ci95": 0.076,
+    "min": 0.08,
+    "max": 0.14
+   },
+   "min_amr_gap": {
+    "mean": 0.297,
+    "sd": 0.058,
+    "ci95": 0.143,
+    "min": 0.23,
+    "max": 0.33
+   },
+   "careless_turns": {
+    "mean": 0,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "tracking_ratio": {
+    "mean": 0.758,
+    "sd": 0.004,
+    "ci95": 0.009,
+    "min": 0.754,
+    "max": 0.761
+   },
+   "mismatch": {
+    "mean": 0,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "alarms_per_h": {
+    "mean": 6.0,
+    "sd": 6.265,
+    "ci95": 15.564,
+    "min": 0.0,
+    "max": 12.5
+   },
+   "mttr_s": {
+    "mean": 277.95,
+    "sd": 27.224,
+    "ci95": 244.59,
+    "min": 258.7,
+    "max": 297.2
+   },
+   "mtta_s": {
+    "mean": 22.55,
+    "sd": 2.616,
+    "ci95": 23.506,
+    "min": 20.7,
+    "max": 24.4
+   },
+   "interventions": {
+    "mean": 6.333,
+    "sd": 7.095,
+    "ci95": 17.625,
+    "min": 0,
+    "max": 14
+   },
+   "queued": {
+    "mean": 7.333,
+    "sd": 8.505,
+    "ci95": 21.129,
+    "min": 1,
+    "max": 17
+   },
+   "site_putaway_h": {
+    "mean": 23.833,
+    "sd": 14.154,
+    "ci95": 35.163,
+    "min": 7.5,
+    "max": 32.5
+   },
+   "site_shipped_h": {
+    "mean": 23.667,
+    "sd": 10.867,
+    "ci95": 26.996,
+    "min": 12.0,
+    "max": 33.5
+   },
+   "site_tote_h": {
+    "mean": 83.667,
+    "sd": 2.255,
+    "ci95": 5.601,
+    "min": 81.5,
+    "max": 86.0
+   },
+   "site_picks": {
+    "mean": 371,
+    "sd": 12.288,
+    "ci95": 30.528,
+    "min": 357,
+    "max": 380
+   },
+   "site_units": {
+    "mean": 952,
+    "sd": 28.16,
+    "ci95": 69.96,
+    "min": 921,
+    "max": 976
+   },
+   "site_dock_to_stock_avg": {
+    "mean": 697.433,
+    "sd": 58.524,
+    "ci95": 145.393,
+    "min": 630.3,
+    "max": 737.7
+   },
+   "site_dock_to_stock_p90": {
+    "mean": 1126.533,
+    "sd": 129.551,
+    "ci95": 321.849,
+    "min": 1012.5,
+    "max": 1267.4
+   },
+   "site_picker_wait_s": {
+    "mean": 4086.133,
+    "sd": 308.996,
+    "ci95": 767.651,
+    "min": 3754.3,
+    "max": 4365.6
+   },
+   "site_staged_in": {
+    "mean": 7.667,
+    "sd": 5.508,
+    "ci95": 13.683,
+    "min": 4,
+    "max": 14
+   },
+   "site_tote_backlog": {
+    "mean": 0.667,
+    "sd": 0.577,
+    "ci95": 1.434,
+    "min": 0,
+    "max": 1
+   },
+   "site_exceptions": {
+    "mean": 1.333,
+    "sd": 0.577,
+    "ci95": 1.434,
+    "min": 1,
+    "max": 2
+   },
+   "site_rack_fill": {
+    "mean": 0.69,
+    "sd": 0.031,
+    "ci95": 0.077,
+    "min": 0.654,
+    "max": 0.708
+   },
+   "agf_moves_per_vehicle_h": {
+    "mean": 4.75,
+    "sd": 0.918,
+    "ci95": 2.28,
+    "min": 4.1,
+    "max": 5.8
+   },
+   "agf_m_per_move": {
+    "mean": 273.967,
+    "sd": 34.264,
+    "ci95": 85.124,
+    "min": 234.7,
+    "max": 297.8
+   },
+   "amr_orders_per_vehicle_h": {
+    "mean": 5.973,
+    "sd": 0.16,
+    "ci95": 0.399,
+    "min": 5.82,
+    "max": 6.14
+   },
+   "picker_lph": {
+    "mean": 26.5,
+    "sd": 0.872,
+    "ci95": 2.166,
+    "min": 25.5,
+    "max": 27.1
+   },
+   "picker_uph": {
+    "mean": 68.0,
+    "sd": 1.997,
+    "ci95": 4.962,
+    "min": 65.8,
+    "max": 69.7
+   }
+  },
+  "locks+resolve/pick-zone": {
+   "runs": 3,
+   "done": {
+    "mean": 191,
+    "sd": 22.65,
+    "ci95": 56.269,
+    "min": 170,
+    "max": 215
+   },
+   "throughput_h": {
+    "mean": 95.5,
+    "sd": 11.325,
+    "ci95": 28.135,
+    "min": 85.0,
+    "max": 107.5
+   },
+   "cycle_avg": {
+    "mean": 920.733,
+    "sd": 115.392,
+    "ci95": 286.673,
+    "min": 818.4,
+    "max": 1045.8
+   },
+   "cycle_p90": {
+    "mean": 1665.533,
+    "sd": 211.043,
+    "ci95": 524.303,
+    "min": 1515.2,
+    "max": 1906.8
+   },
+   "wait_avg": {
+    "mean": 157.433,
+    "sd": 70.251,
+    "ci95": 174.527,
+    "min": 77.2,
+    "max": 207.9
+   },
+   "exec_avg": {
+    "mean": 763.3,
+    "sd": 66.347,
+    "ci95": 164.828,
+    "min": 710.9,
+    "max": 837.9
+   },
+   "traffic_wait_ratio": {
+    "mean": 0.119,
+    "sd": 0.002,
+    "ci95": 0.005,
+    "min": 0.117,
+    "max": 0.121
+   },
+   "utilization": {
+    "mean": 0.838,
+    "sd": 0.053,
+    "ci95": 0.133,
+    "min": 0.795,
+    "max": 0.898
+   },
+   "deadlocks": {
+    "mean": 0,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "deadlocks_resolved": {
+    "mean": 0,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "reroutes": {
+    "mean": 59,
+    "sd": 11.0,
+    "ci95": 27.328,
+    "min": 48,
+    "max": 70
+   },
+   "evasions": {
+    "mean": 0.333,
+    "sd": 0.577,
+    "ci95": 1.434,
+    "min": 0,
+    "max": 1
+   },
+   "protective_stops": {
+    "mean": 87.667,
+    "sd": 9.074,
+    "ci95": 22.542,
+    "min": 81,
+    "max": 98
+   },
+   "protective_human": {
+    "mean": 5.333,
+    "sd": 0.577,
+    "ci95": 1.434,
+    "min": 5,
+    "max": 6
+   },
+   "near_miss_fms": {
+    "mean": 4.667,
+    "sd": 0.577,
+    "ci95": 1.434,
+    "min": 4,
+    "max": 5
+   },
+   "contacts": {
+    "mean": 2.667,
+    "sd": 1.528,
+    "ci95": 3.795,
+    "min": 1,
+    "max": 4
+   },
+   "contacts_moving": {
+    "mean": 1.667,
+    "sd": 1.155,
+    "ci95": 2.869,
+    "min": 1,
+    "max": 3
+   },
+   "contacts_struck": {
+    "mean": 1,
+    "sd": 1.0,
+    "ci95": 2.484,
+    "min": 0,
+    "max": 2
+   },
+   "contacts_static": {
+    "mean": 0,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "contacts_human": {
+    "mean": 2,
+    "sd": 1.732,
+    "ci95": 4.303,
+    "min": 1,
+    "max": 4
+   },
+   "contacts_human_moving": {
+    "mean": 1.333,
+    "sd": 1.528,
+    "ci95": 3.795,
+    "min": 0,
+    "max": 3
+   },
+   "near_misses": {
+    "mean": 1,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 1,
+    "max": 1
+   },
+   "close_calls": {
+    "mean": 1268.333,
+    "sd": 83.548,
+    "ci95": 207.562,
+    "min": 1172,
+    "max": 1321
+   },
+   "clearance_violations": {
+    "mean": 2.333,
+    "sd": 0.577,
+    "ci95": 1.434,
+    "min": 2,
+    "max": 3
+   },
+   "min_gap_moving": {
+    "mean": 0.017,
+    "sd": 0.029,
+    "ci95": 0.072,
+    "min": 0.0,
+    "max": 0.05
+   },
+   "min_amr_gap": {
+    "mean": 0.277,
+    "sd": 0.046,
+    "ci95": 0.115,
+    "min": 0.25,
+    "max": 0.33
+   },
+   "careless_turns": {
+    "mean": 0,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "tracking_ratio": {
+    "mean": 0.752,
+    "sd": 0.011,
+    "ci95": 0.027,
+    "min": 0.739,
+    "max": 0.759
+   },
+   "mismatch": {
+    "mean": 0,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "alarms_per_h": {
+    "mean": 6.167,
+    "sd": 1.528,
+    "ci95": 3.795,
+    "min": 4.5,
+    "max": 7.5
+   },
+   "mttr_s": {
+    "mean": 255.067,
+    "sd": 17.002,
+    "ci95": 42.238,
+    "min": 243.6,
+    "max": 274.6
+   },
+   "mtta_s": {
+    "mean": 26.5,
+    "sd": 4.33,
+    "ci95": 10.758,
+    "min": 24.0,
+    "max": 31.5
+   },
+   "interventions": {
+    "mean": 5.667,
+    "sd": 1.155,
+    "ci95": 2.869,
+    "min": 5,
+    "max": 7
+   },
+   "queued": {
+    "mean": 3.667,
+    "sd": 2.517,
+    "ci95": 6.252,
+    "min": 1,
+    "max": 6
+   },
+   "site_putaway_h": {
+    "mean": 19.167,
+    "sd": 11.361,
+    "ci95": 28.226,
+    "min": 7.0,
+    "max": 29.5
+   },
+   "site_shipped_h": {
+    "mean": 34.0,
+    "sd": 0.866,
+    "ci95": 2.151,
+    "min": 33.5,
+    "max": 35.0
+   },
+   "site_tote_h": {
+    "mean": 81.5,
+    "sd": 3.122,
+    "ci95": 7.757,
+    "min": 79.0,
+    "max": 85.0
+   },
+   "site_picks": {
+    "mean": 372,
+    "sd": 24.331,
+    "ci95": 60.447,
+    "min": 344,
+    "max": 388
+   },
+   "site_units": {
+    "mean": 952.667,
+    "sd": 52.691,
+    "ci95": 130.902,
+    "min": 892,
+    "max": 987
+   },
+   "site_dock_to_stock_avg": {
+    "mean": 574.533,
+    "sd": 105.376,
+    "ci95": 261.79,
+    "min": 464.7,
+    "max": 674.8
+   },
+   "site_dock_to_stock_p90": {
+    "mean": 839.1,
+    "sd": 206.089,
+    "ci95": 511.995,
+    "min": 627.0,
+    "max": 1038.6
+   },
+   "site_picker_wait_s": {
+    "mean": 4130.867,
+    "sd": 525.007,
+    "ci95": 1304.296,
+    "min": 3525.5,
+    "max": 4461.5
+   },
+   "site_staged_in": {
+    "mean": 2.333,
+    "sd": 1.528,
+    "ci95": 3.795,
+    "min": 1,
+    "max": 4
+   },
+   "site_tote_backlog": {
+    "mean": 0.333,
+    "sd": 0.577,
+    "ci95": 1.434,
+    "min": 0,
+    "max": 1
+   },
+   "site_exceptions": {
+    "mean": 1.667,
+    "sd": 0.577,
+    "ci95": 1.434,
+    "min": 1,
+    "max": 2
+   },
+   "site_rack_fill": {
+    "mean": 0.662,
+    "sd": 0.006,
+    "ci95": 0.014,
+    "min": 0.657,
+    "max": 0.668
+   },
+   "agf_moves_per_vehicle_h": {
+    "mean": 5.317,
+    "sd": 1.206,
+    "ci95": 2.995,
+    "min": 4.05,
+    "max": 6.45
+   },
+   "agf_m_per_move": {
+    "mean": 271.4,
+    "sd": 34.982,
+    "ci95": 86.906,
+    "min": 238.3,
+    "max": 308.0
+   },
+   "amr_orders_per_vehicle_h": {
+    "mean": 5.82,
+    "sd": 0.223,
+    "ci95": 0.555,
+    "min": 5.64,
+    "max": 6.07
+   },
+   "picker_lph": {
+    "mean": 26.567,
+    "sd": 1.71,
+    "ci95": 4.248,
+    "min": 24.6,
+    "max": 27.7
+   },
+   "picker_uph": {
+    "mean": 68.033,
+    "sd": 3.765,
+    "ci95": 9.353,
+    "min": 63.7,
+    "max": 70.5
+   }
+  },
+  "locks+resolve/pick-vehicle": {
+   "runs": 3,
+   "done": {
+    "mean": 194.333,
+    "sd": 25.027,
+    "ci95": 62.175,
+    "min": 170,
+    "max": 220
+   },
+   "throughput_h": {
+    "mean": 97.167,
+    "sd": 12.513,
+    "ci95": 31.087,
+    "min": 85.0,
+    "max": 110.0
+   },
+   "cycle_avg": {
+    "mean": 674.767,
+    "sd": 37.788,
+    "ci95": 93.878,
+    "min": 641.4,
+    "max": 715.8
+   },
+   "cycle_p90": {
+    "mean": 1009.8,
+    "sd": 35.744,
+    "ci95": 88.8,
+    "min": 969.6,
+    "max": 1038.0
+   },
+   "wait_avg": {
+    "mean": 76.467,
+    "sd": 52.962,
+    "ci95": 131.574,
+    "min": 25.6,
+    "max": 131.3
+   },
+   "exec_avg": {
+    "mean": 598.333,
+    "sd": 16.029,
+    "ci95": 39.823,
+    "min": 584.5,
+    "max": 615.9
+   },
+   "traffic_wait_ratio": {
+    "mean": 0.143,
+    "sd": 0.018,
+    "ci95": 0.046,
+    "min": 0.127,
+    "max": 0.163
+   },
+   "utilization": {
+    "mean": 0.667,
+    "sd": 0.076,
+    "ci95": 0.188,
+    "min": 0.593,
+    "max": 0.744
+   },
+   "deadlocks": {
+    "mean": 0,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "deadlocks_resolved": {
+    "mean": 0,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "reroutes": {
+    "mean": 55,
+    "sd": 17.692,
+    "ci95": 43.952,
+    "min": 39,
+    "max": 74
+   },
+   "evasions": {
+    "mean": 2.667,
+    "sd": 2.517,
+    "ci95": 6.252,
+    "min": 0,
+    "max": 5
+   },
+   "protective_stops": {
+    "mean": 107,
+    "sd": 45.902,
+    "ci95": 114.036,
+    "min": 80,
+    "max": 160
+   },
+   "protective_human": {
+    "mean": 36,
+    "sd": 22.517,
+    "ci95": 55.939,
+    "min": 14,
+    "max": 59
+   },
+   "near_miss_fms": {
+    "mean": 12.333,
+    "sd": 3.512,
+    "ci95": 8.725,
+    "min": 9,
+    "max": 16
+   },
+   "contacts": {
+    "mean": 2.333,
+    "sd": 0.577,
+    "ci95": 1.434,
+    "min": 2,
+    "max": 3
+   },
+   "contacts_moving": {
+    "mean": 1,
+    "sd": 1.0,
+    "ci95": 2.484,
+    "min": 0,
+    "max": 2
+   },
+   "contacts_struck": {
+    "mean": 1.333,
+    "sd": 0.577,
+    "ci95": 1.434,
+    "min": 1,
+    "max": 2
+   },
+   "contacts_static": {
+    "mean": 0,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "contacts_human": {
+    "mean": 0.333,
+    "sd": 0.577,
+    "ci95": 1.434,
+    "min": 0,
+    "max": 1
+   },
+   "contacts_human_moving": {
+    "mean": 0.333,
+    "sd": 0.577,
+    "ci95": 1.434,
+    "min": 0,
+    "max": 1
+   },
+   "near_misses": {
+    "mean": 0.667,
+    "sd": 0.577,
+    "ci95": 1.434,
+    "min": 0,
+    "max": 1
+   },
+   "close_calls": {
+    "mean": 1008,
+    "sd": 47.885,
+    "ci95": 118.963,
+    "min": 964,
+    "max": 1059
+   },
+   "clearance_violations": {
+    "mean": 22,
+    "sd": 8.888,
+    "ci95": 22.081,
+    "min": 15,
+    "max": 32
+   },
+   "min_gap_moving": {
+    "mean": 0.08,
+    "sd": 0.075,
+    "ci95": 0.188,
+    "min": 0.0,
+    "max": 0.15
+   },
+   "min_amr_gap": {
+    "mean": 0.327,
+    "sd": 0.006,
+    "ci95": 0.014,
+    "min": 0.32,
+    "max": 0.33
+   },
+   "careless_turns": {
+    "mean": 0,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "tracking_ratio": {
+    "mean": 0.694,
+    "sd": 0.01,
+    "ci95": 0.024,
+    "min": 0.684,
+    "max": 0.703
+   },
+   "mismatch": {
+    "mean": 0,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "alarms_per_h": {
+    "mean": 7.167,
+    "sd": 4.311,
+    "ci95": 10.71,
+    "min": 2.5,
+    "max": 11.0
+   },
+   "mttr_s": {
+    "mean": 255.6,
+    "sd": 9.443,
+    "ci95": 23.46,
+    "min": 248.9,
+    "max": 266.4
+   },
+   "mtta_s": {
+    "mean": 21.333,
+    "sd": 1.756,
+    "ci95": 4.362,
+    "min": 19.5,
+    "max": 23.0
+   },
+   "interventions": {
+    "mean": 6.333,
+    "sd": 3.786,
+    "ci95": 9.406,
+    "min": 2,
+    "max": 9
+   },
+   "queued": {
+    "mean": 3,
+    "sd": 3.464,
+    "ci95": 8.606,
+    "min": 1,
+    "max": 7
+   },
+   "site_putaway_h": {
+    "mean": 20.0,
+    "sd": 11.758,
+    "ci95": 29.211,
+    "min": 6.5,
+    "max": 28.0
+   },
+   "site_shipped_h": {
+    "mean": 33.667,
+    "sd": 1.756,
+    "ci95": 4.362,
+    "min": 32.0,
+    "max": 35.5
+   },
+   "site_tote_h": {
+    "mean": 82.0,
+    "sd": 3.969,
+    "ci95": 9.859,
+    "min": 77.5,
+    "max": 85.0
+   },
+   "site_picks": {
+    "mean": 365.667,
+    "sd": 18.61,
+    "ci95": 46.234,
+    "min": 346,
+    "max": 383
+   },
+   "site_units": {
+    "mean": 935.333,
+    "sd": 35.838,
+    "ci95": 89.033,
+    "min": 897,
+    "max": 968
+   },
+   "site_dock_to_stock_avg": {
+    "mean": 728.067,
+    "sd": 82.985,
+    "ci95": 206.162,
+    "min": 665.9,
+    "max": 822.3
+   },
+   "site_dock_to_stock_p90": {
+    "mean": 1107.967,
+    "sd": 104.007,
+    "ci95": 258.388,
+    "min": 1000.0,
+    "max": 1207.5
+   },
+   "site_picker_wait_s": {
+    "mean": 4000.667,
+    "sd": 16.947,
+    "ci95": 42.102,
+    "min": 3981.1,
+    "max": 4010.7
+   },
+   "site_staged_in": {
+    "mean": 4.667,
+    "sd": 4.619,
+    "ci95": 11.475,
+    "min": 2,
+    "max": 10
+   },
+   "site_tote_backlog": {
+    "mean": 0.667,
+    "sd": 0.577,
+    "ci95": 1.434,
+    "min": 0,
+    "max": 1
+   },
+   "site_exceptions": {
+    "mean": 1.333,
+    "sd": 0.577,
+    "ci95": 1.434,
+    "min": 1,
+    "max": 2
+   },
+   "site_rack_fill": {
+    "mean": 0.665,
+    "sd": 0.008,
+    "ci95": 0.019,
+    "min": 0.66,
+    "max": 0.674
+   },
+   "agf_moves_per_vehicle_h": {
+    "mean": 5.367,
+    "sd": 1.221,
+    "ci95": 3.033,
+    "min": 4.0,
+    "max": 6.35
+   },
+   "agf_m_per_move": {
+    "mean": 261.033,
+    "sd": 22.316,
+    "ci95": 55.44,
+    "min": 247.9,
+    "max": 286.8
+   },
+   "amr_orders_per_vehicle_h": {
+    "mean": 5.857,
+    "sd": 0.28,
+    "ci95": 0.695,
+    "min": 5.54,
+    "max": 6.07
+   },
+   "picker_lph": {
+    "mean": 26.133,
+    "sd": 1.358,
+    "ci95": 3.373,
+    "min": 24.7,
+    "max": 27.4
+   },
+   "picker_uph": {
+    "mean": 66.8,
+    "sd": 2.524,
+    "ci95": 6.27,
+    "min": 64.1,
+    "max": 69.1
+   }
+  },
+  "locks+resolve/tote-single": {
+   "runs": 3,
+   "done": {
+    "mean": 253.333,
+    "sd": 28.919,
+    "ci95": 71.846,
+    "min": 222,
+    "max": 279
+   },
+   "throughput_h": {
+    "mean": 126.667,
+    "sd": 14.46,
+    "ci95": 35.923,
+    "min": 111.0,
+    "max": 139.5
+   },
+   "cycle_avg": {
+    "mean": 1362.833,
+    "sd": 254.973,
+    "ci95": 633.439,
+    "min": 1098.2,
+    "max": 1606.9
+   },
+   "cycle_p90": {
+    "mean": 2667.533,
+    "sd": 617.01,
+    "ci95": 1532.862,
+    "min": 2012.8,
+    "max": 3238.2
+   },
+   "wait_avg": {
+    "mean": 751.0,
+    "sd": 219.85,
+    "ci95": 546.183,
+    "min": 512.2,
+    "max": 945.0
+   },
+   "exec_avg": {
+    "mean": 611.833,
+    "sd": 43.366,
+    "ci95": 107.737,
+    "min": 586.0,
+    "max": 661.9
+   },
+   "traffic_wait_ratio": {
+    "mean": 0.143,
+    "sd": 0.027,
+    "ci95": 0.066,
+    "min": 0.125,
+    "max": 0.174
+   },
+   "utilization": {
+    "mean": 0.905,
+    "sd": 0.041,
+    "ci95": 0.102,
+    "min": 0.868,
+    "max": 0.949
+   },
+   "deadlocks": {
+    "mean": 0.333,
+    "sd": 0.577,
+    "ci95": 1.434,
+    "min": 0,
+    "max": 1
+   },
+   "deadlocks_resolved": {
+    "mean": 0.333,
+    "sd": 0.577,
+    "ci95": 1.434,
+    "min": 0,
+    "max": 1
+   },
+   "reroutes": {
+    "mean": 89.333,
+    "sd": 17.926,
+    "ci95": 44.534,
+    "min": 78,
+    "max": 110
+   },
+   "evasions": {
+    "mean": 2,
+    "sd": 1.0,
+    "ci95": 2.484,
+    "min": 1,
+    "max": 3
+   },
+   "protective_stops": {
+    "mean": 85.333,
+    "sd": 18.61,
+    "ci95": 46.234,
+    "min": 68,
+    "max": 105
+   },
+   "protective_human": {
+    "mean": 5,
+    "sd": 3.464,
+    "ci95": 8.606,
+    "min": 1,
+    "max": 7
+   },
+   "near_miss_fms": {
+    "mean": 3.667,
+    "sd": 3.215,
+    "ci95": 7.986,
+    "min": 0,
+    "max": 6
+   },
+   "contacts": {
+    "mean": 2.333,
+    "sd": 1.155,
+    "ci95": 2.869,
+    "min": 1,
+    "max": 3
+   },
+   "contacts_moving": {
+    "mean": 1,
+    "sd": 1.0,
+    "ci95": 2.484,
+    "min": 0,
+    "max": 2
+   },
+   "contacts_struck": {
+    "mean": 1.333,
+    "sd": 0.577,
+    "ci95": 1.434,
+    "min": 1,
+    "max": 2
+   },
+   "contacts_static": {
+    "mean": 0,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "contacts_human": {
+    "mean": 0.667,
+    "sd": 0.577,
+    "ci95": 1.434,
+    "min": 0,
+    "max": 1
+   },
+   "contacts_human_moving": {
+    "mean": 0.333,
+    "sd": 0.577,
+    "ci95": 1.434,
+    "min": 0,
+    "max": 1
+   },
+   "near_misses": {
+    "mean": 0.333,
+    "sd": 0.577,
+    "ci95": 1.434,
+    "min": 0,
+    "max": 1
+   },
+   "close_calls": {
+    "mean": 1266,
+    "sd": 78.083,
+    "ci95": 193.985,
+    "min": 1202,
+    "max": 1353
+   },
+   "clearance_violations": {
+    "mean": 1.333,
+    "sd": 0.577,
+    "ci95": 1.434,
+    "min": 1,
+    "max": 2
+   },
+   "min_gap_moving": {
+    "mean": 0.05,
+    "sd": 0.087,
+    "ci95": 0.215,
+    "min": 0.0,
+    "max": 0.15
+   },
+   "min_amr_gap": {
+    "mean": 0.303,
+    "sd": 0.046,
+    "ci95": 0.115,
+    "min": 0.25,
+    "max": 0.33
+   },
+   "careless_turns": {
+    "mean": 0,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "tracking_ratio": {
+    "mean": 0.754,
+    "sd": 0.006,
+    "ci95": 0.014,
+    "min": 0.751,
+    "max": 0.761
+   },
+   "mismatch": {
+    "mean": 0,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "alarms_per_h": {
+    "mean": 5.5,
+    "sd": 0.5,
+    "ci95": 1.242,
+    "min": 5.0,
+    "max": 6.0
+   },
+   "mttr_s": {
+    "mean": 253.867,
+    "sd": 68.763,
+    "ci95": 170.832,
+    "min": 205.6,
+    "max": 332.6
+   },
+   "mtta_s": {
+    "mean": 21.1,
+    "sd": 1.709,
+    "ci95": 4.245,
+    "min": 19.3,
+    "max": 22.7
+   },
+   "interventions": {
+    "mean": 6.333,
+    "sd": 3.786,
+    "ci95": 9.406,
+    "min": 2,
+    "max": 9
+   },
+   "queued": {
+    "mean": 57,
+    "sd": 12.124,
+    "ci95": 30.121,
+    "min": 43,
+    "max": 64
+   },
+   "site_putaway_h": {
+    "mean": 28.667,
+    "sd": 7.974,
+    "ci95": 19.81,
+    "min": 19.5,
+    "max": 34.0
+   },
+   "site_shipped_h": {
+    "mean": 33.5,
+    "sd": 3.041,
+    "ci95": 7.556,
+    "min": 31.5,
+    "max": 37.0
+   },
+   "site_tote_h": {
+    "mean": 64.833,
+    "sd": 4.856,
+    "ci95": 12.065,
+    "min": 59.5,
+    "max": 69.0
+   },
+   "site_picks": {
+    "mean": 303.667,
+    "sd": 20.502,
+    "ci95": 50.934,
+    "min": 283,
+    "max": 324
+   },
+   "site_units": {
+    "mean": 762.333,
+    "sd": 64.314,
+    "ci95": 159.779,
+    "min": 702,
+    "max": 830
+   },
+   "site_dock_to_stock_avg": {
+    "mean": 670.767,
+    "sd": 26.513,
+    "ci95": 65.867,
+    "min": 640.3,
+    "max": 688.6
+   },
+   "site_dock_to_stock_p90": {
+    "mean": 1052.533,
+    "sd": 41.868,
+    "ci95": 104.013,
+    "min": 1018.0,
+    "max": 1099.1
+   },
+   "site_picker_wait_s": {
+    "mean": 3474.233,
+    "sd": 232.856,
+    "ci95": 578.492,
+    "min": 3222.6,
+    "max": 3682.1
+   },
+   "site_staged_in": {
+    "mean": 1.667,
+    "sd": 1.528,
+    "ci95": 3.795,
+    "min": 0,
+    "max": 3
+   },
+   "site_tote_backlog": {
+    "mean": 0,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "site_exceptions": {
+    "mean": 2,
+    "sd": 1.0,
+    "ci95": 2.484,
+    "min": 1,
+    "max": 3
+   },
+   "site_rack_fill": {
+    "mean": 0.689,
+    "sd": 0.032,
+    "ci95": 0.078,
+    "min": 0.658,
+    "max": 0.721
+   },
+   "agf_moves_per_vehicle_h": {
+    "mean": 6.217,
+    "sd": 0.988,
+    "ci95": 2.454,
+    "min": 5.15,
+    "max": 7.1
+   },
+   "agf_m_per_move": {
+    "mean": 248.033,
+    "sd": 20.521,
+    "ci95": 50.981,
+    "min": 231.5,
+    "max": 271.0
+   },
+   "amr_orders_per_vehicle_h": {
+    "mean": 4.63,
+    "sd": 0.347,
+    "ci95": 0.862,
+    "min": 4.25,
+    "max": 4.93
+   },
+   "picker_lph": {
+    "mean": 21.667,
+    "sd": 1.45,
+    "ci95": 3.603,
+    "min": 20.2,
+    "max": 23.1
+   },
+   "picker_uph": {
+    "mean": 54.433,
+    "sd": 4.623,
+    "ci95": 11.485,
+    "min": 50.1,
+    "max": 59.3
+   }
+  },
+  "locks+resolve/dispatch-fifo": {
+   "runs": 3,
+   "done": {
+    "mean": 198,
+    "sd": 28.0,
+    "ci95": 69.561,
+    "min": 166,
+    "max": 218
+   },
+   "throughput_h": {
+    "mean": 99.0,
+    "sd": 14.0,
+    "ci95": 34.781,
+    "min": 83.0,
+    "max": 109.0
+   },
+   "cycle_avg": {
+    "mean": 876.467,
+    "sd": 23.035,
+    "ci95": 57.227,
+    "min": 857.5,
+    "max": 902.1
+   },
+   "cycle_p90": {
+    "mean": 1582.8,
+    "sd": 120.702,
+    "ci95": 299.864,
+    "min": 1494.8,
+    "max": 1720.4
+   },
+   "wait_avg": {
+    "mean": 145.433,
+    "sd": 76.822,
+    "ci95": 190.852,
+    "min": 58.4,
+    "max": 203.8
+   },
+   "exec_avg": {
+    "mean": 731.033,
+    "sd": 58.962,
+    "ci95": 146.481,
+    "min": 695.7,
+    "max": 799.1
+   },
+   "traffic_wait_ratio": {
+    "mean": 0.136,
+    "sd": 0.025,
+    "ci95": 0.061,
+    "min": 0.113,
+    "max": 0.162
+   },
+   "utilization": {
+    "mean": 0.831,
+    "sd": 0.062,
+    "ci95": 0.154,
+    "min": 0.76,
+    "max": 0.874
+   },
+   "deadlocks": {
+    "mean": 0,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "deadlocks_resolved": {
+    "mean": 0,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "reroutes": {
+    "mean": 65.667,
+    "sd": 2.887,
+    "ci95": 7.172,
+    "min": 64,
+    "max": 69
+   },
+   "evasions": {
+    "mean": 1,
+    "sd": 1.0,
+    "ci95": 2.484,
+    "min": 0,
+    "max": 2
+   },
+   "protective_stops": {
+    "mean": 58.333,
+    "sd": 5.508,
+    "ci95": 13.683,
+    "min": 52,
+    "max": 62
+   },
+   "protective_human": {
+    "mean": 5.333,
+    "sd": 3.215,
+    "ci95": 7.986,
+    "min": 3,
+    "max": 9
+   },
+   "near_miss_fms": {
+    "mean": 4,
+    "sd": 2.646,
+    "ci95": 6.573,
+    "min": 2,
+    "max": 7
+   },
+   "contacts": {
+    "mean": 3.333,
+    "sd": 3.055,
+    "ci95": 7.59,
+    "min": 0,
+    "max": 6
+   },
+   "contacts_moving": {
+    "mean": 0,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "contacts_struck": {
+    "mean": 3.333,
+    "sd": 3.055,
+    "ci95": 7.59,
+    "min": 0,
+    "max": 6
+   },
+   "contacts_static": {
+    "mean": 0,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "contacts_human": {
+    "mean": 3,
+    "sd": 3.0,
+    "ci95": 7.453,
+    "min": 0,
+    "max": 6
+   },
+   "contacts_human_moving": {
+    "mean": 0,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "near_misses": {
+    "mean": 0,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "close_calls": {
+    "mean": 1278.667,
+    "sd": 43.363,
+    "ci95": 107.728,
+    "min": 1229,
+    "max": 1309
+   },
+   "clearance_violations": {
+    "mean": 2.333,
+    "sd": 1.528,
+    "ci95": 3.795,
+    "min": 1,
+    "max": 4
+   },
+   "min_gap_moving": {
+    "mean": 0.11,
+    "sd": 0.03,
+    "ci95": 0.075,
+    "min": 0.08,
+    "max": 0.14
+   },
+   "min_amr_gap": {
+    "mean": 0.303,
+    "sd": 0.046,
+    "ci95": 0.115,
+    "min": 0.25,
+    "max": 0.33
+   },
+   "careless_turns": {
+    "mean": 0,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "tracking_ratio": {
+    "mean": 0.757,
+    "sd": 0.006,
+    "ci95": 0.014,
+    "min": 0.751,
+    "max": 0.762
+   },
+   "mismatch": {
+    "mean": 0,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "alarms_per_h": {
+    "mean": 4.333,
+    "sd": 4.01,
+    "ci95": 9.963,
+    "min": 0.5,
+    "max": 8.5
+   },
+   "mttr_s": {
+    "mean": 233.0,
+    "sd": 30.957,
+    "ci95": 76.909,
+    "min": 197.6,
+    "max": 255.0
+   },
+   "mtta_s": {
+    "mean": 24.767,
+    "sd": 6.403,
+    "ci95": 15.908,
+    "min": 17.4,
+    "max": 29.0
+   },
+   "interventions": {
+    "mean": 6,
+    "sd": 4.0,
+    "ci95": 9.937,
+    "min": 2,
+    "max": 10
+   },
+   "queued": {
+    "mean": 4.667,
+    "sd": 1.155,
+    "ci95": 2.869,
+    "min": 4,
+    "max": 6
+   },
+   "site_putaway_h": {
+    "mean": 23.5,
+    "sd": 16.225,
+    "ci95": 40.308,
+    "min": 5.5,
+    "max": 37.0
+   },
+   "site_shipped_h": {
+    "mean": 31.833,
+    "sd": 2.887,
+    "ci95": 7.172,
+    "min": 28.5,
+    "max": 33.5
+   },
+   "site_tote_h": {
+    "mean": 82.333,
+    "sd": 0.764,
+    "ci95": 1.897,
+    "min": 81.5,
+    "max": 83.0
+   },
+   "site_picks": {
+    "mean": 368.667,
+    "sd": 8.083,
+    "ci95": 20.081,
+    "min": 360,
+    "max": 376
+   },
+   "site_units": {
+    "mean": 948,
+    "sd": 22.113,
+    "ci95": 54.937,
+    "min": 931,
+    "max": 973
+   },
+   "site_dock_to_stock_avg": {
+    "mean": 588.533,
+    "sd": 90.502,
+    "ci95": 224.838,
+    "min": 484.9,
+    "max": 652.0
+   },
+   "site_dock_to_stock_p90": {
+    "mean": 931.033,
+    "sd": 170.613,
+    "ci95": 423.861,
+    "min": 738.6,
+    "max": 1063.8
+   },
+   "site_picker_wait_s": {
+    "mean": 3975.467,
+    "sd": 68.047,
+    "ci95": 169.053,
+    "min": 3934.0,
+    "max": 4054.0
+   },
+   "site_staged_in": {
+    "mean": 4,
+    "sd": 2.0,
+    "ci95": 4.969,
+    "min": 2,
+    "max": 6
+   },
+   "site_tote_backlog": {
+    "mean": 0.333,
+    "sd": 0.577,
+    "ci95": 1.434,
+    "min": 0,
+    "max": 1
+   },
+   "site_exceptions": {
+    "mean": 1.333,
+    "sd": 0.577,
+    "ci95": 1.434,
+    "min": 1,
+    "max": 2
+   },
+   "site_rack_fill": {
+    "mean": 0.683,
+    "sd": 0.03,
+    "ci95": 0.075,
+    "min": 0.66,
+    "max": 0.717
+   },
+   "agf_moves_per_vehicle_h": {
+    "mean": 5.533,
+    "sd": 1.429,
+    "ci95": 3.549,
+    "min": 3.9,
+    "max": 6.55
+   },
+   "agf_m_per_move": {
+    "mean": 256.367,
+    "sd": 37.921,
+    "ci95": 94.209,
+    "min": 226.4,
+    "max": 299.0
+   },
+   "amr_orders_per_vehicle_h": {
+    "mean": 5.88,
+    "sd": 0.056,
+    "ci95": 0.138,
+    "min": 5.82,
+    "max": 5.93
+   },
+   "picker_lph": {
+    "mean": 26.333,
+    "sd": 0.603,
+    "ci95": 1.497,
+    "min": 25.7,
+    "max": 26.9
+   },
+   "picker_uph": {
+    "mean": 67.7,
+    "sd": 1.587,
+    "ci95": 3.944,
+    "min": 66.5,
+    "max": 69.5
+   }
+  },
+  "locks+resolve/saturated": {
+   "runs": 3,
+   "done": {
+    "mean": 257.667,
+    "sd": 3.786,
+    "ci95": 9.406,
+    "min": 255,
+    "max": 262
+   },
+   "throughput_h": {
+    "mean": 128.833,
+    "sd": 1.893,
+    "ci95": 4.703,
+    "min": 127.5,
+    "max": 131.0
+   },
+   "cycle_avg": {
+    "mean": 2175.067,
+    "sd": 54.737,
+    "ci95": 135.986,
+    "min": 2116.3,
+    "max": 2224.6
+   },
+   "cycle_p90": {
+    "mean": 3438.6,
+    "sd": 252.537,
+    "ci95": 627.387,
+    "min": 3147.0,
+    "max": 3585.8
+   },
+   "wait_avg": {
+    "mean": 1502.8,
+    "sd": 54.458,
+    "ci95": 135.292,
+    "min": 1442.0,
+    "max": 1547.1
+   },
+   "exec_avg": {
+    "mean": 672.233,
+    "sd": 6.549,
+    "ci95": 16.271,
+    "min": 664.9,
+    "max": 677.5
+   },
+   "traffic_wait_ratio": {
+    "mean": 0.12,
+    "sd": 0.012,
+    "ci95": 0.029,
+    "min": 0.11,
+    "max": 0.133
+   },
+   "utilization": {
+    "mean": 0.997,
+    "sd": 0.002,
+    "ci95": 0.004,
+    "min": 0.995,
+    "max": 0.998
+   },
+   "deadlocks": {
+    "mean": 0,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "deadlocks_resolved": {
+    "mean": 0,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "reroutes": {
+    "mean": 95.333,
+    "sd": 19.399,
+    "ci95": 48.194,
+    "min": 73,
+    "max": 108
+   },
+   "evasions": {
+    "mean": 3.667,
+    "sd": 0.577,
+    "ci95": 1.434,
+    "min": 3,
+    "max": 4
+   },
+   "protective_stops": {
+    "mean": 100.667,
+    "sd": 26.839,
+    "ci95": 66.677,
+    "min": 80,
+    "max": 131
+   },
+   "protective_human": {
+    "mean": 5,
+    "sd": 1.732,
+    "ci95": 4.303,
+    "min": 4,
+    "max": 7
+   },
+   "near_miss_fms": {
+    "mean": 4,
+    "sd": 2.646,
+    "ci95": 6.573,
+    "min": 2,
+    "max": 7
+   },
+   "contacts": {
+    "mean": 3,
+    "sd": 1.732,
+    "ci95": 4.303,
+    "min": 1,
+    "max": 4
+   },
+   "contacts_moving": {
+    "mean": 1,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 1,
+    "max": 1
+   },
+   "contacts_struck": {
+    "mean": 2,
+    "sd": 1.732,
+    "ci95": 4.303,
+    "min": 0,
+    "max": 3
+   },
+   "contacts_static": {
+    "mean": 0,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "contacts_human": {
+    "mean": 1.667,
+    "sd": 2.082,
+    "ci95": 5.172,
+    "min": 0,
+    "max": 4
+   },
+   "contacts_human_moving": {
+    "mean": 0.667,
+    "sd": 0.577,
+    "ci95": 1.434,
+    "min": 0,
+    "max": 1
+   },
+   "near_misses": {
+    "mean": 0,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "close_calls": {
+    "mean": 1422.333,
+    "sd": 30.73,
+    "ci95": 76.344,
+    "min": 1394,
+    "max": 1455
+   },
+   "clearance_violations": {
+    "mean": 1.667,
+    "sd": 1.155,
+    "ci95": 2.869,
+    "min": 1,
+    "max": 3
+   },
+   "min_gap_moving": {
+    "mean": 0.05,
+    "sd": 0.087,
+    "ci95": 0.215,
+    "min": 0.0,
+    "max": 0.15
+   },
+   "min_amr_gap": {
+    "mean": 0.33,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 0.33,
+    "max": 0.33
+   },
+   "careless_turns": {
+    "mean": 0,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "tracking_ratio": {
+    "mean": 0.776,
+    "sd": 0.005,
+    "ci95": 0.012,
+    "min": 0.77,
+    "max": 0.779
+   },
+   "mismatch": {
+    "mean": 0,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "alarms_per_h": {
+    "mean": 4.0,
+    "sd": 1.323,
+    "ci95": 3.286,
+    "min": 2.5,
+    "max": 5.0
+   },
+   "mttr_s": {
+    "mean": 228.4,
+    "sd": 52.18,
+    "ci95": 129.633,
+    "min": 178.9,
+    "max": 282.9
+   },
+   "mtta_s": {
+    "mean": 25.533,
+    "sd": 7.223,
+    "ci95": 17.945,
+    "min": 17.2,
+    "max": 30.0
+   },
+   "interventions": {
+    "mean": 5.667,
+    "sd": 3.215,
+    "ci95": 7.986,
+    "min": 2,
+    "max": 8
+   },
+   "queued": {
+    "mean": 118,
+    "sd": 3.606,
+    "ci95": 8.957,
+    "min": 114,
+    "max": 121
+   },
+   "site_putaway_h": {
+    "mean": 47.0,
+    "sd": 1.803,
+    "ci95": 4.479,
+    "min": 45.5,
+    "max": 49.0
+   },
+   "site_shipped_h": {
+    "mean": 37.167,
+    "sd": 1.756,
+    "ci95": 4.362,
+    "min": 35.5,
+    "max": 39.0
+   },
+   "site_tote_h": {
+    "mean": 111.667,
+    "sd": 5.752,
+    "ci95": 14.289,
+    "min": 106.0,
+    "max": 117.5
+   },
+   "site_picks": {
+    "mean": 515.333,
+    "sd": 23.671,
+    "ci95": 58.808,
+    "min": 488,
+    "max": 529
+   },
+   "site_units": {
+    "mean": 1331.333,
+    "sd": 86.199,
+    "ci95": 214.148,
+    "min": 1237,
+    "max": 1406
+   },
+   "site_dock_to_stock_avg": {
+    "mean": 1736.233,
+    "sd": 51.979,
+    "ci95": 129.133,
+    "min": 1692.5,
+    "max": 1793.7
+   },
+   "site_dock_to_stock_p90": {
+    "mean": 2082.667,
+    "sd": 125.979,
+    "ci95": 312.975,
+    "min": 1976.8,
+    "max": 2222.0
+   },
+   "site_picker_wait_s": {
+    "mean": 6168.767,
+    "sd": 260.797,
+    "ci95": 647.907,
+    "min": 5970.9,
+    "max": 6464.3
+   },
+   "site_staged_in": {
+    "mean": 22.667,
+    "sd": 1.155,
+    "ci95": 2.869,
+    "min": 22,
+    "max": 24
+   },
+   "site_tote_backlog": {
+    "mean": 0.333,
+    "sd": 0.577,
+    "ci95": 1.434,
+    "min": 0,
+    "max": 1
+   },
+   "site_exceptions": {
+    "mean": 3,
+    "sd": 0.0,
+    "ci95": 0.0,
+    "min": 3,
+    "max": 3
+   },
+   "site_rack_fill": {
+    "mean": 0.714,
+    "sd": 0.009,
+    "ci95": 0.022,
+    "min": 0.704,
+    "max": 0.721
+   },
+   "agf_moves_per_vehicle_h": {
+    "mean": 8.417,
+    "sd": 0.202,
+    "ci95": 0.502,
+    "min": 8.2,
+    "max": 8.6
+   },
+   "agf_m_per_move": {
+    "mean": 199.5,
+    "sd": 5.557,
+    "ci95": 13.805,
+    "min": 195.9,
+    "max": 205.9
+   },
+   "amr_orders_per_vehicle_h": {
+    "mean": 7.973,
+    "sd": 0.41,
+    "ci95": 1.019,
+    "min": 7.57,
+    "max": 8.39
+   },
+   "picker_lph": {
+    "mean": 36.833,
+    "sd": 1.674,
+    "ci95": 4.16,
+    "min": 34.9,
+    "max": 37.8
+   },
+   "picker_uph": {
+    "mean": 95.1,
+    "sd": 6.121,
+    "ci95": 15.207,
+    "min": 88.4,
+    "max": 100.4
+   }
+  }
+ },
+ "runs": [
+  {
+   "job": {
+    "scenario": "standard",
+    "strategy": "none",
+    "seed": 1,
+    "duration": 7200.0,
+    "warmup": 1800.0,
+    "manager": {},
+    "vehicle": {},
+    "scenario_overrides": {},
+    "operator": true,
+    "label": "none/base"
+   },
+   "kpi": {
+    "queued": 140,
+    "active": 20,
+    "throughput_h": 0.0,
+    "by_kind_h": {},
+    "cycle_avg": null,
+    "cycle_p90": null,
+    "wait_avg": null,
+    "exec_avg": null,
+    "created": 109,
+    "done": 0,
+    "failed": 0,
+    "canceled": 0,
+    "requeued": 0,
+    "exceptions": 0,
+    "robots": 24,
+    "online": 24,
+    "working": 20,
+    "utilization": 0.833,
+    "traffic_wait_ratio": 0.0,
+    "deadlocks": 0,
+    "deadlocks_resolved": 0,
+    "deadlocks_active": 0,
+    "deadlock_avg_s": null,
+    "reroutes": 0,
+    "evasions": 0,
+    "nudges": 0,
+    "protective_stops": 0,
+    "protective_human": 0,
+    "near_miss_fms": 0,
+    "contacts": 0,
+    "contacts_moving": 0,
+    "contacts_struck": 0,
+    "contacts_static": 0,
+    "contacts_human": 0,
+    "contacts_human_moving": 0,
+    "near_misses": 0,
+    "close_calls": 0,
+    "clearance_violations": 0,
+    "min_gap_moving": null,
+    "min_amr_gap": 0.13,
+    "tracking_ratio": 0.608,
+    "mismatch": 0,
+    "comms_lost": 7,
+    "order_rejects": 0,
+    "resends": 0,
+    "mttr_s": null,
+    "alarms_per_h": 3.5,
+    "alerts_per_h": 3.5,
+    "alarms_by_priority_h": {
+     "1": 0.0,
+     "2": 0.0,
+     "3": 3.5,
+     "4": 3.5
+    },
+    "alarms_by_type": {
+     "COMMS_DEGRADED": 7,
+     "STANDOFF": 7
+    },
+    "bus_dropped": 1560,
+    "bus_published": 2675640,
+    "sim_hours": 2.0,
+    "careless_turns": 0,
+    "site_trucks": 7,
+    "site_pallets_unloaded": 5,
+    "site_putaway": 0,
+    "site_shipped": 0,
+    "site_out_backlog": 57,
+    "site_tote_done": 0,
+    "site_tote_orders": 166,
+    "site_tote_backlog": 1,
+    "site_picks": 0,
+    "site_units": 0,
+    "site_putaway_h": 0.0,
+    "site_shipped_h": 0.0,
+    "site_tote_h": 0.0,
+    "site_dock_to_stock_avg": null,
+    "site_dock_to_stock_p90": null,
+    "site_picker_wait_s": 0.0,
+    "site_rack_fill": 0.721,
+    "site_staged_in": 21,
+    "site_staged_out": 0,
+    "site_trucks_waiting": 1,
+    "site_exceptions": 0,
+    "site_retries": 0,
+    "site_redirects": 0,
+    "site_inventory_fixes": 0,
+    "agf_moves_per_vehicle_h": 0.0,
+    "agf_m_per_move": null,
+    "amr_orders_per_vehicle_h": 0.0,
+    "picker_lph": 0.0,
+    "picker_uph": 0.0,
+    "time_share": {
+     "FORKLIFT": {
+      "PROTECTIVE": 1.0,
+      "OFFLINE": 0.0
+     },
+     "CARRIER": {
+      "PROTECTIVE": 0.999,
+      "OFFLINE": 0.001
+     }
+    },
+    "interventions": 0,
+    "mtta_s": 24.9,
+    "lock_problems": 0
+   },
+   "wall_s": 337.8,
+   "forklift_reversals": [
+    0,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "job": {
+    "scenario": "standard",
+    "strategy": "none",
+    "seed": 2,
+    "duration": 7200.0,
+    "warmup": 1800.0,
+    "manager": {},
+    "vehicle": {},
+    "scenario_overrides": {},
+    "operator": true,
+    "label": "none/base"
+   },
+   "kpi": {
+    "queued": 127,
+    "active": 18,
+    "throughput_h": 3.0,
+    "by_kind_h": {
+     "TOTE_PICK": 1.5,
+     "PUTAWAY": 1.0,
+     "PALLET_OUT": 0.5
+    },
+    "cycle_avg": 1189.6,
+    "cycle_p90": 1513.0,
+    "wait_avg": 511.6,
+    "exec_avg": 678.0,
+    "created": 107,
+    "done": 6,
+    "failed": 1,
+    "canceled": 0,
+    "requeued": 1,
+    "exceptions": 0,
+    "robots": 24,
+    "online": 24,
+    "working": 18,
+    "utilization": 0.814,
+    "traffic_wait_ratio": 0.0,
+    "deadlocks": 0,
+    "deadlocks_resolved": 0,
+    "deadlocks_active": 0,
+    "deadlock_avg_s": null,
+    "reroutes": 0,
+    "evasions": 0,
+    "nudges": 0,
+    "protective_stops": 40,
+    "protective_human": 0,
+    "near_miss_fms": 0,
+    "contacts": 0,
+    "contacts_moving": 0,
+    "contacts_struck": 0,
+    "contacts_static": 0,
+    "contacts_human": 0,
+    "contacts_human_moving": 0,
+    "near_misses": 0,
+    "close_calls": 9,
+    "clearance_violations": 0,
+    "min_gap_moving": 0.15,
+    "min_amr_gap": 0.32,
+    "tracking_ratio": 0.535,
+    "mismatch": 0,
+    "comms_lost": 7,
+    "order_rejects": 0,
+    "resends": 0,
+    "mttr_s": 327.6,
+    "alarms_per_h": 11.5,
+    "alerts_per_h": 3.5,
+    "alarms_by_priority_h": {
+     "1": 0.0,
+     "2": 0.5,
+     "3": 11.0,
+     "4": 3.5
+    },
+    "alarms_by_type": {
+     "STANDOFF": 20,
+     "COMMS_DEGRADED": 7,
+     "ROBOT_FAULT": 2,
+     "ALARM_FLOOD": 1
+    },
+    "bus_dropped": 1539,
+    "bus_published": 2639239,
+    "sim_hours": 2.0,
+    "careless_turns": 0,
+    "site_trucks": 3,
+    "site_pallets_unloaded": 7,
+    "site_putaway": 2,
+    "site_shipped": 0,
+    "site_out_backlog": 50,
+    "site_tote_done": 5,
+    "site_tote_orders": 180,
+    "site_tote_backlog": 0,
+    "site_picks": 4,
+    "site_units": 9,
+    "site_putaway_h": 1.0,
+    "site_shipped_h": 0.0,
+    "site_tote_h": 2.5,
+    "site_dock_to_stock_avg": 1381.3,
+    "site_dock_to_stock_p90": 1249.6,
+    "site_picker_wait_s": 17.0,
+    "site_rack_fill": 0.69,
+    "site_staged_in": 21,
+    "site_staged_out": 1,
+    "site_trucks_waiting": 0,
+    "site_exceptions": 0,
+    "site_retries": 0,
+    "site_redirects": 0,
+    "site_inventory_fixes": 0,
+    "agf_moves_per_vehicle_h": 0.1,
+    "agf_m_per_move": 220.0,
+    "amr_orders_per_vehicle_h": 0.18,
+    "picker_lph": 0.3,
+    "picker_uph": 0.6,
+    "time_share": {
+     "FORKLIFT": {
+      "PROTECTIVE": 0.98,
+      "FAULT": 0.009,
+      "MOVING": 0.008,
+      "ACTION": 0.002,
+      "OFFLINE": 0.001,
+      "IDLE": 0.0
+     },
+     "CARRIER": {
+      "PROTECTIVE": 0.983,
+      "MOVING": 0.009,
+      "PARKED": 0.007,
+      "ACTION": 0.001,
+      "OFFLINE": 0.0,
+      "IDLE": 0.0
+     }
+    },
+    "interventions": 3,
+    "mtta_s": 26.9,
+    "lock_problems": 0
+   },
+   "wall_s": 339.8,
+   "forklift_reversals": [
+    0,
+    0,
+    0,
+    2
+   ]
+  },
+  {
+   "job": {
+    "scenario": "standard",
+    "strategy": "none",
+    "seed": 3,
+    "duration": 7200.0,
+    "warmup": 1800.0,
+    "manager": {},
+    "vehicle": {},
+    "scenario_overrides": {},
+    "operator": true,
+    "label": "none/base"
+   },
+   "kpi": {
+    "queued": 142,
+    "active": 20,
+    "throughput_h": 0.5,
+    "by_kind_h": {
+     "PUTAWAY": 0.5
+    },
+    "cycle_avg": 909.2,
+    "cycle_p90": 909.2,
+    "wait_avg": 525.8,
+    "exec_avg": 383.4,
+    "created": 128,
+    "done": 1,
+    "failed": 0,
+    "canceled": 0,
+    "requeued": 2,
+    "exceptions": 0,
+    "robots": 24,
+    "online": 24,
+    "working": 20,
+    "utilization": 0.842,
+    "traffic_wait_ratio": 0.0,
+    "deadlocks": 0,
+    "deadlocks_resolved": 0,
+    "deadlocks_active": 0,
+    "deadlock_avg_s": null,
+    "reroutes": 0,
+    "evasions": 0,
+    "nudges": 0,
+    "protective_stops": 16,
+    "protective_human": 0,
+    "near_miss_fms": 0,
+    "contacts": 2,
+    "contacts_moving": 0,
+    "contacts_struck": 2,
+    "contacts_static": 0,
+    "contacts_human": 0,
+    "contacts_human_moving": 0,
+    "near_misses": 0,
+    "close_calls": 0,
+    "clearance_violations": 0,
+    "min_gap_moving": 0.94,
+    "min_amr_gap": 0.22,
+    "tracking_ratio": 0.54,
+    "mismatch": 0,
+    "comms_lost": 11,
+    "order_rejects": 0,
+    "resends": 0,
+    "mttr_s": 225.1,
+    "alarms_per_h": 11.0,
+    "alerts_per_h": 5.5,
+    "alarms_by_priority_h": {
+     "1": 0.5,
+     "2": 0.0,
+     "3": 10.5,
+     "4": 5.5
+    },
+    "alarms_by_type": {
+     "STANDOFF": 18,
+     "COMMS_DEGRADED": 11,
+     "LOCALIZATION_LOST": 2,
+     "ROBOT_COLLISION": 1,
+     "ROBOT_FAULT": 1
+    },
+    "bus_dropped": 2451,
+    "bus_published": 2647403,
+    "sim_hours": 2.0,
+    "careless_turns": 0,
+    "site_trucks": 7,
+    "site_pallets_unloaded": 24,
+    "site_putaway": 1,
+    "site_shipped": 0,
+    "site_out_backlog": 55,
+    "site_tote_done": 0,
+    "site_tote_orders": 181,
+    "site_tote_backlog": 1,
+    "site_picks": 0,
+    "site_units": 0,
+    "site_putaway_h": 0.5,
+    "site_shipped_h": 0.0,
+    "site_tote_h": 0.0,
+    "site_dock_to_stock_avg": 909.2,
+    "site_dock_to_stock_p90": 909.2,
+    "site_picker_wait_s": 0.0,
+    "site_rack_fill": 0.696,
+    "site_staged_in": 24,
+    "site_staged_out": 0,
+    "site_trucks_waiting": 0,
+    "site_exceptions": 0,
+    "site_retries": 0,
+    "site_redirects": 0,
+    "site_inventory_fixes": 0,
+    "agf_moves_per_vehicle_h": 0.05,
+    "agf_m_per_move": 320.0,
+    "amr_orders_per_vehicle_h": 0.0,
+    "picker_lph": 0.0,
+    "picker_uph": 0.0,
+    "time_share": {
+     "FORKLIFT": {
+      "PROTECTIVE": 0.982,
+      "FAULT": 0.011,
+      "MOVING": 0.006,
+      "ACTION": 0.002,
+      "OFFLINE": 0.0,
+      "IDLE": 0.0
+     },
+     "CARRIER": {
+      "PROTECTIVE": 0.998,
+      "OFFLINE": 0.001,
+      "FAULT": 0.001
+     }
+    },
+    "interventions": 6,
+    "mtta_s": 23.7,
+    "lock_problems": 0
+   },
+   "wall_s": 365.1,
+   "forklift_reversals": [
+    0,
+    0,
+    0,
+    6
+   ]
+  },
+  {
+   "job": {
+    "scenario": "standard",
+    "strategy": "locks",
+    "seed": 1,
+    "duration": 7200.0,
+    "warmup": 1800.0,
+    "manager": {},
+    "vehicle": {},
+    "scenario_overrides": {},
+    "operator": true,
+    "label": "locks/base"
+   },
+   "kpi": {
+    "queued": 4,
+    "active": 18,
+    "throughput_h": 86.5,
+    "by_kind_h": {
+     "PUTAWAY": 7.5,
+     "TOTE_PICK": 45.5,
+     "PALLET_OUT": 33.5
+    },
+    "cycle_avg": 837.4,
+    "cycle_p90": 1397.2,
+    "wait_avg": 67.6,
+    "exec_avg": 769.8,
+    "created": 168,
+    "done": 173,
+    "failed": 0,
+    "canceled": 0,
+    "requeued": 0,
+    "exceptions": 1,
+    "robots": 24,
+    "online": 24,
+    "working": 17,
+    "utilization": 0.748,
+    "traffic_wait_ratio": 0.093,
+    "deadlocks": 0,
+    "deadlocks_resolved": 0,
+    "deadlocks_active": 0,
+    "deadlock_avg_s": null,
+    "reroutes": 47,
+    "evasions": 0,
+    "nudges": 10,
+    "protective_stops": 60,
+    "protective_human": 4,
+    "near_miss_fms": 4,
+    "contacts": 0,
+    "contacts_moving": 0,
+    "contacts_struck": 0,
+    "contacts_static": 0,
+    "contacts_human": 0,
+    "contacts_human_moving": 0,
+    "near_misses": 0,
+    "close_calls": 1321,
+    "clearance_violations": 1,
+    "min_gap_moving": 0.1,
+    "min_amr_gap": 0.33,
+    "tracking_ratio": 0.759,
+    "mismatch": 0,
+    "comms_lost": 8,
+    "order_rejects": 0,
+    "resends": 0,
+    "mttr_s": null,
+    "alarms_per_h": 0.0,
+    "alerts_per_h": 6.0,
+    "alarms_by_priority_h": {
+     "1": 0.0,
+     "2": 0.0,
+     "3": 0.0,
+     "4": 6.0
+    },
+    "alarms_by_type": {
+     "COMMS_DEGRADED": 8,
+     "NEAR_MISS": 4
+    },
+    "bus_dropped": 585,
+    "bus_published": 1221606,
+    "sim_hours": 2.0,
+    "careless_turns": 0,
+    "site_trucks": 2,
+    "site_pallets_unloaded": 14,
+    "site_putaway": 15,
+    "site_shipped": 67,
+    "site_out_backlog": 0,
+    "site_tote_done": 167,
+    "site_tote_orders": 162,
+    "site_tote_backlog": 1,
+    "site_picks": 380,
+    "site_units": 959,
+    "site_putaway_h": 7.5,
+    "site_shipped_h": 33.5,
+    "site_tote_h": 83.5,
+    "site_dock_to_stock_avg": 630.3,
+    "site_dock_to_stock_p90": 1012.5,
+    "site_picker_wait_s": 4365.6,
+    "site_rack_fill": 0.654,
+    "site_staged_in": 5,
+    "site_staged_out": 1,
+    "site_trucks_waiting": 0,
+    "site_exceptions": 1,
+    "site_retries": 1,
+    "site_redirects": 0,
+    "site_inventory_fixes": 0,
+    "agf_moves_per_vehicle_h": 4.1,
+    "agf_m_per_move": 289.4,
+    "amr_orders_per_vehicle_h": 5.96,
+    "picker_lph": 27.1,
+    "picker_uph": 68.5,
+    "time_share": {
+     "FORKLIFT": {
+      "MOVING": 0.481,
+      "PARKED": 0.328,
+      "ACTION": 0.084,
+      "WAITING": 0.083,
+      "IDLE": 0.018,
+      "PROTECTIVE": 0.005,
+      "BLOCKED": 0.001,
+      "OFFLINE": 0.0
+     },
+     "CARRIER": {
+      "MOVING": 0.773,
+      "ACTION": 0.097,
+      "WAITING": 0.075,
+      "PARKED": 0.052,
+      "IDLE": 0.001,
+      "BLOCKED": 0.0,
+      "OFFLINE": 0.0
+     }
+    },
+    "interventions": 0,
+    "mtta_s": null,
+    "lock_problems": 0
+   },
+   "wall_s": 190.3,
+   "forklift_reversals": [
+    0,
+    0,
+    0,
+    4
+   ]
+  },
+  {
+   "job": {
+    "scenario": "standard",
+    "strategy": "locks",
+    "seed": 2,
+    "duration": 7200.0,
+    "warmup": 1800.0,
+    "manager": {},
+    "vehicle": {},
+    "scenario_overrides": {},
+    "operator": true,
+    "label": "locks/base"
+   },
+   "kpi": {
+    "queued": 1,
+    "active": 16,
+    "throughput_h": 102.5,
+    "by_kind_h": {
+     "PUTAWAY": 31.5,
+     "TOTE_PICK": 47.5,
+     "PALLET_OUT": 23.5
+    },
+    "cycle_avg": 894.4,
+    "cycle_p90": 1398.0,
+    "wait_avg": 169.9,
+    "exec_avg": 724.5,
+    "created": 193,
+    "done": 205,
+    "failed": 0,
+    "canceled": 0,
+    "requeued": 2,
+    "exceptions": 2,
+    "robots": 24,
+    "online": 24,
+    "working": 16,
+    "utilization": 0.827,
+    "traffic_wait_ratio": 0.141,
+    "deadlocks": 0,
+    "deadlocks_resolved": 0,
+    "deadlocks_active": 0,
+    "deadlock_avg_s": null,
+    "reroutes": 57,
+    "evasions": 4,
+    "nudges": 3,
+    "protective_stops": 70,
+    "protective_human": 7,
+    "near_miss_fms": 4,
+    "contacts": 3,
+    "contacts_moving": 1,
+    "contacts_struck": 2,
+    "contacts_static": 0,
+    "contacts_human": 0,
+    "contacts_human_moving": 0,
+    "near_misses": 0,
+    "close_calls": 1288,
+    "clearance_violations": 0,
+    "min_gap_moving": 0.14,
+    "min_amr_gap": 0.23,
+    "tracking_ratio": 0.761,
+    "mismatch": 0,
+    "comms_lost": 11,
+    "order_rejects": 0,
+    "resends": 1,
+    "mttr_s": 258.7,
+    "alarms_per_h": 5.5,
+    "alerts_per_h": 7.5,
+    "alarms_by_priority_h": {
+     "1": 1.0,
+     "2": 0.0,
+     "3": 4.5,
+     "4": 7.5
+    },
+    "alarms_by_type": {
+     "COMMS_DEGRADED": 11,
+     "TASK_OVERDUE": 6,
+     "NEAR_MISS": 4,
+     "ROBOT_COLLISION": 2,
+     "LOCALIZATION_LOST": 1,
+     "BLOCKED_LONG": 1,
+     "ROBOT_FAULT": 1
+    },
+    "bus_dropped": 1055,
+    "bus_published": 1221791,
+    "sim_hours": 2.0,
+    "careless_turns": 0,
+    "site_trucks": 6,
+    "site_pallets_unloaded": 60,
+    "site_putaway": 63,
+    "site_shipped": 24,
+    "site_out_backlog": 27,
+    "site_tote_done": 172,
+    "site_tote_orders": 169,
+    "site_tote_backlog": 1,
+    "site_picks": 376,
+    "site_units": 976,
+    "site_putaway_h": 31.5,
+    "site_shipped_h": 12.0,
+    "site_tote_h": 86.0,
+    "site_dock_to_stock_avg": 724.3,
+    "site_dock_to_stock_p90": 1099.7,
+    "site_picker_wait_s": 4138.5,
+    "site_rack_fill": 0.707,
+    "site_staged_in": 4,
+    "site_staged_out": 24,
+    "site_trucks_waiting": 0,
+    "site_exceptions": 2,
+    "site_retries": 0,
+    "site_redirects": 2,
+    "site_inventory_fixes": 2,
+    "agf_moves_per_vehicle_h": 4.35,
+    "agf_m_per_move": 297.8,
+    "amr_orders_per_vehicle_h": 6.14,
+    "picker_lph": 26.9,
+    "picker_uph": 69.7,
+    "time_share": {
+     "FORKLIFT": {
+      "MOVING": 0.535,
+      "PARKED": 0.183,
+      "WAITING": 0.131,
+      "ACTION": 0.097,
+      "BLOCKED": 0.018,
+      "IDLE": 0.018,
+      "FAULT": 0.013,
+      "PROTECTIVE": 0.004,
+      "OFFLINE": 0.001
+     },
+     "CARRIER": {
+      "MOVING": 0.76,
+      "WAITING": 0.102,
+      "ACTION": 0.095,
+      "PARKED": 0.04,
+      "IDLE": 0.001,
+      "FAULT": 0.001,
+      "BLOCKED": 0.001,
+      "OFFLINE": 0.0
+     }
+    },
+    "interventions": 5,
+    "mtta_s": 20.7,
+    "lock_problems": 0
+   },
+   "wall_s": 199.8,
+   "forklift_reversals": [
+    0,
+    0,
+    0,
+    5
+   ]
+  },
+  {
+   "job": {
+    "scenario": "standard",
+    "strategy": "locks",
+    "seed": 3,
+    "duration": 7200.0,
+    "warmup": 1800.0,
+    "manager": {},
+    "vehicle": {},
+    "scenario_overrides": {},
+    "operator": true,
+    "label": "locks/base"
+   },
+   "kpi": {
+    "queued": 6,
+    "active": 23,
+    "throughput_h": 97.0,
+    "by_kind_h": {
+     "TOTE_PICK": 38.0,
+     "PALLET_OUT": 32.0,
+     "PUTAWAY": 27.0
+    },
+    "cycle_avg": 766.7,
+    "cycle_p90": 1417.8,
+    "wait_avg": 58.6,
+    "exec_avg": 708.2,
+    "created": 205,
+    "done": 194,
+    "failed": 1,
+    "canceled": 0,
+    "requeued": 0,
+    "exceptions": 2,
+    "robots": 24,
+    "online": 24,
+    "working": 23,
+    "utilization": 0.808,
+    "traffic_wait_ratio": 0.125,
+    "deadlocks": 0,
+    "deadlocks_resolved": 0,
+    "deadlocks_active": 0,
+    "deadlock_avg_s": null,
+    "reroutes": 58,
+    "evasions": 1,
+    "nudges": 0,
+    "protective_stops": 63,
+    "protective_human": 5,
+    "near_miss_fms": 1,
+    "contacts": 25,
+    "contacts_moving": 0,
+    "contacts_struck": 25,
+    "contacts_static": 0,
+    "contacts_human": 25,
+    "contacts_human_moving": 0,
+    "near_misses": 0,
+    "close_calls": 1172,
+    "clearance_violations": 2,
+    "min_gap_moving": 0.12,
+    "min_amr_gap": 0.33,
+    "tracking_ratio": 0.743,
+    "mismatch": 0,
+    "comms_lost": 15,
+    "order_rejects": 2,
+    "resends": 1,
+    "mttr_s": 223.8,
+    "alarms_per_h": 4.5,
+    "alerts_per_h": 8.5,
+    "alarms_by_priority_h": {
+     "1": 1.5,
+     "2": 0.0,
+     "3": 3.0,
+     "4": 8.5
+    },
+    "alarms_by_type": {
+     "COMMS_DEGRADED": 15,
+     "HUMAN_CONTACT": 3,
+     "LOCALIZATION_LOST": 2,
+     "TASK_OVERDUE": 2,
+     "NEAR_MISS": 1,
+     "ROBOT_FAULT": 1,
+     "CONGESTION": 1,
+     "BLOCKED_LONG": 1
+    },
+    "bus_dropped": 1452,
+    "bus_published": 1218644,
+    "sim_hours": 2.0,
+    "careless_turns": 0,
+    "site_trucks": 5,
+    "site_pallets_unloaded": 66,
+    "site_putaway": 54,
+    "site_shipped": 65,
+    "site_out_backlog": 0,
+    "site_tote_done": 145,
+    "site_tote_orders": 151,
+    "site_tote_backlog": 1,
+    "site_picks": 350,
+    "site_units": 899,
+    "site_putaway_h": 27.0,
+    "site_shipped_h": 32.5,
+    "site_tote_h": 72.5,
+    "site_dock_to_stock_avg": 498.2,
+    "site_dock_to_stock_p90": 744.1,
+    "site_picker_wait_s": 3444.4,
+    "site_rack_fill": 0.678,
+    "site_staged_in": 8,
+    "site_staged_out": 0,
+    "site_trucks_waiting": 0,
+    "site_exceptions": 2,
+    "site_retries": 0,
+    "site_redirects": 2,
+    "site_inventory_fixes": 2,
+    "agf_moves_per_vehicle_h": 5.95,
+    "agf_m_per_move": 255.8,
+    "amr_orders_per_vehicle_h": 5.18,
+    "picker_lph": 25.0,
+    "picker_uph": 64.2,
+    "time_share": {
+     "FORKLIFT": {
+      "MOVING": 0.621,
+      "PARKED": 0.135,
+      "ACTION": 0.11,
+      "WAITING": 0.107,
+      "FAULT": 0.013,
+      "PAUSED": 0.004,
+      "BLOCKED": 0.004,
+      "PROTECTIVE": 0.003,
+      "OFFLINE": 0.002,
+      "IDLE": 0.001
+     },
+     "CARRIER": {
+      "MOVING": 0.708,
+      "PARKED": 0.098,
+      "WAITING": 0.094,
+      "ACTION": 0.084,
+      "BLOCKED": 0.011,
+      "FAULT": 0.004,
+      "IDLE": 0.001,
+      "OFFLINE": 0.001
+     }
+    },
+    "interventions": 10,
+    "mtta_s": 25.8,
+    "lock_problems": 0
+   },
+   "wall_s": 191.4,
+   "forklift_reversals": [
+    0,
+    0,
+    0,
+    2
+   ]
+  },
+  {
+   "job": {
+    "scenario": "standard",
+    "strategy": "locks+resolve",
+    "seed": 1,
+    "duration": 7200.0,
+    "warmup": 1800.0,
+    "manager": {},
+    "vehicle": {},
+    "scenario_overrides": {},
+    "operator": true,
+    "label": "locks+resolve/base"
+   },
+   "kpi": {
+    "queued": 4,
+    "active": 18,
+    "throughput_h": 86.5,
+    "by_kind_h": {
+     "PUTAWAY": 7.5,
+     "TOTE_PICK": 45.5,
+     "PALLET_OUT": 33.5
+    },
+    "cycle_avg": 837.4,
+    "cycle_p90": 1397.2,
+    "wait_avg": 67.6,
+    "exec_avg": 769.8,
+    "created": 168,
+    "done": 173,
+    "failed": 0,
+    "canceled": 0,
+    "requeued": 0,
+    "exceptions": 1,
+    "robots": 24,
+    "online": 24,
+    "working": 17,
+    "utilization": 0.748,
+    "traffic_wait_ratio": 0.093,
+    "deadlocks": 0,
+    "deadlocks_resolved": 0,
+    "deadlocks_active": 0,
+    "deadlock_avg_s": null,
+    "reroutes": 47,
+    "evasions": 0,
+    "nudges": 10,
+    "protective_stops": 60,
+    "protective_human": 4,
+    "near_miss_fms": 4,
+    "contacts": 0,
+    "contacts_moving": 0,
+    "contacts_struck": 0,
+    "contacts_static": 0,
+    "contacts_human": 0,
+    "contacts_human_moving": 0,
+    "near_misses": 0,
+    "close_calls": 1321,
+    "clearance_violations": 1,
+    "min_gap_moving": 0.1,
+    "min_amr_gap": 0.33,
+    "tracking_ratio": 0.759,
+    "mismatch": 0,
+    "comms_lost": 8,
+    "order_rejects": 0,
+    "resends": 0,
+    "mttr_s": null,
+    "alarms_per_h": 0.0,
+    "alerts_per_h": 6.0,
+    "alarms_by_priority_h": {
+     "1": 0.0,
+     "2": 0.0,
+     "3": 0.0,
+     "4": 6.0
+    },
+    "alarms_by_type": {
+     "COMMS_DEGRADED": 8,
+     "NEAR_MISS": 4
+    },
+    "bus_dropped": 585,
+    "bus_published": 1221606,
+    "sim_hours": 2.0,
+    "careless_turns": 0,
+    "site_trucks": 2,
+    "site_pallets_unloaded": 14,
+    "site_putaway": 15,
+    "site_shipped": 67,
+    "site_out_backlog": 0,
+    "site_tote_done": 167,
+    "site_tote_orders": 162,
+    "site_tote_backlog": 1,
+    "site_picks": 380,
+    "site_units": 959,
+    "site_putaway_h": 7.5,
+    "site_shipped_h": 33.5,
+    "site_tote_h": 83.5,
+    "site_dock_to_stock_avg": 630.3,
+    "site_dock_to_stock_p90": 1012.5,
+    "site_picker_wait_s": 4365.6,
+    "site_rack_fill": 0.654,
+    "site_staged_in": 5,
+    "site_staged_out": 1,
+    "site_trucks_waiting": 0,
+    "site_exceptions": 1,
+    "site_retries": 1,
+    "site_redirects": 0,
+    "site_inventory_fixes": 0,
+    "agf_moves_per_vehicle_h": 4.1,
+    "agf_m_per_move": 289.4,
+    "amr_orders_per_vehicle_h": 5.96,
+    "picker_lph": 27.1,
+    "picker_uph": 68.5,
+    "time_share": {
+     "FORKLIFT": {
+      "MOVING": 0.481,
+      "PARKED": 0.328,
+      "ACTION": 0.084,
+      "WAITING": 0.083,
+      "IDLE": 0.018,
+      "PROTECTIVE": 0.005,
+      "BLOCKED": 0.001,
+      "OFFLINE": 0.0
+     },
+     "CARRIER": {
+      "MOVING": 0.773,
+      "ACTION": 0.097,
+      "WAITING": 0.075,
+      "PARKED": 0.052,
+      "IDLE": 0.001,
+      "BLOCKED": 0.0,
+      "OFFLINE": 0.0
+     }
+    },
+    "interventions": 0,
+    "mtta_s": null,
+    "lock_problems": 0
+   },
+   "wall_s": 195.1,
+   "forklift_reversals": [
+    0,
+    0,
+    0,
+    4
+   ]
+  },
+  {
+   "job": {
+    "scenario": "standard",
+    "strategy": "locks+resolve",
+    "seed": 2,
+    "duration": 7200.0,
+    "warmup": 1800.0,
+    "manager": {},
+    "vehicle": {},
+    "scenario_overrides": {},
+    "operator": true,
+    "label": "locks+resolve/base"
+   },
+   "kpi": {
+    "queued": 1,
+    "active": 16,
+    "throughput_h": 102.5,
+    "by_kind_h": {
+     "PUTAWAY": 31.5,
+     "TOTE_PICK": 47.5,
+     "PALLET_OUT": 23.5
+    },
+    "cycle_avg": 894.4,
+    "cycle_p90": 1398.0,
+    "wait_avg": 169.9,
+    "exec_avg": 724.5,
+    "created": 193,
+    "done": 205,
+    "failed": 0,
+    "canceled": 0,
+    "requeued": 2,
+    "exceptions": 2,
+    "robots": 24,
+    "online": 24,
+    "working": 16,
+    "utilization": 0.827,
+    "traffic_wait_ratio": 0.141,
+    "deadlocks": 0,
+    "deadlocks_resolved": 0,
+    "deadlocks_active": 0,
+    "deadlock_avg_s": null,
+    "reroutes": 57,
+    "evasions": 4,
+    "nudges": 3,
+    "protective_stops": 70,
+    "protective_human": 7,
+    "near_miss_fms": 4,
+    "contacts": 3,
+    "contacts_moving": 1,
+    "contacts_struck": 2,
+    "contacts_static": 0,
+    "contacts_human": 0,
+    "contacts_human_moving": 0,
+    "near_misses": 0,
+    "close_calls": 1288,
+    "clearance_violations": 0,
+    "min_gap_moving": 0.14,
+    "min_amr_gap": 0.23,
+    "tracking_ratio": 0.761,
+    "mismatch": 0,
+    "comms_lost": 11,
+    "order_rejects": 0,
+    "resends": 1,
+    "mttr_s": 258.7,
+    "alarms_per_h": 5.5,
+    "alerts_per_h": 7.5,
+    "alarms_by_priority_h": {
+     "1": 1.0,
+     "2": 0.0,
+     "3": 4.5,
+     "4": 7.5
+    },
+    "alarms_by_type": {
+     "COMMS_DEGRADED": 11,
+     "TASK_OVERDUE": 6,
+     "NEAR_MISS": 4,
+     "ROBOT_COLLISION": 2,
+     "LOCALIZATION_LOST": 1,
+     "BLOCKED_LONG": 1,
+     "ROBOT_FAULT": 1
+    },
+    "bus_dropped": 1055,
+    "bus_published": 1221791,
+    "sim_hours": 2.0,
+    "careless_turns": 0,
+    "site_trucks": 6,
+    "site_pallets_unloaded": 60,
+    "site_putaway": 63,
+    "site_shipped": 24,
+    "site_out_backlog": 27,
+    "site_tote_done": 172,
+    "site_tote_orders": 169,
+    "site_tote_backlog": 1,
+    "site_picks": 376,
+    "site_units": 976,
+    "site_putaway_h": 31.5,
+    "site_shipped_h": 12.0,
+    "site_tote_h": 86.0,
+    "site_dock_to_stock_avg": 724.3,
+    "site_dock_to_stock_p90": 1099.7,
+    "site_picker_wait_s": 4138.5,
+    "site_rack_fill": 0.707,
+    "site_staged_in": 4,
+    "site_staged_out": 24,
+    "site_trucks_waiting": 0,
+    "site_exceptions": 2,
+    "site_retries": 0,
+    "site_redirects": 2,
+    "site_inventory_fixes": 2,
+    "agf_moves_per_vehicle_h": 4.35,
+    "agf_m_per_move": 297.8,
+    "amr_orders_per_vehicle_h": 6.14,
+    "picker_lph": 26.9,
+    "picker_uph": 69.7,
+    "time_share": {
+     "FORKLIFT": {
+      "MOVING": 0.535,
+      "PARKED": 0.183,
+      "WAITING": 0.131,
+      "ACTION": 0.097,
+      "BLOCKED": 0.018,
+      "IDLE": 0.018,
+      "FAULT": 0.013,
+      "PROTECTIVE": 0.004,
+      "OFFLINE": 0.001
+     },
+     "CARRIER": {
+      "MOVING": 0.76,
+      "WAITING": 0.102,
+      "ACTION": 0.095,
+      "PARKED": 0.04,
+      "IDLE": 0.001,
+      "FAULT": 0.001,
+      "BLOCKED": 0.001,
+      "OFFLINE": 0.0
+     }
+    },
+    "interventions": 5,
+    "mtta_s": 20.7,
+    "lock_problems": 0
+   },
+   "wall_s": 194.7,
+   "forklift_reversals": [
+    0,
+    0,
+    0,
+    5
+   ]
+  },
+  {
+   "job": {
+    "scenario": "standard",
+    "strategy": "locks+resolve",
+    "seed": 3,
+    "duration": 7200.0,
+    "warmup": 1800.0,
+    "manager": {},
+    "vehicle": {},
+    "scenario_overrides": {},
+    "operator": true,
+    "label": "locks+resolve/base"
+   },
+   "kpi": {
+    "queued": 17,
+    "active": 21,
+    "throughput_h": 101.5,
+    "by_kind_h": {
+     "TOTE_PICK": 44.0,
+     "PALLET_OUT": 25.0,
+     "PUTAWAY": 32.5
+    },
+    "cycle_avg": 941.5,
+    "cycle_p90": 1595.6,
+    "wait_avg": 205.7,
+    "exec_avg": 735.8,
+    "created": 225,
+    "done": 203,
+    "failed": 2,
+    "canceled": 0,
+    "requeued": 2,
+    "exceptions": 1,
+    "robots": 24,
+    "online": 24,
+    "working": 21,
+    "utilization": 0.873,
+    "traffic_wait_ratio": 0.179,
+    "deadlocks": 1,
+    "deadlocks_resolved": 1,
+    "deadlocks_active": 0,
+    "deadlock_avg_s": 0.2,
+    "reroutes": 83,
+    "evasions": 0,
+    "nudges": 2,
+    "protective_stops": 96,
+    "protective_human": 6,
+    "near_miss_fms": 6,
+    "contacts": 6,
+    "contacts_moving": 0,
+    "contacts_struck": 6,
+    "contacts_static": 0,
+    "contacts_human": 5,
+    "contacts_human_moving": 0,
+    "near_misses": 0,
+    "close_calls": 1236,
+    "clearance_violations": 3,
+    "min_gap_moving": 0.08,
+    "min_amr_gap": 0.33,
+    "tracking_ratio": 0.754,
+    "mismatch": 0,
+    "comms_lost": 14,
+    "order_rejects": 132,
+    "resends": 3,
+    "mttr_s": 297.2,
+    "alarms_per_h": 12.5,
+    "alerts_per_h": 10.5,
+    "alarms_by_priority_h": {
+     "1": 1.5,
+     "2": 0.0,
+     "3": 11.0,
+     "4": 10.5
+    },
+    "alarms_by_type": {
+     "COMMS_DEGRADED": 14,
+     "BLOCKED_LONG": 8,
+     "TASK_OVERDUE": 8,
+     "NEAR_MISS": 6,
+     "ROBOT_FAULT": 3,
+     "HUMAN_CONTACT": 2,
+     "LOCALIZATION_LOST": 2,
+     "CONGESTION": 1,
+     "ROBOT_COLLISION": 1,
+     "STANDOFF": 1
+    },
+    "bus_dropped": 1421,
+    "bus_published": 1222510,
+    "sim_hours": 2.0,
+    "careless_turns": 0,
+    "site_trucks": 6,
+    "site_pallets_unloaded": 82,
+    "site_putaway": 65,
+    "site_shipped": 51,
+    "site_out_backlog": 0,
+    "site_tote_done": 163,
+    "site_tote_orders": 158,
+    "site_tote_backlog": 0,
+    "site_picks": 357,
+    "site_units": 921,
+    "site_putaway_h": 32.5,
+    "site_shipped_h": 25.5,
+    "site_tote_h": 81.5,
+    "site_dock_to_stock_avg": 737.7,
+    "site_dock_to_stock_p90": 1267.4,
+    "site_picker_wait_s": 3754.3,
+    "site_rack_fill": 0.708,
+    "site_staged_in": 14,
+    "site_staged_out": 1,
+    "site_trucks_waiting": 0,
+    "site_exceptions": 1,
+    "site_retries": 0,
+    "site_redirects": 1,
+    "site_inventory_fixes": 1,
+    "agf_moves_per_vehicle_h": 5.8,
+    "agf_m_per_move": 234.7,
+    "amr_orders_per_vehicle_h": 5.82,
+    "picker_lph": 25.5,
+    "picker_uph": 65.8,
+    "time_share": {
+     "FORKLIFT": {
+      "MOVING": 0.559,
+      "WAITING": 0.168,
+      "ACTION": 0.11,
+      "PARKED": 0.108,
+      "BLOCKED": 0.027,
+      "FAULT": 0.019,
+      "PROTECTIVE": 0.008,
+      "IDLE": 0.001,
+      "OFFLINE": 0.001
+     },
+     "CARRIER": {
+      "MOVING": 0.725,
+      "WAITING": 0.128,
+      "ACTION": 0.089,
+      "PARKED": 0.037,
+      "FAULT": 0.01,
+      "BLOCKED": 0.009,
+      "OFFLINE": 0.001,
+      "IDLE": 0.001
+     }
+    },
+    "interventions": 14,
+    "mtta_s": 24.4,
+    "lock_problems": 0
+   },
+   "wall_s": 195.7,
+   "forklift_reversals": [
+    0,
+    0,
+    0,
+    7
+   ]
+  },
+  {
+   "job": {
+    "scenario": "standard",
+    "strategy": "locks+resolve",
+    "seed": 1,
+    "duration": 7200.0,
+    "warmup": 1800.0,
+    "manager": {},
+    "vehicle": {},
+    "scenario_overrides": {
+     "pick_limit": "zone"
+    },
+    "operator": true,
+    "label": "locks+resolve/pick-zone"
+   },
+   "kpi": {
+    "queued": 4,
+    "active": 20,
+    "throughput_h": 85.0,
+    "by_kind_h": {
+     "PUTAWAY": 7.0,
+     "TOTE_PICK": 45.5,
+     "PALLET_OUT": 32.5
+    },
+    "cycle_avg": 1045.8,
+    "cycle_p90": 1906.8,
+    "wait_avg": 207.9,
+    "exec_avg": 837.9,
+    "created": 168,
+    "done": 170,
+    "failed": 0,
+    "canceled": 0,
+    "requeued": 1,
+    "exceptions": 1,
+    "robots": 24,
+    "online": 24,
+    "working": 20,
+    "utilization": 0.822,
+    "traffic_wait_ratio": 0.118,
+    "deadlocks": 0,
+    "deadlocks_resolved": 0,
+    "deadlocks_active": 0,
+    "deadlock_avg_s": null,
+    "reroutes": 70,
+    "evasions": 1,
+    "nudges": 8,
+    "protective_stops": 84,
+    "protective_human": 6,
+    "near_miss_fms": 5,
+    "contacts": 4,
+    "contacts_moving": 3,
+    "contacts_struck": 1,
+    "contacts_static": 0,
+    "contacts_human": 4,
+    "contacts_human_moving": 3,
+    "near_misses": 1,
+    "close_calls": 1321,
+    "clearance_violations": 2,
+    "min_gap_moving": 0.0,
+    "min_amr_gap": 0.25,
+    "tracking_ratio": 0.759,
+    "mismatch": 0,
+    "comms_lost": 5,
+    "order_rejects": 0,
+    "resends": 0,
+    "mttr_s": 274.6,
+    "alarms_per_h": 7.5,
+    "alerts_per_h": 5.0,
+    "alarms_by_priority_h": {
+     "1": 2.0,
+     "2": 0.0,
+     "3": 5.5,
+     "4": 5.0
+    },
+    "alarms_by_type": {
+     "TASK_OVERDUE": 6,
+     "NEAR_MISS": 5,
+     "COMMS_DEGRADED": 5,
+     "BLOCKED_LONG": 4,
+     "ROBOT_COLLISION": 3,
+     "HUMAN_CONTACT": 1,
+     "STANDOFF": 1
+    },
+    "bus_dropped": 334,
+    "bus_published": 1156760,
+    "sim_hours": 2.0,
+    "careless_turns": 0,
+    "site_trucks": 2,
+    "site_pallets_unloaded": 14,
+    "site_putaway": 14,
+    "site_shipped": 67,
+    "site_out_backlog": 0,
+    "site_tote_done": 170,
+    "site_tote_orders": 162,
+    "site_tote_backlog": 1,
+    "site_picks": 388,
+    "site_units": 987,
+    "site_putaway_h": 7.0,
+    "site_shipped_h": 33.5,
+    "site_tote_h": 85.0,
+    "site_dock_to_stock_avg": 584.1,
+    "site_dock_to_stock_p90": 851.7,
+    "site_picker_wait_s": 4461.5,
+    "site_rack_fill": 0.66,
+    "site_staged_in": 2,
+    "site_staged_out": 0,
+    "site_trucks_waiting": 0,
+    "site_exceptions": 1,
+    "site_retries": 1,
+    "site_redirects": 0,
+    "site_inventory_fixes": 0,
+    "agf_moves_per_vehicle_h": 4.05,
+    "agf_m_per_move": 308.0,
+    "amr_orders_per_vehicle_h": 6.07,
+    "picker_lph": 27.7,
+    "picker_uph": 70.5,
+    "time_share": {
+     "FORKLIFT": {
+      "MOVING": 0.502,
+      "PARKED": 0.256,
+      "WAITING": 0.109,
+      "ACTION": 0.083,
+      "IDLE": 0.022,
+      "FAULT": 0.015,
+      "BLOCKED": 0.007,
+      "PROTECTIVE": 0.005,
+      "OFFLINE": 0.0
+     },
+     "CARRIER": {
+      "MOVING": 0.797,
+      "ACTION": 0.099,
+      "WAITING": 0.097,
+      "PAUSED": 0.003,
+      "PARKED": 0.002,
+      "IDLE": 0.001,
+      "BLOCKED": 0.001,
+      "OFFLINE": 0.0,
+      "PROTECTIVE": 0.0
+     }
+    },
+    "interventions": 5,
+    "mtta_s": 24.0,
+    "lock_problems": 0
+   },
+   "wall_s": 189.9,
+   "forklift_reversals": [
+    0,
+    0,
+    0,
+    4
+   ]
+  },
+  {
+   "job": {
+    "scenario": "standard",
+    "strategy": "locks+resolve",
+    "seed": 2,
+    "duration": 7200.0,
+    "warmup": 1800.0,
+    "manager": {},
+    "vehicle": {},
+    "scenario_overrides": {
+     "pick_limit": "zone"
+    },
+    "operator": true,
+    "label": "locks+resolve/pick-zone"
+   },
+   "kpi": {
+    "queued": 6,
+    "active": 22,
+    "throughput_h": 107.5,
+    "by_kind_h": {
+     "PUTAWAY": 29.5,
+     "PALLET_OUT": 34.0,
+     "TOTE_PICK": 44.0
+    },
+    "cycle_avg": 898.0,
+    "cycle_p90": 1574.6,
+    "wait_avg": 187.2,
+    "exec_avg": 710.9,
+    "created": 216,
+    "done": 215,
+    "failed": 0,
+    "canceled": 0,
+    "requeued": 2,
+    "exceptions": 2,
+    "robots": 24,
+    "online": 24,
+    "working": 22,
+    "utilization": 0.898,
+    "traffic_wait_ratio": 0.117,
+    "deadlocks": 0,
+    "deadlocks_resolved": 0,
+    "deadlocks_active": 0,
+    "deadlock_avg_s": null,
+    "reroutes": 59,
+    "evasions": 0,
+    "nudges": 3,
+    "protective_stops": 98,
+    "protective_human": 5,
+    "near_miss_fms": 4,
+    "contacts": 1,
+    "contacts_moving": 1,
+    "contacts_struck": 0,
+    "contacts_static": 0,
+    "contacts_human": 1,
+    "contacts_human_moving": 1,
+    "near_misses": 1,
+    "close_calls": 1312,
+    "clearance_violations": 2,
+    "min_gap_moving": 0.0,
+    "min_amr_gap": 0.25,
+    "tracking_ratio": 0.757,
+    "mismatch": 0,
+    "comms_lost": 8,
+    "order_rejects": 0,
+    "resends": 1,
+    "mttr_s": 247.0,
+    "alarms_per_h": 6.5,
+    "alerts_per_h": 6.0,
+    "alarms_by_priority_h": {
+     "1": 0.5,
+     "2": 0.0,
+     "3": 6.0,
+     "4": 6.0
+    },
+    "alarms_by_type": {
+     "COMMS_DEGRADED": 8,
+     "TASK_OVERDUE": 8,
+     "NEAR_MISS": 4,
+     "LOCALIZATION_LOST": 2,
+     "ROBOT_COLLISION": 1,
+     "STANDOFF": 1,
+     "ROBOT_FAULT": 1
+    },
+    "bus_dropped": 797,
+    "bus_published": 1160707,
+    "sim_hours": 2.0,
+    "careless_turns": 0,
+    "site_trucks": 4,
+    "site_pallets_unloaded": 51,
+    "site_putaway": 59,
+    "site_shipped": 70,
+    "site_out_backlog": 0,
+    "site_tote_done": 161,
+    "site_tote_orders": 177,
+    "site_tote_backlog": 0,
+    "site_picks": 384,
+    "site_units": 979,
+    "site_putaway_h": 29.5,
+    "site_shipped_h": 35.0,
+    "site_tote_h": 80.5,
+    "site_dock_to_stock_avg": 674.8,
+    "site_dock_to_stock_p90": 1038.6,
+    "site_picker_wait_s": 4405.6,
+    "site_rack_fill": 0.668,
+    "site_staged_in": 1,
+    "site_staged_out": 1,
+    "site_trucks_waiting": 0,
+    "site_exceptions": 2,
+    "site_retries": 0,
+    "site_redirects": 2,
+    "site_inventory_fixes": 2,
+    "agf_moves_per_vehicle_h": 6.45,
+    "agf_m_per_move": 238.3,
+    "amr_orders_per_vehicle_h": 5.75,
+    "picker_lph": 27.4,
+    "picker_uph": 69.9,
+    "time_share": {
+     "FORKLIFT": {
+      "MOVING": 0.623,
+      "WAITING": 0.123,
+      "ACTION": 0.118,
+      "PARKED": 0.094,
+      "FAULT": 0.014,
+      "BLOCKED": 0.012,
+      "IDLE": 0.008,
+      "PROTECTIVE": 0.007,
+      "OFFLINE": 0.001
+     },
+     "CARRIER": {
+      "MOVING": 0.798,
+      "ACTION": 0.098,
+      "WAITING": 0.092,
+      "PARKED": 0.007,
+      "BLOCKED": 0.003,
+      "IDLE": 0.001,
+      "OFFLINE": 0.001,
+      "FAULT": 0.001,
+      "PROTECTIVE": 0.0
+     }
+    },
+    "interventions": 5,
+    "mtta_s": 24.0,
+    "lock_problems": 0
+   },
+   "wall_s": 197.6,
+   "forklift_reversals": [
+    0,
+    0,
+    0,
+    5
+   ]
+  },
+  {
+   "job": {
+    "scenario": "standard",
+    "strategy": "locks+resolve",
+    "seed": 3,
+    "duration": 7200.0,
+    "warmup": 1800.0,
+    "manager": {},
+    "vehicle": {},
+    "scenario_overrides": {
+     "pick_limit": "zone"
+    },
+    "operator": true,
+    "label": "locks+resolve/pick-zone"
+   },
+   "kpi": {
+    "queued": 1,
+    "active": 19,
+    "throughput_h": 94.0,
+    "by_kind_h": {
+     "TOTE_PICK": 40.0,
+     "PALLET_OUT": 33.0,
+     "PUTAWAY": 21.0
+    },
+    "cycle_avg": 818.4,
+    "cycle_p90": 1515.2,
+    "wait_avg": 77.2,
+    "exec_avg": 741.1,
+    "created": 189,
+    "done": 188,
+    "failed": 0,
+    "canceled": 0,
+    "requeued": 3,
+    "exceptions": 2,
+    "robots": 24,
+    "online": 24,
+    "working": 19,
+    "utilization": 0.795,
+    "traffic_wait_ratio": 0.121,
+    "deadlocks": 0,
+    "deadlocks_resolved": 0,
+    "deadlocks_active": 0,
+    "deadlock_avg_s": null,
+    "reroutes": 48,
+    "evasions": 0,
+    "nudges": 0,
+    "protective_stops": 81,
+    "protective_human": 5,
+    "near_miss_fms": 5,
+    "contacts": 3,
+    "contacts_moving": 1,
+    "contacts_struck": 2,
+    "contacts_static": 0,
+    "contacts_human": 1,
+    "contacts_human_moving": 0,
+    "near_misses": 1,
+    "close_calls": 1172,
+    "clearance_violations": 3,
+    "min_gap_moving": 0.05,
+    "min_amr_gap": 0.33,
+    "tracking_ratio": 0.739,
+    "mismatch": 0,
+    "comms_lost": 14,
+    "order_rejects": 0,
+    "resends": 1,
+    "mttr_s": 243.6,
+    "alarms_per_h": 4.5,
+    "alerts_per_h": 9.5,
+    "alarms_by_priority_h": {
+     "1": 1.5,
+     "2": 0.0,
+     "3": 3.0,
+     "4": 9.5
+    },
+    "alarms_by_type": {
+     "COMMS_DEGRADED": 14,
+     "NEAR_MISS": 5,
+     "ROBOT_COLLISION": 3,
+     "TASK_OVERDUE": 2,
+     "LOCALIZATION_LOST": 2,
+     "STANDOFF": 1,
+     "ROBOT_FAULT": 1
+    },
+    "bus_dropped": 1194,
+    "bus_published": 1158479,
+    "sim_hours": 2.0,
+    "careless_turns": 0,
+    "site_trucks": 4,
+    "site_pallets_unloaded": 47,
+    "site_putaway": 42,
+    "site_shipped": 67,
+    "site_out_backlog": 0,
+    "site_tote_done": 158,
+    "site_tote_orders": 149,
+    "site_tote_backlog": 0,
+    "site_picks": 344,
+    "site_units": 892,
+    "site_putaway_h": 21.0,
+    "site_shipped_h": 33.5,
+    "site_tote_h": 79.0,
+    "site_dock_to_stock_avg": 464.7,
+    "site_dock_to_stock_p90": 627.0,
+    "site_picker_wait_s": 3525.5,
+    "site_rack_fill": 0.657,
+    "site_staged_in": 4,
+    "site_staged_out": 2,
+    "site_trucks_waiting": 0,
+    "site_exceptions": 2,
+    "site_retries": 0,
+    "site_redirects": 2,
+    "site_inventory_fixes": 2,
+    "agf_moves_per_vehicle_h": 5.45,
+    "agf_m_per_move": 267.9,
+    "amr_orders_per_vehicle_h": 5.64,
+    "picker_lph": 24.6,
+    "picker_uph": 63.7,
+    "time_share": {
+     "FORKLIFT": {
+      "MOVING": 0.599,
+      "WAITING": 0.135,
+      "PARKED": 0.126,
+      "ACTION": 0.103,
+      "BLOCKED": 0.014,
+      "FAULT": 0.013,
+      "PROTECTIVE": 0.008,
+      "IDLE": 0.001,
+      "OFFLINE": 0.0
+     },
+     "CARRIER": {
+      "MOVING": 0.737,
+      "WAITING": 0.085,
+      "ACTION": 0.085,
+      "PARKED": 0.083,
+      "FAULT": 0.005,
+      "BLOCKED": 0.003,
+      "OFFLINE": 0.001,
+      "IDLE": 0.001
+     }
+    },
+    "interventions": 7,
+    "mtta_s": 31.5,
+    "lock_problems": 0
+   },
+   "wall_s": 188.0,
+   "forklift_reversals": [
+    0,
+    0,
+    0,
+    8
+   ]
+  },
+  {
+   "job": {
+    "scenario": "standard",
+    "strategy": "locks+resolve",
+    "seed": 1,
+    "duration": 7200.0,
+    "warmup": 1800.0,
+    "manager": {},
+    "vehicle": {},
+    "scenario_overrides": {
+     "pick_limit": "vehicle"
+    },
+    "operator": true,
+    "label": "locks+resolve/pick-vehicle"
+   },
+   "kpi": {
+    "queued": 1,
+    "active": 16,
+    "throughput_h": 85.0,
+    "by_kind_h": {
+     "TOTE_PICK": 45.0,
+     "PUTAWAY": 6.5,
+     "PALLET_OUT": 33.5
+    },
+    "cycle_avg": 641.4,
+    "cycle_p90": 969.6,
+    "wait_avg": 25.6,
+    "exec_avg": 615.9,
+    "created": 168,
+    "done": 170,
+    "failed": 0,
+    "canceled": 0,
+    "requeued": 1,
+    "exceptions": 1,
+    "robots": 24,
+    "online": 24,
+    "working": 16,
+    "utilization": 0.593,
+    "traffic_wait_ratio": 0.127,
+    "deadlocks": 0,
+    "deadlocks_resolved": 0,
+    "deadlocks_active": 0,
+    "deadlock_avg_s": null,
+    "reroutes": 39,
+    "evasions": 0,
+    "nudges": 30,
+    "protective_stops": 80,
+    "protective_human": 35,
+    "near_miss_fms": 12,
+    "contacts": 3,
+    "contacts_moving": 2,
+    "contacts_struck": 1,
+    "contacts_static": 0,
+    "contacts_human": 1,
+    "contacts_human_moving": 1,
+    "near_misses": 1,
+    "close_calls": 1001,
+    "clearance_violations": 19,
+    "min_gap_moving": 0.0,
+    "min_amr_gap": 0.33,
+    "tracking_ratio": 0.695,
+    "mismatch": 0,
+    "comms_lost": 5,
+    "order_rejects": 0,
+    "resends": 0,
+    "mttr_s": 266.4,
+    "alarms_per_h": 2.5,
+    "alerts_per_h": 8.5,
+    "alarms_by_priority_h": {
+     "1": 1.0,
+     "2": 0.0,
+     "3": 1.5,
+     "4": 8.5
+    },
+    "alarms_by_type": {
+     "NEAR_MISS": 12,
+     "COMMS_DEGRADED": 5,
+     "BLOCKED_LONG": 2,
+     "ROBOT_COLLISION": 2,
+     "STANDOFF": 1
+    },
+    "bus_dropped": 459,
+    "bus_published": 1142457,
+    "sim_hours": 2.0,
+    "careless_turns": 0,
+    "site_trucks": 2,
+    "site_pallets_unloaded": 14,
+    "site_putaway": 13,
+    "site_shipped": 67,
+    "site_out_backlog": 0,
+    "site_tote_done": 167,
+    "site_tote_orders": 162,
+    "site_tote_backlog": 1,
+    "site_picks": 368,
+    "site_units": 941,
+    "site_putaway_h": 6.5,
+    "site_shipped_h": 33.5,
+    "site_tote_h": 83.5,
+    "site_dock_to_stock_avg": 665.9,
+    "site_dock_to_stock_p90": 1000.0,
+    "site_picker_wait_s": 4010.2,
+    "site_rack_fill": 0.66,
+    "site_staged_in": 2,
+    "site_staged_out": 0,
+    "site_trucks_waiting": 0,
+    "site_exceptions": 1,
+    "site_retries": 1,
+    "site_redirects": 0,
+    "site_inventory_fixes": 0,
+    "agf_moves_per_vehicle_h": 4.0,
+    "agf_m_per_move": 286.8,
+    "amr_orders_per_vehicle_h": 5.96,
+    "picker_lph": 26.3,
+    "picker_uph": 67.2,
+    "time_share": {
+     "FORKLIFT": {
+      "MOVING": 0.465,
+      "PARKED": 0.315,
+      "ACTION": 0.084,
+      "WAITING": 0.083,
+      "IDLE": 0.029,
+      "BLOCKED": 0.01,
+      "FAULT": 0.007,
+      "PROTECTIVE": 0.006,
+      "OFFLINE": 0.001
+     },
+     "CARRIER": {
+      "MOVING": 0.534,
+      "PARKED": 0.267,
+      "ACTION": 0.092,
+      "WAITING": 0.078,
+      "IDLE": 0.026,
+      "BLOCKED": 0.002,
+      "PROTECTIVE": 0.0,
+      "OFFLINE": 0.0
+     }
+    },
+    "interventions": 2,
+    "mtta_s": 21.5,
+    "lock_problems": 0
+   },
+   "wall_s": 181.5,
+   "forklift_reversals": [
+    0,
+    0,
+    0,
+    7
+   ]
+  },
+  {
+   "job": {
+    "scenario": "standard",
+    "strategy": "locks+resolve",
+    "seed": 2,
+    "duration": 7200.0,
+    "warmup": 1800.0,
+    "manager": {},
+    "vehicle": {},
+    "scenario_overrides": {
+     "pick_limit": "vehicle"
+    },
+    "operator": true,
+    "label": "locks+resolve/pick-vehicle"
+   },
+   "kpi": {
+    "queued": 1,
+    "active": 18,
+    "throughput_h": 110.0,
+    "by_kind_h": {
+     "PALLET_OUT": 35.0,
+     "TOTE_PICK": 47.0,
+     "PUTAWAY": 28.0
+    },
+    "cycle_avg": 715.8,
+    "cycle_p90": 1038.0,
+    "wait_avg": 131.3,
+    "exec_avg": 584.5,
+    "created": 216,
+    "done": 220,
+    "failed": 1,
+    "canceled": 0,
+    "requeued": 2,
+    "exceptions": 1,
+    "robots": 24,
+    "online": 24,
+    "working": 18,
+    "utilization": 0.744,
+    "traffic_wait_ratio": 0.138,
+    "deadlocks": 0,
+    "deadlocks_resolved": 0,
+    "deadlocks_active": 0,
+    "deadlock_avg_s": null,
+    "reroutes": 74,
+    "evasions": 5,
+    "nudges": 15,
+    "protective_stops": 160,
+    "protective_human": 59,
+    "near_miss_fms": 16,
+    "contacts": 2,
+    "contacts_moving": 0,
+    "contacts_struck": 2,
+    "contacts_static": 0,
+    "contacts_human": 0,
+    "contacts_human_moving": 0,
+    "near_misses": 1,
+    "close_calls": 1059,
+    "clearance_violations": 32,
+    "min_gap_moving": 0.09,
+    "min_amr_gap": 0.32,
+    "tracking_ratio": 0.703,
+    "mismatch": 0,
+    "comms_lost": 14,
+    "order_rejects": 0,
+    "resends": 0,
+    "mttr_s": 248.9,
+    "alarms_per_h": 11.0,
+    "alerts_per_h": 15.0,
+    "alarms_by_priority_h": {
+     "1": 1.0,
+     "2": 0.0,
+     "3": 10.0,
+     "4": 15.0
+    },
+    "alarms_by_type": {
+     "NEAR_MISS": 16,
+     "COMMS_DEGRADED": 14,
+     "STANDOFF": 8,
+     "TASK_OVERDUE": 7,
+     "LOCALIZATION_LOST": 2,
+     "ROBOT_FAULT": 2,
+     "ROBOT_COLLISION": 2,
+     "BLOCKED_LONG": 1
+    },
+    "bus_dropped": 1246,
+    "bus_published": 1154935,
+    "sim_hours": 2.0,
+    "careless_turns": 0,
+    "site_trucks": 4,
+    "site_pallets_unloaded": 51,
+    "site_putaway": 56,
+    "site_shipped": 71,
+    "site_out_backlog": 0,
+    "site_tote_done": 170,
+    "site_tote_orders": 177,
+    "site_tote_backlog": 0,
+    "site_picks": 383,
+    "site_units": 968,
+    "site_putaway_h": 28.0,
+    "site_shipped_h": 35.5,
+    "site_tote_h": 85.0,
+    "site_dock_to_stock_avg": 822.3,
+    "site_dock_to_stock_p90": 1207.5,
+    "site_picker_wait_s": 3981.1,
+    "site_rack_fill": 0.662,
+    "site_staged_in": 2,
+    "site_staged_out": 2,
+    "site_trucks_waiting": 0,
+    "site_exceptions": 1,
+    "site_retries": 0,
+    "site_redirects": 1,
+    "site_inventory_fixes": 1,
+    "agf_moves_per_vehicle_h": 6.35,
+    "agf_m_per_move": 247.9,
+    "amr_orders_per_vehicle_h": 6.07,
+    "picker_lph": 27.4,
+    "picker_uph": 69.1,
+    "time_share": {
+     "FORKLIFT": {
+      "MOVING": 0.63,
+      "WAITING": 0.129,
+      "ACTION": 0.117,
+      "PARKED": 0.074,
+      "PROTECTIVE": 0.018,
+      "FAULT": 0.015,
+      "BLOCKED": 0.01,
+      "IDLE": 0.005,
+      "OFFLINE": 0.001
+     },
+     "CARRIER": {
+      "MOVING": 0.562,
+      "PARKED": 0.237,
+      "ACTION": 0.093,
+      "WAITING": 0.086,
+      "IDLE": 0.015,
+      "FAULT": 0.004,
+      "BLOCKED": 0.002,
+      "OFFLINE": 0.001,
+      "PROTECTIVE": 0.001
+     }
+    },
+    "interventions": 8,
+    "mtta_s": 19.5,
+    "lock_problems": 0
+   },
+   "wall_s": 186.0,
+   "forklift_reversals": [
+    0,
+    0,
+    0,
+    26
+   ]
+  },
+  {
+   "job": {
+    "scenario": "standard",
+    "strategy": "locks+resolve",
+    "seed": 3,
+    "duration": 7200.0,
+    "warmup": 1800.0,
+    "manager": {},
+    "vehicle": {},
+    "scenario_overrides": {
+     "pick_limit": "vehicle"
+    },
+    "operator": true,
+    "label": "locks+resolve/pick-vehicle"
+   },
+   "kpi": {
+    "queued": 7,
+    "active": 18,
+    "throughput_h": 96.5,
+    "by_kind_h": {
+     "TOTE_PICK": 39.5,
+     "PALLET_OUT": 31.5,
+     "PUTAWAY": 25.5
+    },
+    "cycle_avg": 667.1,
+    "cycle_p90": 1021.8,
+    "wait_avg": 72.5,
+    "exec_avg": 594.6,
+    "created": 205,
+    "done": 193,
+    "failed": 2,
+    "canceled": 0,
+    "requeued": 0,
+    "exceptions": 2,
+    "robots": 24,
+    "online": 24,
+    "working": 18,
+    "utilization": 0.664,
+    "traffic_wait_ratio": 0.163,
+    "deadlocks": 0,
+    "deadlocks_resolved": 0,
+    "deadlocks_active": 0,
+    "deadlock_avg_s": null,
+    "reroutes": 52,
+    "evasions": 3,
+    "nudges": 24,
+    "protective_stops": 81,
+    "protective_human": 14,
+    "near_miss_fms": 9,
+    "contacts": 2,
+    "contacts_moving": 1,
+    "contacts_struck": 1,
+    "contacts_static": 0,
+    "contacts_human": 0,
+    "contacts_human_moving": 0,
+    "near_misses": 0,
+    "close_calls": 964,
+    "clearance_violations": 15,
+    "min_gap_moving": 0.15,
+    "min_amr_gap": 0.33,
+    "tracking_ratio": 0.684,
+    "mismatch": 0,
+    "comms_lost": 14,
+    "order_rejects": 0,
+    "resends": 0,
+    "mttr_s": 251.5,
+    "alarms_per_h": 8.0,
+    "alerts_per_h": 12.0,
+    "alarms_by_priority_h": {
+     "1": 1.0,
+     "2": 0.0,
+     "3": 7.0,
+     "4": 12.0
+    },
+    "alarms_by_type": {
+     "COMMS_DEGRADED": 14,
+     "NEAR_MISS": 9,
+     "STANDOFF": 5,
+     "ROBOT_FAULT": 3,
+     "TASK_OVERDUE": 3,
+     "ROBOT_COLLISION": 2,
+     "BLOCKED_LONG": 2,
+     "CONGESTION": 1,
+     "LOCALIZATION_LOST": 1
+    },
+    "bus_dropped": 1215,
+    "bus_published": 1143594,
+    "sim_hours": 2.0,
+    "careless_turns": 0,
+    "site_trucks": 5,
+    "site_pallets_unloaded": 66,
+    "site_putaway": 51,
+    "site_shipped": 64,
+    "site_out_backlog": 0,
+    "site_tote_done": 155,
+    "site_tote_orders": 151,
+    "site_tote_backlog": 1,
+    "site_picks": 346,
+    "site_units": 897,
+    "site_putaway_h": 25.5,
+    "site_shipped_h": 32.0,
+    "site_tote_h": 77.5,
+    "site_dock_to_stock_avg": 696.0,
+    "site_dock_to_stock_p90": 1116.4,
+    "site_picker_wait_s": 4010.7,
+    "site_rack_fill": 0.674,
+    "site_staged_in": 10,
+    "site_staged_out": 1,
+    "site_trucks_waiting": 0,
+    "site_exceptions": 2,
+    "site_retries": 0,
+    "site_redirects": 2,
+    "site_inventory_fixes": 2,
+    "agf_moves_per_vehicle_h": 5.75,
+    "agf_m_per_move": 248.4,
+    "amr_orders_per_vehicle_h": 5.54,
+    "picker_lph": 24.7,
+    "picker_uph": 64.1,
+    "time_share": {
+     "FORKLIFT": {
+      "MOVING": 0.584,
+      "WAITING": 0.129,
+      "PARKED": 0.121,
+      "ACTION": 0.108,
+      "BLOCKED": 0.03,
+      "FAULT": 0.014,
+      "PROTECTIVE": 0.012,
+      "IDLE": 0.002,
+      "OFFLINE": 0.001
+     },
+     "CARRIER": {
+      "MOVING": 0.475,
+      "PARKED": 0.301,
+      "ACTION": 0.09,
+      "WAITING": 0.085,
+      "IDLE": 0.036,
+      "BLOCKED": 0.007,
+      "FAULT": 0.005,
+      "OFFLINE": 0.001,
+      "PROTECTIVE": 0.0
+     }
+    },
+    "interventions": 9,
+    "mtta_s": 23.0,
+    "lock_problems": 0
+   },
+   "wall_s": 182.8,
+   "forklift_reversals": [
+    0,
+    0,
+    0,
+    9
+   ]
+  },
+  {
+   "job": {
+    "scenario": "standard",
+    "strategy": "locks+resolve",
+    "seed": 1,
+    "duration": 7200.0,
+    "warmup": 1800.0,
+    "manager": {},
+    "vehicle": {},
+    "scenario_overrides": {
+     "tote_batch": 1
+    },
+    "operator": true,
+    "label": "locks+resolve/tote-single"
+   },
+   "kpi": {
+    "queued": 43,
+    "active": 24,
+    "throughput_h": 139.5,
+    "by_kind_h": {
+     "PALLET_OUT": 36.5,
+     "TOTE_PICK": 69.0,
+     "PUTAWAY": 34.0
+    },
+    "cycle_avg": 1098.2,
+    "cycle_p90": 2012.8,
+    "wait_avg": 512.2,
+    "exec_avg": 586.0,
+    "created": 317,
+    "done": 279,
+    "failed": 0,
+    "canceled": 0,
+    "requeued": 0,
+    "exceptions": 3,
+    "robots": 24,
+    "online": 24,
+    "working": 24,
+    "utilization": 0.949,
+    "traffic_wait_ratio": 0.125,
+    "deadlocks": 1,
+    "deadlocks_resolved": 1,
+    "deadlocks_active": 0,
+    "deadlock_avg_s": 0.2,
+    "reroutes": 110,
+    "evasions": 3,
+    "nudges": 0,
+    "protective_stops": 83,
+    "protective_human": 7,
+    "near_miss_fms": 5,
+    "contacts": 1,
+    "contacts_moving": 0,
+    "contacts_struck": 1,
+    "contacts_static": 0,
+    "contacts_human": 1,
+    "contacts_human_moving": 0,
+    "near_misses": 0,
+    "close_calls": 1353,
+    "clearance_violations": 1,
+    "min_gap_moving": 0.0,
+    "min_amr_gap": 0.33,
+    "tracking_ratio": 0.761,
+    "mismatch": 0,
+    "comms_lost": 7,
+    "order_rejects": 0,
+    "resends": 0,
+    "mttr_s": 223.4,
+    "alarms_per_h": 6.0,
+    "alerts_per_h": 6.0,
+    "alarms_by_priority_h": {
+     "1": 0.5,
+     "2": 0.0,
+     "3": 5.5,
+     "4": 6.0
+    },
+    "alarms_by_type": {
+     "TASK_OVERDUE": 7,
+     "COMMS_DEGRADED": 7,
+     "NEAR_MISS": 5,
+     "STANDOFF": 4,
+     "HUMAN_CONTACT": 1
+    },
+    "bus_dropped": 650,
+    "bus_published": 1229144,
+    "sim_hours": 2.0,
+    "careless_turns": 0,
+    "site_trucks": 6,
+    "site_pallets_unloaded": 73,
+    "site_putaway": 68,
+    "site_shipped": 74,
+    "site_out_backlog": 0,
+    "site_tote_done": 138,
+    "site_tote_orders": 167,
+    "site_tote_backlog": 0,
+    "site_picks": 324,
+    "site_units": 830,
+    "site_putaway_h": 34.0,
+    "site_shipped_h": 37.0,
+    "site_tote_h": 69.0,
+    "site_dock_to_stock_avg": 688.6,
+    "site_dock_to_stock_p90": 1099.1,
+    "site_picker_wait_s": 3682.1,
+    "site_rack_fill": 0.721,
+    "site_staged_in": 2,
+    "site_staged_out": 0,
+    "site_trucks_waiting": 0,
+    "site_exceptions": 3,
+    "site_retries": 1,
+    "site_redirects": 2,
+    "site_inventory_fixes": 2,
+    "agf_moves_per_vehicle_h": 7.1,
+    "agf_m_per_move": 231.5,
+    "amr_orders_per_vehicle_h": 4.93,
+    "picker_lph": 23.1,
+    "picker_uph": 59.3,
+    "time_share": {
+     "FORKLIFT": {
+      "MOVING": 0.661,
+      "WAITING": 0.142,
+      "ACTION": 0.139,
+      "PARKED": 0.031,
+      "PROTECTIVE": 0.012,
+      "BLOCKED": 0.011,
+      "FAULT": 0.003,
+      "IDLE": 0.001,
+      "OFFLINE": 0.001
+     },
+     "CARRIER": {
+      "MOVING": 0.81,
+      "WAITING": 0.106,
+      "ACTION": 0.082,
+      "IDLE": 0.001,
+      "BLOCKED": 0.001,
+      "OFFLINE": 0.0
+     }
+    },
+    "interventions": 2,
+    "mtta_s": 22.7,
+    "lock_problems": 0
+   },
+   "wall_s": 199.7,
+   "forklift_reversals": [
+    0,
+    0,
+    0,
+    13
+   ]
+  },
+  {
+   "job": {
+    "scenario": "standard",
+    "strategy": "locks+resolve",
+    "seed": 2,
+    "duration": 7200.0,
+    "warmup": 1800.0,
+    "manager": {},
+    "vehicle": {},
+    "scenario_overrides": {
+     "tote_batch": 1
+    },
+    "operator": true,
+    "label": "locks+resolve/tote-single"
+   },
+   "kpi": {
+    "queued": 64,
+    "active": 15,
+    "throughput_h": 129.5,
+    "by_kind_h": {
+     "TOTE_PICK": 66.0,
+     "PUTAWAY": 32.5,
+     "PALLET_OUT": 31.0
+    },
+    "cycle_avg": 1383.4,
+    "cycle_p90": 2751.6,
+    "wait_avg": 795.8,
+    "exec_avg": 587.6,
+    "created": 297,
+    "done": 259,
+    "failed": 1,
+    "canceled": 0,
+    "requeued": 3,
+    "exceptions": 1,
+    "robots": 24,
+    "online": 24,
+    "working": 15,
+    "utilization": 0.897,
+    "traffic_wait_ratio": 0.131,
+    "deadlocks": 0,
+    "deadlocks_resolved": 0,
+    "deadlocks_active": 0,
+    "deadlock_avg_s": null,
+    "reroutes": 78,
+    "evasions": 2,
+    "nudges": 2,
+    "protective_stops": 68,
+    "protective_human": 1,
+    "near_miss_fms": 0,
+    "contacts": 3,
+    "contacts_moving": 1,
+    "contacts_struck": 2,
+    "contacts_static": 0,
+    "contacts_human": 0,
+    "contacts_human_moving": 0,
+    "near_misses": 0,
+    "close_calls": 1243,
+    "clearance_violations": 2,
+    "min_gap_moving": 0.15,
+    "min_amr_gap": 0.25,
+    "tracking_ratio": 0.751,
+    "mismatch": 0,
+    "comms_lost": 10,
+    "order_rejects": 0,
+    "resends": 0,
+    "mttr_s": 205.6,
+    "alarms_per_h": 5.0,
+    "alerts_per_h": 5.5,
+    "alarms_by_priority_h": {
+     "1": 1.0,
+     "2": 0.0,
+     "3": 4.0,
+     "4": 5.5
+    },
+    "alarms_by_type": {
+     "COMMS_DEGRADED": 10,
+     "STANDOFF": 4,
+     "LOCALIZATION_LOST": 2,
+     "ROBOT_FAULT": 2,
+     "ROBOT_COLLISION": 2,
+     "CONGESTION": 1
+    },
+    "bus_dropped": 786,
+    "bus_published": 1224699,
+    "sim_hours": 2.0,
+    "careless_turns": 0,
+    "site_trucks": 3,
+    "site_pallets_unloaded": 56,
+    "site_putaway": 65,
+    "site_shipped": 63,
+    "site_out_backlog": 0,
+    "site_tote_done": 132,
+    "site_tote_orders": 179,
+    "site_tote_backlog": 0,
+    "site_picks": 304,
+    "site_units": 755,
+    "site_putaway_h": 32.5,
+    "site_shipped_h": 31.5,
+    "site_tote_h": 66.0,
+    "site_dock_to_stock_avg": 683.4,
+    "site_dock_to_stock_p90": 1018.0,
+    "site_picker_wait_s": 3518.0,
+    "site_rack_fill": 0.689,
+    "site_staged_in": 0,
+    "site_staged_out": 0,
+    "site_trucks_waiting": 0,
+    "site_exceptions": 1,
+    "site_retries": 0,
+    "site_redirects": 1,
+    "site_inventory_fixes": 1,
+    "agf_moves_per_vehicle_h": 6.4,
+    "agf_m_per_move": 241.6,
+    "amr_orders_per_vehicle_h": 4.71,
+    "picker_lph": 21.7,
+    "picker_uph": 53.9,
+    "time_share": {
+     "FORKLIFT": {
+      "MOVING": 0.626,
+      "ACTION": 0.118,
+      "PARKED": 0.109,
+      "WAITING": 0.107,
+      "BLOCKED": 0.016,
+      "FAULT": 0.012,
+      "PROTECTIVE": 0.009,
+      "IDLE": 0.004,
+      "OFFLINE": 0.001
+     },
+     "CARRIER": {
+      "MOVING": 0.795,
+      "WAITING": 0.115,
+      "ACTION": 0.077,
+      "BLOCKED": 0.007,
+      "FAULT": 0.004,
+      "IDLE": 0.001,
+      "OFFLINE": 0.0
+     }
+    },
+    "interventions": 8,
+    "mtta_s": 19.3,
+    "lock_problems": 0
+   },
+   "wall_s": 196.4,
+   "forklift_reversals": [
+    0,
+    0,
+    0,
+    11
+   ]
+  },
+  {
+   "job": {
+    "scenario": "standard",
+    "strategy": "locks+resolve",
+    "seed": 3,
+    "duration": 7200.0,
+    "warmup": 1800.0,
+    "manager": {},
+    "vehicle": {},
+    "scenario_overrides": {
+     "tote_batch": 1
+    },
+    "operator": true,
+    "label": "locks+resolve/tote-single"
+   },
+   "kpi": {
+    "queued": 64,
+    "active": 21,
+    "throughput_h": 111.0,
+    "by_kind_h": {
+     "TOTE_PICK": 59.5,
+     "PALLET_OUT": 32.0,
+     "PUTAWAY": 19.5
+    },
+    "cycle_avg": 1606.9,
+    "cycle_p90": 3238.2,
+    "wait_avg": 945.0,
+    "exec_avg": 661.9,
+    "created": 273,
+    "done": 222,
+    "failed": 3,
+    "canceled": 0,
+    "requeued": 1,
+    "exceptions": 2,
+    "robots": 24,
+    "online": 24,
+    "working": 21,
+    "utilization": 0.868,
+    "traffic_wait_ratio": 0.174,
+    "deadlocks": 0,
+    "deadlocks_resolved": 0,
+    "deadlocks_active": 0,
+    "deadlock_avg_s": null,
+    "reroutes": 80,
+    "evasions": 1,
+    "nudges": 1,
+    "protective_stops": 105,
+    "protective_human": 7,
+    "near_miss_fms": 6,
+    "contacts": 3,
+    "contacts_moving": 2,
+    "contacts_struck": 1,
+    "contacts_static": 0,
+    "contacts_human": 1,
+    "contacts_human_moving": 1,
+    "near_misses": 1,
+    "close_calls": 1202,
+    "clearance_violations": 1,
+    "min_gap_moving": 0.0,
+    "min_amr_gap": 0.33,
+    "tracking_ratio": 0.751,
+    "mismatch": 0,
+    "comms_lost": 9,
+    "order_rejects": 1,
+    "resends": 0,
+    "mttr_s": 332.6,
+    "alarms_per_h": 5.5,
+    "alerts_per_h": 8.0,
+    "alarms_by_priority_h": {
+     "1": 1.0,
+     "2": 0.0,
+     "3": 4.5,
+     "4": 8.0
+    },
+    "alarms_by_type": {
+     "COMMS_DEGRADED": 9,
+     "NEAR_MISS": 6,
+     "BLOCKED_LONG": 4,
+     "ROBOT_FAULT": 3,
+     "ROBOT_COLLISION": 2,
+     "STANDOFF": 1,
+     "CONGESTION": 1,
+     "LOCALIZATION_LOST": 1
+    },
+    "bus_dropped": 775,
+    "bus_published": 1223351,
+    "sim_hours": 2.0,
+    "careless_turns": 0,
+    "site_trucks": 4,
+    "site_pallets_unloaded": 44,
+    "site_putaway": 39,
+    "site_shipped": 64,
+    "site_out_backlog": 0,
+    "site_tote_done": 119,
+    "site_tote_orders": 164,
+    "site_tote_backlog": 0,
+    "site_picks": 283,
+    "site_units": 702,
+    "site_putaway_h": 19.5,
+    "site_shipped_h": 32.0,
+    "site_tote_h": 59.5,
+    "site_dock_to_stock_avg": 640.3,
+    "site_dock_to_stock_p90": 1040.5,
+    "site_picker_wait_s": 3222.6,
+    "site_rack_fill": 0.658,
+    "site_staged_in": 3,
+    "site_staged_out": 1,
+    "site_trucks_waiting": 0,
+    "site_exceptions": 2,
+    "site_retries": 0,
+    "site_redirects": 2,
+    "site_inventory_fixes": 2,
+    "agf_moves_per_vehicle_h": 5.15,
+    "agf_m_per_move": 271.0,
+    "amr_orders_per_vehicle_h": 4.25,
+    "picker_lph": 20.2,
+    "picker_uph": 50.1,
+    "time_share": {
+     "FORKLIFT": {
+      "MOVING": 0.566,
+      "PARKED": 0.167,
+      "WAITING": 0.123,
+      "ACTION": 0.1,
+      "FAULT": 0.013,
+      "PROTECTIVE": 0.012,
+      "BLOCKED": 0.012,
+      "IDLE": 0.005,
+      "OFFLINE": 0.0
+     },
+     "CARRIER": {
+      "MOVING": 0.742,
+      "WAITING": 0.164,
+      "ACTION": 0.071,
+      "BLOCKED": 0.011,
+      "FAULT": 0.01,
+      "IDLE": 0.001,
+      "OFFLINE": 0.001
+     }
+    },
+    "interventions": 9,
+    "mtta_s": 21.3,
+    "lock_problems": 0
+   },
+   "wall_s": 196.6,
+   "forklift_reversals": [
+    0,
+    0,
+    0,
+    8
+   ]
+  },
+  {
+   "job": {
+    "scenario": "standard",
+    "strategy": "locks+resolve",
+    "seed": 1,
+    "duration": 7200.0,
+    "warmup": 1800.0,
+    "manager": {},
+    "vehicle": {},
+    "scenario_overrides": {
+     "dispatch": "fifo"
+    },
+    "operator": true,
+    "label": "locks+resolve/dispatch-fifo"
+   },
+   "kpi": {
+    "queued": 4,
+    "active": 18,
+    "throughput_h": 83.0,
+    "by_kind_h": {
+     "TOTE_PICK": 44.5,
+     "PALLET_OUT": 33.0,
+     "PUTAWAY": 5.5
+    },
+    "cycle_avg": 857.5,
+    "cycle_p90": 1494.8,
+    "wait_avg": 58.4,
+    "exec_avg": 799.1,
+    "created": 168,
+    "done": 166,
+    "failed": 0,
+    "canceled": 0,
+    "requeued": 0,
+    "exceptions": 1,
+    "robots": 24,
+    "online": 24,
+    "working": 18,
+    "utilization": 0.76,
+    "traffic_wait_ratio": 0.113,
+    "deadlocks": 0,
+    "deadlocks_resolved": 0,
+    "deadlocks_active": 0,
+    "deadlock_avg_s": null,
+    "reroutes": 64,
+    "evasions": 0,
+    "nudges": 5,
+    "protective_stops": 52,
+    "protective_human": 4,
+    "near_miss_fms": 2,
+    "contacts": 6,
+    "contacts_moving": 0,
+    "contacts_struck": 6,
+    "contacts_static": 0,
+    "contacts_human": 6,
+    "contacts_human_moving": 0,
+    "near_misses": 0,
+    "close_calls": 1309,
+    "clearance_violations": 2,
+    "min_gap_moving": 0.11,
+    "min_amr_gap": 0.33,
+    "tracking_ratio": 0.762,
+    "mismatch": 0,
+    "comms_lost": 8,
+    "order_rejects": 1,
+    "resends": 2,
+    "mttr_s": 246.4,
+    "alarms_per_h": 0.5,
+    "alerts_per_h": 5.0,
+    "alarms_by_priority_h": {
+     "1": 0.5,
+     "2": 0.0,
+     "3": 0.0,
+     "4": 5.0
+    },
+    "alarms_by_type": {
+     "COMMS_DEGRADED": 8,
+     "NEAR_MISS": 2,
+     "HUMAN_CONTACT": 1
+    },
+    "bus_dropped": 603,
+    "bus_published": 1216926,
+    "sim_hours": 2.0,
+    "careless_turns": 0,
+    "site_trucks": 2,
+    "site_pallets_unloaded": 14,
+    "site_putaway": 11,
+    "site_shipped": 67,
+    "site_out_backlog": 0,
+    "site_tote_done": 166,
+    "site_tote_orders": 162,
+    "site_tote_backlog": 1,
+    "site_picks": 370,
+    "site_units": 940,
+    "site_putaway_h": 5.5,
+    "site_shipped_h": 33.5,
+    "site_tote_h": 83.0,
+    "site_dock_to_stock_avg": 484.9,
+    "site_dock_to_stock_p90": 738.6,
+    "site_picker_wait_s": 4054.0,
+    "site_rack_fill": 0.66,
+    "site_staged_in": 2,
+    "site_staged_out": 0,
+    "site_trucks_waiting": 0,
+    "site_exceptions": 1,
+    "site_retries": 1,
+    "site_redirects": 0,
+    "site_inventory_fixes": 0,
+    "agf_moves_per_vehicle_h": 3.9,
+    "agf_m_per_move": 299.0,
+    "amr_orders_per_vehicle_h": 5.93,
+    "picker_lph": 26.4,
+    "picker_uph": 67.1,
+    "time_share": {
+     "FORKLIFT": {
+      "MOVING": 0.47,
+      "PARKED": 0.329,
+      "WAITING": 0.085,
+      "ACTION": 0.082,
+      "IDLE": 0.024,
+      "FAULT": 0.003,
+      "PROTECTIVE": 0.003,
+      "BLOCKED": 0.003,
+      "OFFLINE": 0.0
+     },
+     "CARRIER": {
+      "MOVING": 0.769,
+      "WAITING": 0.101,
+      "ACTION": 0.093,
+      "PARKED": 0.035,
+      "IDLE": 0.001,
+      "BLOCKED": 0.001,
+      "OFFLINE": 0.0
+     }
+    },
+    "interventions": 2,
+    "mtta_s": 29.0,
+    "lock_problems": 0
+   },
+   "wall_s": 190.1,
+   "forklift_reversals": [
+    0,
+    0,
+    0,
+    3
+   ]
+  },
+  {
+   "job": {
+    "scenario": "standard",
+    "strategy": "locks+resolve",
+    "seed": 2,
+    "duration": 7200.0,
+    "warmup": 1800.0,
+    "manager": {},
+    "vehicle": {},
+    "scenario_overrides": {
+     "dispatch": "fifo"
+    },
+    "operator": true,
+    "label": "locks+resolve/dispatch-fifo"
+   },
+   "kpi": {
+    "queued": 6,
+    "active": 20,
+    "throughput_h": 105.0,
+    "by_kind_h": {
+     "PALLET_OUT": 32.5,
+     "TOTE_PICK": 44.5,
+     "PUTAWAY": 28.0
+    },
+    "cycle_avg": 869.8,
+    "cycle_p90": 1533.2,
+    "wait_avg": 174.1,
+    "exec_avg": 695.7,
+    "created": 212,
+    "done": 210,
+    "failed": 2,
+    "canceled": 0,
+    "requeued": 0,
+    "exceptions": 1,
+    "robots": 24,
+    "online": 24,
+    "working": 20,
+    "utilization": 0.859,
+    "traffic_wait_ratio": 0.132,
+    "deadlocks": 0,
+    "deadlocks_resolved": 0,
+    "deadlocks_active": 0,
+    "deadlock_avg_s": null,
+    "reroutes": 64,
+    "evasions": 1,
+    "nudges": 3,
+    "protective_stops": 61,
+    "protective_human": 3,
+    "near_miss_fms": 3,
+    "contacts": 0,
+    "contacts_moving": 0,
+    "contacts_struck": 0,
+    "contacts_static": 0,
+    "contacts_human": 0,
+    "contacts_human_moving": 0,
+    "near_misses": 0,
+    "close_calls": 1298,
+    "clearance_violations": 1,
+    "min_gap_moving": 0.14,
+    "min_amr_gap": 0.33,
+    "tracking_ratio": 0.759,
+    "mismatch": 0,
+    "comms_lost": 8,
+    "order_rejects": 0,
+    "resends": 1,
+    "mttr_s": 197.6,
+    "alarms_per_h": 4.0,
+    "alerts_per_h": 6.0,
+    "alarms_by_priority_h": {
+     "1": 0.0,
+     "2": 0.0,
+     "3": 4.0,
+     "4": 6.0
+    },
+    "alarms_by_type": {
+     "COMMS_DEGRADED": 8,
+     "TASK_OVERDUE": 3,
+     "NEAR_MISS": 3,
+     "LOCALIZATION_LOST": 2,
+     "ROBOT_FAULT": 2,
+     "CONGESTION": 1,
+     "STANDOFF": 1
+    },
+    "bus_dropped": 676,
+    "bus_published": 1222088,
+    "sim_hours": 2.0,
+    "careless_turns": 0,
+    "site_trucks": 5,
+    "site_pallets_unloaded": 55,
+    "site_putaway": 56,
+    "site_shipped": 67,
+    "site_out_backlog": 0,
+    "site_tote_done": 165,
+    "site_tote_orders": 175,
+    "site_tote_backlog": 0,
+    "site_picks": 376,
+    "site_units": 973,
+    "site_putaway_h": 28.0,
+    "site_shipped_h": 33.5,
+    "site_tote_h": 82.5,
+    "site_dock_to_stock_avg": 652.0,
+    "site_dock_to_stock_p90": 1063.8,
+    "site_picker_wait_s": 3934.0,
+    "site_rack_fill": 0.672,
+    "site_staged_in": 4,
+    "site_staged_out": 0,
+    "site_trucks_waiting": 0,
+    "site_exceptions": 1,
+    "site_retries": 0,
+    "site_redirects": 1,
+    "site_inventory_fixes": 1,
+    "agf_moves_per_vehicle_h": 6.15,
+    "agf_m_per_move": 243.7,
+    "amr_orders_per_vehicle_h": 5.89,
+    "picker_lph": 26.9,
+    "picker_uph": 69.5,
+    "time_share": {
+     "FORKLIFT": {
+      "MOVING": 0.61,
+      "WAITING": 0.134,
+      "PARKED": 0.118,
+      "ACTION": 0.11,
+      "BLOCKED": 0.01,
+      "IDLE": 0.008,
+      "PROTECTIVE": 0.006,
+      "FAULT": 0.004,
+      "OFFLINE": 0.0
+     },
+     "CARRIER": {
+      "MOVING": 0.762,
+      "WAITING": 0.107,
+      "ACTION": 0.093,
+      "PARKED": 0.025,
+      "FAULT": 0.006,
+      "BLOCKED": 0.005,
+      "IDLE": 0.001,
+      "OFFLINE": 0.0
+     }
+    },
+    "interventions": 6,
+    "mtta_s": 17.4,
+    "lock_problems": 0
+   },
+   "wall_s": 194.5,
+   "forklift_reversals": [
+    0,
+    0,
+    0,
+    7
+   ]
+  },
+  {
+   "job": {
+    "scenario": "standard",
+    "strategy": "locks+resolve",
+    "seed": 3,
+    "duration": 7200.0,
+    "warmup": 1800.0,
+    "manager": {},
+    "vehicle": {},
+    "scenario_overrides": {
+     "dispatch": "fifo"
+    },
+    "operator": true,
+    "label": "locks+resolve/dispatch-fifo"
+   },
+   "kpi": {
+    "queued": 4,
+    "active": 19,
+    "throughput_h": 109.0,
+    "by_kind_h": {
+     "TOTE_PICK": 44.0,
+     "PALLET_OUT": 28.0,
+     "PUTAWAY": 37.0
+    },
+    "cycle_avg": 902.1,
+    "cycle_p90": 1720.4,
+    "wait_avg": 203.8,
+    "exec_avg": 698.3,
+    "created": 225,
+    "done": 218,
+    "failed": 2,
+    "canceled": 0,
+    "requeued": 1,
+    "exceptions": 2,
+    "robots": 24,
+    "online": 24,
+    "working": 19,
+    "utilization": 0.874,
+    "traffic_wait_ratio": 0.162,
+    "deadlocks": 0,
+    "deadlocks_resolved": 0,
+    "deadlocks_active": 0,
+    "deadlock_avg_s": null,
+    "reroutes": 69,
+    "evasions": 2,
+    "nudges": 2,
+    "protective_stops": 62,
+    "protective_human": 9,
+    "near_miss_fms": 7,
+    "contacts": 4,
+    "contacts_moving": 0,
+    "contacts_struck": 4,
+    "contacts_static": 0,
+    "contacts_human": 3,
+    "contacts_human_moving": 0,
+    "near_misses": 0,
+    "close_calls": 1229,
+    "clearance_violations": 4,
+    "min_gap_moving": 0.08,
+    "min_amr_gap": 0.25,
+    "tracking_ratio": 0.751,
+    "mismatch": 0,
+    "comms_lost": 15,
+    "order_rejects": 0,
+    "resends": 3,
+    "mttr_s": 255.0,
+    "alarms_per_h": 8.5,
+    "alerts_per_h": 11.5,
+    "alarms_by_priority_h": {
+     "1": 1.0,
+     "2": 0.0,
+     "3": 7.5,
+     "4": 11.5
+    },
+    "alarms_by_type": {
+     "COMMS_DEGRADED": 15,
+     "TASK_OVERDUE": 9,
+     "NEAR_MISS": 7,
+     "ROBOT_FAULT": 2,
+     "BLOCKED_LONG": 2,
+     "LOCALIZATION_LOST": 2,
+     "HUMAN_CONTACT": 1,
+     "CONGESTION": 1,
+     "ROBOT_COLLISION": 1
+    },
+    "bus_dropped": 1396,
+    "bus_published": 1219605,
+    "sim_hours": 2.0,
+    "careless_turns": 0,
+    "site_trucks": 6,
+    "site_pallets_unloaded": 82,
+    "site_putaway": 74,
+    "site_shipped": 57,
+    "site_out_backlog": 0,
+    "site_tote_done": 163,
+    "site_tote_orders": 158,
+    "site_tote_backlog": 0,
+    "site_picks": 360,
+    "site_units": 931,
+    "site_putaway_h": 37.0,
+    "site_shipped_h": 28.5,
+    "site_tote_h": 81.5,
+    "site_dock_to_stock_avg": 628.7,
+    "site_dock_to_stock_p90": 990.7,
+    "site_picker_wait_s": 3938.4,
+    "site_rack_fill": 0.717,
+    "site_staged_in": 6,
+    "site_staged_out": 1,
+    "site_trucks_waiting": 0,
+    "site_exceptions": 2,
+    "site_retries": 0,
+    "site_redirects": 2,
+    "site_inventory_fixes": 2,
+    "agf_moves_per_vehicle_h": 6.55,
+    "agf_m_per_move": 226.4,
+    "amr_orders_per_vehicle_h": 5.82,
+    "picker_lph": 25.7,
+    "picker_uph": 66.5,
+    "time_share": {
+     "FORKLIFT": {
+      "MOVING": 0.608,
+      "WAITING": 0.132,
+      "ACTION": 0.122,
+      "PARKED": 0.11,
+      "BLOCKED": 0.012,
+      "FAULT": 0.008,
+      "PROTECTIVE": 0.005,
+      "IDLE": 0.002,
+      "OFFLINE": 0.001
+     },
+     "CARRIER": {
+      "MOVING": 0.721,
+      "WAITING": 0.142,
+      "ACTION": 0.092,
+      "PARKED": 0.025,
+      "FAULT": 0.01,
+      "BLOCKED": 0.009,
+      "OFFLINE": 0.001,
+      "IDLE": 0.001,
+      "PROTECTIVE": 0.0
+     }
+    },
+    "interventions": 10,
+    "mtta_s": 27.9,
+    "lock_problems": 0
+   },
+   "wall_s": 194.8,
+   "forklift_reversals": [
+    0,
+    0,
+    0,
+    4
+   ]
+  },
+  {
+   "job": {
+    "scenario": "standard",
+    "strategy": "locks+resolve",
+    "seed": 1,
+    "duration": 7200.0,
+    "warmup": 1800.0,
+    "manager": {},
+    "vehicle": {},
+    "scenario_overrides": {
+     "trucks_h": 6.0,
+     "out_pallets_h": 80.0,
+     "tote_orders_h": 200.0
+    },
+    "operator": true,
+    "label": "locks+resolve/saturated"
+   },
+   "kpi": {
+    "queued": 119,
+    "active": 23,
+    "throughput_h": 127.5,
+    "by_kind_h": {
+     "PUTAWAY": 45.5,
+     "PALLET_OUT": 37.0,
+     "TOTE_PICK": 45.0
+    },
+    "cycle_avg": 2116.3,
+    "cycle_p90": 3147.0,
+    "wait_avg": 1442.0,
+    "exec_avg": 674.3,
+    "created": 329,
+    "done": 255,
+    "failed": 0,
+    "canceled": 0,
+    "requeued": 2,
+    "exceptions": 3,
+    "robots": 24,
+    "online": 24,
+    "working": 23,
+    "utilization": 0.998,
+    "traffic_wait_ratio": 0.133,
+    "deadlocks": 0,
+    "deadlocks_resolved": 0,
+    "deadlocks_active": 0,
+    "deadlock_avg_s": null,
+    "reroutes": 105,
+    "evasions": 4,
+    "nudges": 0,
+    "protective_stops": 91,
+    "protective_human": 4,
+    "near_miss_fms": 3,
+    "contacts": 4,
+    "contacts_moving": 1,
+    "contacts_struck": 3,
+    "contacts_static": 0,
+    "contacts_human": 0,
+    "contacts_human_moving": 0,
+    "near_misses": 0,
+    "close_calls": 1394,
+    "clearance_violations": 1,
+    "min_gap_moving": 0.15,
+    "min_amr_gap": 0.33,
+    "tracking_ratio": 0.77,
+    "mismatch": 0,
+    "comms_lost": 8,
+    "order_rejects": 0,
+    "resends": 0,
+    "mttr_s": 223.4,
+    "alarms_per_h": 4.5,
+    "alerts_per_h": 5.5,
+    "alarms_by_priority_h": {
+     "1": 1.0,
+     "2": 0.0,
+     "3": 3.5,
+     "4": 5.5
+    },
+    "alarms_by_type": {
+     "COMMS_DEGRADED": 8,
+     "STANDOFF": 7,
+     "NEAR_MISS": 3,
+     "ROBOT_COLLISION": 2
+    },
+    "bus_dropped": 710,
+    "bus_published": 1235784,
+    "sim_hours": 2.0,
+    "careless_turns": 0,
+    "site_trucks": 12,
+    "site_pallets_unloaded": 93,
+    "site_putaway": 91,
+    "site_shipped": 78,
+    "site_out_backlog": 110,
+    "site_tote_done": 212,
+    "site_tote_orders": 391,
+    "site_tote_backlog": 1,
+    "site_picks": 488,
+    "site_units": 1237,
+    "site_putaway_h": 45.5,
+    "site_shipped_h": 39.0,
+    "site_tote_h": 106.0,
+    "site_dock_to_stock_avg": 1793.7,
+    "site_dock_to_stock_p90": 2222.0,
+    "site_picker_wait_s": 5970.9,
+    "site_rack_fill": 0.721,
+    "site_staged_in": 22,
+    "site_staged_out": 0,
+    "site_trucks_waiting": 1,
+    "site_exceptions": 3,
+    "site_retries": 1,
+    "site_redirects": 2,
+    "site_inventory_fixes": 2,
+    "agf_moves_per_vehicle_h": 8.45,
+    "agf_m_per_move": 196.7,
+    "amr_orders_per_vehicle_h": 7.57,
+    "picker_lph": 34.9,
+    "picker_uph": 88.4,
+    "time_share": {
+     "FORKLIFT": {
+      "MOVING": 0.658,
+      "ACTION": 0.164,
+      "WAITING": 0.131,
+      "BLOCKED": 0.023,
+      "PROTECTIVE": 0.015,
+      "FAULT": 0.007,
+      "IDLE": 0.001,
+      "OFFLINE": 0.001
+     },
+     "CARRIER": {
+      "MOVING": 0.751,
+      "ACTION": 0.129,
+      "WAITING": 0.117,
+      "IDLE": 0.001,
+      "BLOCKED": 0.001,
+      "OFFLINE": 0.0
+     }
+    },
+    "interventions": 2,
+    "mtta_s": 17.2,
+    "lock_problems": 0
+   },
+   "wall_s": 207.0,
+   "forklift_reversals": [
+    0,
+    0,
+    0,
+    20
+   ]
+  },
+  {
+   "job": {
+    "scenario": "standard",
+    "strategy": "locks+resolve",
+    "seed": 2,
+    "duration": 7200.0,
+    "warmup": 1800.0,
+    "manager": {},
+    "vehicle": {},
+    "scenario_overrides": {
+     "trucks_h": 6.0,
+     "out_pallets_h": 80.0,
+     "tote_orders_h": 200.0
+    },
+    "operator": true,
+    "label": "locks+resolve/saturated"
+   },
+   "kpi": {
+    "queued": 114,
+    "active": 24,
+    "throughput_h": 131.0,
+    "by_kind_h": {
+     "PALLET_OUT": 36.5,
+     "PUTAWAY": 49.0,
+     "TOTE_PICK": 45.5
+    },
+    "cycle_avg": 2184.3,
+    "cycle_p90": 3585.8,
+    "wait_avg": 1519.3,
+    "exec_avg": 664.9,
+    "created": 325,
+    "done": 262,
+    "failed": 0,
+    "canceled": 0,
+    "requeued": 1,
+    "exceptions": 3,
+    "robots": 24,
+    "online": 24,
+    "working": 24,
+    "utilization": 0.998,
+    "traffic_wait_ratio": 0.118,
+    "deadlocks": 0,
+    "deadlocks_resolved": 0,
+    "deadlocks_active": 0,
+    "deadlock_avg_s": null,
+    "reroutes": 73,
+    "evasions": 3,
+    "nudges": 1,
+    "protective_stops": 80,
+    "protective_human": 4,
+    "near_miss_fms": 2,
+    "contacts": 4,
+    "contacts_moving": 1,
+    "contacts_struck": 3,
+    "contacts_static": 0,
+    "contacts_human": 4,
+    "contacts_human_moving": 1,
+    "near_misses": 0,
+    "close_calls": 1455,
+    "clearance_violations": 3,
+    "min_gap_moving": 0.0,
+    "min_amr_gap": 0.33,
+    "tracking_ratio": 0.778,
+    "mismatch": 0,
+    "comms_lost": 13,
+    "order_rejects": 0,
+    "resends": 4,
+    "mttr_s": 178.9,
+    "alarms_per_h": 2.5,
+    "alerts_per_h": 7.5,
+    "alarms_by_priority_h": {
+     "1": 0.5,
+     "2": 0.0,
+     "3": 2.0,
+     "4": 7.5
+    },
+    "alarms_by_type": {
+     "COMMS_DEGRADED": 13,
+     "LOCALIZATION_LOST": 2,
+     "NEAR_MISS": 2,
+     "ROBOT_FAULT": 1,
+     "HUMAN_CONTACT": 1,
+     "STANDOFF": 1
+    },
+    "bus_dropped": 1182,
+    "bus_published": 1228394,
+    "sim_hours": 2.0,
+    "careless_turns": 0,
+    "site_trucks": 13,
+    "site_pallets_unloaded": 101,
+    "site_putaway": 98,
+    "site_shipped": 74,
+    "site_out_backlog": 93,
+    "site_tote_done": 235,
+    "site_tote_orders": 387,
+    "site_tote_backlog": 0,
+    "site_picks": 529,
+    "site_units": 1351,
+    "site_putaway_h": 49.0,
+    "site_shipped_h": 37.0,
+    "site_tote_h": 117.5,
+    "site_dock_to_stock_avg": 1722.5,
+    "site_dock_to_stock_p90": 2049.2,
+    "site_picker_wait_s": 6464.3,
+    "site_rack_fill": 0.717,
+    "site_staged_in": 24,
+    "site_staged_out": 0,
+    "site_trucks_waiting": 1,
+    "site_exceptions": 3,
+    "site_retries": 0,
+    "site_redirects": 3,
+    "site_inventory_fixes": 3,
+    "agf_moves_per_vehicle_h": 8.6,
+    "agf_m_per_move": 195.9,
+    "amr_orders_per_vehicle_h": 8.39,
+    "picker_lph": 37.8,
+    "picker_uph": 96.5,
+    "time_share": {
+     "FORKLIFT": {
+      "MOVING": 0.67,
+      "ACTION": 0.167,
+      "WAITING": 0.131,
+      "BLOCKED": 0.014,
+      "FAULT": 0.01,
+      "PROTECTIVE": 0.005,
+      "OFFLINE": 0.001,
+      "IDLE": 0.001
+     },
+     "CARRIER": {
+      "MOVING": 0.758,
+      "ACTION": 0.141,
+      "WAITING": 0.097,
+      "IDLE": 0.001,
+      "BLOCKED": 0.001,
+      "FAULT": 0.001,
+      "OFFLINE": 0.001
+     }
+    },
+    "interventions": 7,
+    "mtta_s": 30.0,
+    "lock_problems": 0
+   },
+   "wall_s": 205.5,
+   "forklift_reversals": [
+    0,
+    0,
+    0,
+    13
+   ]
+  },
+  {
+   "job": {
+    "scenario": "standard",
+    "strategy": "locks+resolve",
+    "seed": 3,
+    "duration": 7200.0,
+    "warmup": 1800.0,
+    "manager": {},
+    "vehicle": {},
+    "scenario_overrides": {
+     "trucks_h": 6.0,
+     "out_pallets_h": 80.0,
+     "tote_orders_h": 200.0
+    },
+    "operator": true,
+    "label": "locks+resolve/saturated"
+   },
+   "kpi": {
+    "queued": 121,
+    "active": 24,
+    "throughput_h": 128.0,
+    "by_kind_h": {
+     "TOTE_PICK": 46.0,
+     "PUTAWAY": 46.5,
+     "PALLET_OUT": 35.5
+    },
+    "cycle_avg": 2224.6,
+    "cycle_p90": 3583.0,
+    "wait_avg": 1547.1,
+    "exec_avg": 677.5,
+    "created": 334,
+    "done": 256,
+    "failed": 1,
+    "canceled": 0,
+    "requeued": 1,
+    "exceptions": 3,
+    "robots": 24,
+    "online": 24,
+    "working": 24,
+    "utilization": 0.995,
+    "traffic_wait_ratio": 0.11,
+    "deadlocks": 0,
+    "deadlocks_resolved": 0,
+    "deadlocks_active": 0,
+    "deadlock_avg_s": null,
+    "reroutes": 108,
+    "evasions": 4,
+    "nudges": 1,
+    "protective_stops": 131,
+    "protective_human": 7,
+    "near_miss_fms": 7,
+    "contacts": 1,
+    "contacts_moving": 1,
+    "contacts_struck": 0,
+    "contacts_static": 0,
+    "contacts_human": 1,
+    "contacts_human_moving": 1,
+    "near_misses": 0,
+    "close_calls": 1418,
+    "clearance_violations": 1,
+    "min_gap_moving": 0.0,
+    "min_amr_gap": 0.33,
+    "tracking_ratio": 0.779,
+    "mismatch": 0,
+    "comms_lost": 16,
+    "order_rejects": 3,
+    "resends": 1,
+    "mttr_s": 282.9,
+    "alarms_per_h": 5.0,
+    "alerts_per_h": 11.5,
+    "alarms_by_priority_h": {
+     "1": 0.5,
+     "2": 0.0,
+     "3": 4.5,
+     "4": 11.5
+    },
+    "alarms_by_type": {
+     "COMMS_DEGRADED": 16,
+     "NEAR_MISS": 7,
+     "STANDOFF": 5,
+     "LOCALIZATION_LOST": 2,
+     "ROBOT_COLLISION": 1,
+     "ROBOT_FAULT": 1,
+     "BLOCKED_LONG": 1
+    },
+    "bus_dropped": 1562,
+    "bus_published": 1238322,
+    "sim_hours": 2.0,
+    "careless_turns": 0,
+    "site_trucks": 12,
+    "site_pallets_unloaded": 99,
+    "site_putaway": 93,
+    "site_shipped": 71,
+    "site_out_backlog": 99,
+    "site_tote_done": 223,
+    "site_tote_orders": 402,
+    "site_tote_backlog": 0,
+    "site_picks": 529,
+    "site_units": 1406,
+    "site_putaway_h": 46.5,
+    "site_shipped_h": 35.5,
+    "site_tote_h": 111.5,
+    "site_dock_to_stock_avg": 1692.5,
+    "site_dock_to_stock_p90": 1976.8,
+    "site_picker_wait_s": 6071.1,
+    "site_rack_fill": 0.704,
+    "site_staged_in": 22,
+    "site_staged_out": 2,
+    "site_trucks_waiting": 0,
+    "site_exceptions": 3,
+    "site_retries": 1,
+    "site_redirects": 2,
+    "site_inventory_fixes": 2,
+    "agf_moves_per_vehicle_h": 8.2,
+    "agf_m_per_move": 205.9,
+    "amr_orders_per_vehicle_h": 7.96,
+    "picker_lph": 37.8,
+    "picker_uph": 100.4,
+    "time_share": {
+     "FORKLIFT": {
+      "MOVING": 0.67,
+      "ACTION": 0.156,
+      "WAITING": 0.117,
+      "PROTECTIVE": 0.021,
+      "BLOCKED": 0.019,
+      "FAULT": 0.016,
+      "OFFLINE": 0.002,
+      "IDLE": 0.001,
+      "PARKED": 0.0
+     },
+     "CARRIER": {
+      "MOVING": 0.769,
+      "ACTION": 0.137,
+      "WAITING": 0.089,
+      "IDLE": 0.001,
+      "BLOCKED": 0.001,
+      "FAULT": 0.001,
+      "OFFLINE": 0.001
+     }
+    },
+    "interventions": 8,
+    "mtta_s": 29.4,
+    "lock_problems": 0
+   },
+   "wall_s": 206.0,
+   "forklift_reversals": [
+    0,
+    0,
+    0,
+    25
+   ]
+  }
+ ]
+}

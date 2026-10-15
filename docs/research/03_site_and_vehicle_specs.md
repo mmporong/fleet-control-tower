@@ -291,10 +291,10 @@
 - h = 3 m 결과(67–85 s)가 R-MATIC "66–85 s"와 같은 범위에 든다. 우연일 수 있으나 기본값으로 쓰기에 무리가 없다는 근거로 본다.
 - 편도 60 m 운반 예: 적재 60/1.3 = 46 s, 공차 복귀 60/1.5 = 40 s, 바닥 픽 30 s + 3 m 드롭 85 s, 선회·가감속 손실 20 s [가정] → 약 220 s, 이론 16회/h, 가동률 80 % 적용 시 약 13회/h. 블로그의 36회/h는 짧은 거리·바닥 간 이송 기준으로 보이며 랙 적치 흐름에는 과대할 수 있다 [추론].
 
-### 5.2 AMR 피킹 처리량 [2차, 벤더 사례]
+### 5.2 AMR 피킹 처리량 사례
 
 - Locus: 생산성 2배 이상, "2-3x" — https://locusrobotics.com/locusone/fleet/locus-origin-collaborative-robot
-- GEODIS Dallas(Locus Vector): UPH 65 → 98+ — https://locusrobotics.com/wp-content/uploads/2024/03/GEODIS-Dallas-TX-Vector-Case-Study.pdf
+- GEODIS Dallas: UPH 65 → 98 — [고객사 공식 사례](https://geodis.com/us-en/resources/case-studies/mini-logistics-case-study-mobile-robotics). 40,000 ft² 피킹 구역, Locus Vector+Cart 12대, 전기 팔레트잭 작업에서 전환한 사례다. UPH의 작업 단위(item·case·order)와 분모(개인·팀·현장)는 공개하지 않아 피커 1인당 수치로 해석하지 않는다. [벤더 사례 PDF](https://locusrobotics.com/wp-content/uploads/2024/03/GEODIS-Dallas-TX-Vector-Case-Study.pdf)는 98+로 표기한다.
 - 그 밖에 검색 요약: GEODIS 약 100 → 175–200 UPH, Staples Canada 42 → 82 UPH, nGroup 124 → 285 LPH(출처 페이지별 원문 대조는 못 함)
 - Geek+ P800: 스테이션당 최대 100 orders/h, 크로스도킹 300–500 cases/h(검색 요약, 원문 미확인)
 
@@ -320,11 +320,13 @@
 
 | 항목 | 값 | 등급·출처 |
 |---|---|---|
-| 유인 지게차 랙 적치 | 팔레트를 랙 칸에 넣는 작업 32팔레트/인시 | [2차] Carter & Burgess 분석 사례 단면, Cisco-Eagle 정리(2014) — https://www.cisco-eagle.com/blog/2014/02/12/quick-guide-to-order-picking-methods-productivity |
+| 풀팔레트 랙 적치(차종 미기재) | 팔레트를 랙 칸에 넣는 작업 32팔레트/인시 | [2차] Carter & Burgess 분석 사례 단면, Cisco-Eagle 정리(2014) — https://www.cisco-eagle.com/blog/2014/02/12/quick-guide-to-order-picking-methods-productivity |
 | 유인 카운터밸런스 지게차 팔레트 피킹 | 바닥 적치 50, 랙 65 팔레트/인시 | 〃 |
 | 피스 피킹(카톤 플로 랙, 종이 지시서) | 184 라인/인시 | 〃 |
 | AGF 사이클 모델 | 편도 60 m, 3 m 드롭 기준 이론 16회/h, 가동률 80 %면 약 13회/h | [추론] 5.1 |
-| 로봇 협업 피킹 전후 | GEODIS Dallas 65 → 98+ UPH | [원문] 5.2 |
+| 로봇 협업 피킹 전후 | GEODIS Dallas 65 → 98 UPH(작업 단위·분모 미공개) | [고객사 공식 사례] 5.2 |
+
+Cisco-Eagle의 2014년 글은 Carter & Burgess 분석 프로젝트의 일부 사례를 요약한 2차 출처다. 원 분석 보고서와 표본·이송 거리·층고·중량·대기 시간·분산은 공개된 자료에서 확인하지 못했다. 32는 적치만, 50·65는 바닥·랙에서 풀팔레트를 꺼내는 작업이므로 모델의 적치+출고 합산 이동/대·h와 같은 지표가 아니다. 184라인/인시는 종이 지시서의 주문 라인 기준이며, 모델의 LPH는 같은 피킹면 주문을 합칠 수 있는 `x_pickItems` 완료 횟수 기준이다. 현장 작업 단위와 인원 분모를 맞추기 전에는 성능 배수 비교에 쓰지 않는다.
 
 ---
 
