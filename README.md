@@ -1,160 +1,178 @@
-# Fleet Control Tower — 다중 AMR 관제 시스템
+# Fleet Control Tower: 다중 AMR 관제 시스템
 
-팔레트 물류센터에서 자율 지게차(AGF) 10대와 토트 AMR 16대를 VDA 5050 마스터 컨트롤로 운영하는 관제 시스템입니다. 수동 지게차·피커·보행자·타사 청소 로봇처럼 명령할 수 없는 유닛이 같은 공간을 씁니다. 교통 제어(예약·교착 해소), 사람·지게차 인지, 고속문 설비 연동, ISA-18.2 알람과 SOP, 사고 재생, 교대 인계를 한 화면에서 다룹니다.
+팔레트 물류센터의 자율 지게차(AGF)와 토트 AMR을 VDA 5050으로 운영하는 관제 시스템입니다. 같은 관제 코어를 설계 검증용 시뮬레이터와 MQTT 기반 실운영 서비스에서 사용합니다.
 
-현장 규모·차량 제원·운영 절차는 제조사 데이터시트, 표준, 채용 공고 53건을 조사한 결과([docs/research/](docs/research/))에 맞췄고, 성능 수치는 모두 시드를 고정한 벤치마크로 재현할 수 있습니다.
+- **시뮬레이션 관제탑**(`fleet.server`): 수동 지게차, 피커, 보행자, 타사 청소 로봇, 천장 카메라가 있는 현장에서 교통 제어와 이상 대응 절차를 검증하고 차량 대수를 산정합니다.
+- **실운영 관제 서비스**(`fleet.fms`): MQTT 브로커 건너편 차량을 VDMA LIF 레이아웃, SQLite 영속화, 재기동 재동기화, 계정과 권한, WMS 이벤트와 함께 운영합니다. 동봉한 차량 시뮬레이터(`fleet.agvsim`)와 mosquitto를 쓴 종단 시험 이력이 있으며, 최신 교통 코드의 전체 종단 회귀와 실차 상호운용 시험은 남아 있습니다.
+
+관제는 안전 기능이 아닙니다. 사람 보호는 차량 탑재 안전 기능과 현장 설계가 맡고, 관제는 위험에 노출되는 상황을 줄이는 운영 계층입니다([docs/SAFETY.md](docs/SAFETY.md)).
 
 ![관제 화면](docs/img/overview.png)
+
+## 현재 단계
+
+| 단계 | 상태 | 근거와 남은 일 |
+|---|---|---|
+| 설계 검증용 시뮬레이터 | 재검증 중 | [BENCHMARK](docs/BENCHMARK.md)와 `results/`에는 이전 교통 코드의 측정값이 남아 있음. 최신 교통 코드의 전체 148회 벤치는 아직 끝나지 않아 추천 대수와 8시간 교대 결과를 확정하지 않음. 수요와 행동 모델은 현장 데이터로 보정하지 않은 설계 추정치 |
+| 파일럿 준비 | 일부 | MQTT 3.1.1 인증·TLS, VDA 5050 2.0.0 스키마 검사, 표준 폴백, LIF, 영속화와 재동기화, 계정과 감사, WMS 이벤트를 구현. 실차·벤더 시뮬레이터 상호운용 시험, 현장 위험성 평가, 카메라 피드와 문 PLC 어댑터는 남음 |
+| 운영 | 해당 없음 | 이중화, 다중 관제석, 운영 관측 체계 없음 |
 
 ## 핵심 기능
 
 | 영역 | 내용 |
 |---|---|
-| 현장 | 88 × 53.5 m 팔레트 물류센터: 입고 도크 6 → 팔레트 랙(4 m 통로, AGF 전용) → 방화벽 고속문 → 협업 피킹(토트 AMR + 피커) → 패킹 → 출고 도크 6. 일방통행 척추, 2차선 주통로, 차종별 통행 제한([SITE.md](docs/SITE.md)) |
-| 차량 | VDA 5050 2.0 클라이언트. factsheet로 차종(FORKLIFT·CARRIER)과 지원 액션을 알림. 속도 비례 보호·경고 필드, 360° 근접 필드, 보호정지 2초 자동 재개, 고장 래치, 원격 조종(0.6초 데드맨) |
-| 교통 제어 | 노드·차선 예약, 교차로·문턱은 통과까지 한 번에 예약, 회전 영역 예약, 교착 탐지(대기 관계 순환)와 재계획·비켜서기, 점유된 스텁 앞 대기 규칙, 혼잡 회피 경로 |
-| 통제 불가 유닛 | 카메라 + 차량 센서 융합 추적, 사람·지게차 예측 점유로 예약 차단, 사각지대, 인프라 피드 두절 시 사람 구역 전체 감속. 타사 로봇은 공개 일정(ETA)으로 예약. 대치 시 우리 로봇이 비킴 |
-| 설비 | 방화벽 고속문 2개. 미리 열림 요청, 열림 보고 뒤에만 예약, 걸림·무응답·고장 신호 판정, 알람과 즉시 우회, 사용 중지·재시도 |
-| 이상 상황 | 알람 19종(ISA-18.2 수명주기·우선순위·보류·홍수·파생 알람 억제), 알람마다 자동 조치·절차·명령 버튼, 사고 전 30초·후 10초 재생, 근접사고(ISO 3691-4 기준) 자동 기록 |
-| 운영 | 확인이 필요한 전체 명령, 비상정지 해제 후 자동 재개 금지, 감사 로그, 읽기 전용 모드, 교대 인계 자동 요약, 구역 봉쇄·대피·감속, 작업 재할당·우선순위, 가상 운영자(SOP 자동 대응, MTTA 측정) |
-| 연동 | WMS 주문 REST(멱등 키), SSE 실시간 스트림, VDA 5050 메시지 검사기, 실물 JD-AMR 1대 상태 읽기(명령 없음), Docker 한 줄 기동 |
+| 현장 | 88 × 53.5 m 물류센터. 입고 도크 6개, 팔레트 랙 720슬롯, 방화벽 고속문 2개, 협업 피킹, 패킹, 출고 도크 6개. 일방통행 척추, 2차선 주통로, 동측 복귀로, 차종별 통행 제한([SITE.md](docs/SITE.md)) |
+| 차량 | VDA 5050 2.0 클라이언트. factsheet로 차종과 지원 액션 선언, 속도 비례 보호·경고 필드, 좁은 필드 세트, 보호정지 자동 재개, 고장 래치, 안전 관련 고장의 원격 리셋 거부, 원격 조종 데드맨 |
+| 교통 제어 | 노드·차선 예약, 교차로·문턱 통과 단위 예약, 회전 영역 예약, 교착 탐지와 재계획·비켜서기, 혼잡 회피 경로, 피킹 동 작업 방출 상한 |
+| 통제 불가 유닛 | 카메라와 차량 센서 융합 추적, 사람·지게차 예측 점유, 주행 지게차 앞 선회 영역 선점, 통로 점유·요청 신호, 정지 지게차 선회 요청, 규칙 위반 모델 |
+| 설비 | 방화벽 고속문 감독. 열림 보고 뒤 예약, 걸림·무응답·고장 판정과 우회, 화재 경보 연동 |
+| 이상 상황 | ISA-18.2 알람 22종, 우선순위·보류·홍수·파생 억제, 알람별 자동 조치와 절차, 사고 전후 재생, 근접사고 알림 |
+| 운영 | 확인 절차가 있는 명령, 일괄 정지 해제 뒤 자동 재개 금지, HMAC 체인 감사 로그, 교대 인계, SOP를 따르는 가상 운영자 |
+| 연동 | MQTT 3.1.1, QoS 0·1, Last Will, 재접속, 인증·TLS, 메시지 스키마 검사, VDMA LIF, SQLite 영속화, 계정·역할·CSRF, 멱등 WMS 주문과 이벤트 outbox([INTEGRATION.md](docs/INTEGRATION.md)) |
 
 ## 채용 요구와의 대응
 
-로봇 관제 채용 공고 53건(한국 33, 해외 20)에서 뽑은 역량 순위([research/02 A-5](docs/research/02_jobs_and_incident_response.md))를 기준으로, 이 저장소에서 확인할 수 있는 곳을 정리했습니다.
+로봇 관제 채용 공고 53건(한국 33, 해외 20)에서 정리한 역량 순위([research/02 A-5](docs/research/02_jobs_and_incident_response.md))와 저장소의 근거를 연결했습니다.
 
 | 순위 | 요구 역량 | 확인할 곳 |
 |---|---|---|
-| 1 | 이상 상황 처리 파이프라인(감지 → 자동 대응 → 확인·조치 → 현장 → 재개 → 기록·인계) | `fleet/alarms.py`, [RUNBOOK.md](docs/RUNBOOK.md), 화면 알람 대기열·사고 재생·교대 인계 |
-| 2 | 교통 관리(충돌·교착 방지와 해소, 통제 불가 유닛) | `fleet/control.py`, [DESIGN.md §2–5](docs/DESIGN.md), 전략 비교 벤치 |
-| 3 | 작업 할당과 확장성 | `fleet/dispatcher.py`, `fleet/process_dc.py`, 대수 확장 벤치 |
-| 4 | 실시간 관제 UI(국내 관제장치 요건: 식별·위치·속력·배터리·통신 감도·원격 정지) | `web/`, 차량 목록·상세 |
-| 5 | 표준 메시징·API | `fleet/vda5050.py`, `fleet/bus.py`, `fleet/server.py` |
-| 6 | 상위 시스템·설비 연동과 실패 주입 | `POST /api/wms/orders`, `fleet/facility.py`, 문 고장 훈련 |
-| 7 | 데이터·KPI | 상단 KPI 12개, 추세 탭, `fleet/bench.py` |
-| 8 | 결함 주입 기반 검증 | 훈련 명령 4종, 테스트 88개(Python)·7개(node), [BENCHMARK.md](docs/BENCHMARK.md) |
-| 9 | 배포·운영성 | `Dockerfile`(nobody 사용자, 헬스체크), 읽기 전용 모드 |
+| 1 | 이상 상황 처리 파이프라인(감지, 자동 대응, 확인·조치, 현장 대응, 재개, 기록·인계) | `fleet/alarms.py`, [RUNBOOK.md](docs/RUNBOOK.md), 화면 알람 대기열·사고 재생·교대 인계 |
+| 2 | 교통 관리(충돌·교착 방지와 해소, 통제 불가 유닛) | `fleet/control.py`, [DESIGN.md §2–5](docs/DESIGN.md), 운영 방식 비교 벤치 |
+| 3 | 작업 할당과 확장성 | `fleet/dispatcher.py`, `fleet/process_dc.py`, 대수 산정 벤치 |
+| 4 | 실시간 관제 UI(식별·위치·속력·배터리·통신 감도·원격 정지) | `web/`, 차량 목록과 상세 화면 |
+| 5 | 표준 메시징과 API | `fleet/vda5050.py`, `fleet/schema.py`, `fleet/mqtt.py`, `fleet/server.py` |
+| 6 | 상위 시스템·설비 연동과 실패 주입 | WMS API, `fleet/facility.py`, 문 고장 훈련 |
+| 7 | 데이터와 KPI | 화면 KPI와 추세, `fleet/bench.py`, 결과 JSON |
+| 8 | 결함 주입 기반 검증 | 훈련 명령, Python 297개·Node 7개 시험, [BENCHMARK.md](docs/BENCHMARK.md) |
+| 9 | 배포와 운영성 | `Dockerfile`, 인증·권한, 헬스체크, 읽기 전용 모드 |
 | 10 | 사고 조사와 문서화 | 사고 재생, 보고서·인계 양식, 비상 계획표([RUNBOOK.md](docs/RUNBOOK.md)) |
 
 ## 실행
 
-Python 3.11 이상만 있으면 됩니다(외부 패키지 없음).
+Python 3.11 이상이 필요하며 외부 Python 패키지는 쓰지 않습니다.
 
 ```bash
 cd ~/fleet-control-tower
 python3 -m fleet.server --scenario standard --speed 5
-# 브라우저에서 http://127.0.0.1:8095
+# 첫 실행에 감독자 계정 admin의 비밀번호를 한 번 출력합니다.
+# 브라우저: http://127.0.0.1:8095
 ```
 
-Docker로도 실행할 수 있습니다. 인증이 없으므로 호스트 루프백에만 엽니다.
+로그인 없이 화면만 확인할 때는 개발용 `--no-auth`를 씁니다. 루프백 주소에서만 허용됩니다. MQTT 브로커에 실운영 서비스와 차량 시뮬레이터를 연결하는 방법은 [docs/INTEGRATION.md](docs/INTEGRATION.md)에 있습니다.
 
 ```bash
 cd ~/fleet-control-tower
 docker build -t fleet-control-tower .
-docker run --rm -p 127.0.0.1:8095:8095 fleet-control-tower
+docker run --rm -p 127.0.0.1:8095:8095 -v fct-data:/data fleet-control-tower
 ```
 
 | 옵션 | 기본값 | 설명 |
 |---|---|---|
 | `--scenario` | `standard` | 아래 시나리오 중 하나 |
-| `--strategy` | `locks+resolve` | `none`(관제 없음) · `locks`(예약만) · `locks+resolve` |
-| `--speed` | `1` | 0.5 · 1 · 2 · 5 · 10배속(원격 조종 중에는 1배속 고정) |
-| `--seed` | `7` | 같은 시드면 같은 결과 |
-| `--auto-operator` | 꺼짐 | 가상 운영자가 SOP대로 알람을 확인·조치 |
-| `--read-only` | 꺼짐 | 관찰 전용: 모든 명령 거부(감사 로그에는 남음) |
-| `--port`, `--host` | `8095`, `127.0.0.1` | |
-| `--no-jdamr`, `--jdamr-url` | 루프백 8090 | 실물 JD-AMR 상태 읽기 |
+| `--strategy` | `locks+resolve` | `none`(관제 없음), `locks`(예약만), `locks+resolve` |
+| `--speed` | `1` | 0.5·1·2·5·10배속. 원격 조종 중에는 1배속 이하 |
+| `--seed` | `7` | 난수 시드. 같은 코드와 실행 환경에서 비교 조건을 재현할 때 사용 |
+| `--auto-operator` | 꺼짐 | 가상 운영자가 SOP에 따라 알람을 확인하고 조치 |
+| `--read-only` | 꺼짐 | 관찰 전용. 모든 명령을 거부하고 시도는 감사 로그에 기록 |
+| `--db` | `~/.local/state/fleet-control-tower/server.sqlite3` | 계정·세션·감사 로그·멱등 키 저장소 |
+| `--add-user NAME:ROLE`, `--create-api-key NAME` | 없음 | 계정(viewer·operator·supervisor)이나 WMS API 키를 만들고 종료 |
+| `--no-auth`, `--secure-cookie` | 꺼짐 | 개발용 인증 끄기, TLS 프록시 뒤 Secure 쿠키 사용 |
+| `--port`, `--host` | `8095`, `127.0.0.1` | HTTP 수신 주소 |
+| `--no-jdamr`, `--jdamr-url` | 루프백 8090 | 실물 JD-AMR 상태 읽기 사용 여부와 주소 |
 
-| 시나리오 | 내용 |
+## 시나리오
+
+| 이름 | 용도 | 기본 구성 |
+|---|---|---|
+| `standard` | 표준 교대 | AGF 10대, 토트 AMR 14대, 피커 7명, 설계 평균 수요 |
+| `peak` | 피크 시간 | AGF 11대, 토트 AMR 16대, 피커 8명, 설계 피크 수요(입고 트럭 3대·출고 39팔레트·토트 103건/h) |
+| `crowded` | 사람 밀집 시험 | 피커 12명, 도크 작업자 6명, 보행자 6명, 타사 청소 로봇 1대 |
+| `faults` | 장애 대응 훈련 | 로봇별 고장·통신 두절 평균 1시간, 메시지 손실 2%, 고속문 고장 |
+| `night` | 야간 입출고 | 피킹 없음, 최소 인원, 청소 로봇, 입고 트럭 2.5대·출고 15팔레트/h |
+| `grid` | 혼합 교통 알고리즘 시험 | 단일 차종 AMR 30대, 사람 8명, 지게차 2대 |
+| `grid-night` | 교통 코어 기준선 | 사람·지게차 없는 격자, AMR 20대 |
+| `grid-deadlock` | 교착 스트레스 | 1차선 양방향 격자, AMR 36대, 240건/h |
+
+## 검증 상태
+
+| 확인 항목 | 현재 상태 |
 |---|---|
-| `standard` | 표준 교대. AGF 10, 토트 AMR 16, 피커 6, 수동 지게차 4. 입고 약 29·출고 15팔레트/h(AGF 과부하 처리량의 약 70%), 토트 45건/h(토트 처리 한계 근처) |
-| `peak` | AGF 12, 토트 AMR 22, 피커 9, 용량 근처 수요 |
-| `crowded` | 피커 12, 도크 작업자 6, 보행자 6, 타사 청소 로봇 |
-| `faults` | 로봇 고장·통신 두절 로봇당 평균 1시간, 메시지 손실 2%, 고속문 고장 |
-| `night` | 피킹 없음, 입출고만, 바닥 청소 로봇 |
-| `grid`, `grid-night`, `grid-deadlock` | 알고리즘 검증용 격자 창고(단일 차종). `grid-deadlock`은 1차선 양방향 스트레스 기준선 |
+| Python 동작 시험 | 현재 공개 기준 코드에서 297개 통과. 단위·시스템·HTTP·MQTT·런타임 회귀를 포함 |
+| 화면 계산 시험 | Node 시험 7개 통과 |
+| MQTT·Docker 종단 시험 | 이전 통합 버전에서 차량 시뮬레이터와 mosquitto를 연결해 운송·문 제어·무효 메시지 거부·감사 로그를 확인. 최신 교통 코드의 전체 종단 회귀는 남아 있음 |
+| 브라우저 UI | 이전 통합 버전에서 로그인·지도·KPI·CSRF·로그아웃 점검 15개를 통과. 최신 교통 코드 반영 뒤 화면 회귀는 다시 확인할 예정 |
+| 대수 산정·8시간 교대 | 최신 코드 재검증 중. 전체 148회 벤치가 끝나기 전에는 추천 대수와 처리량을 확정하지 않음 |
 
-## 결과 요약
-
-시드를 고정한 1시간 시뮬레이션의 평균 ± 표준편차입니다. 방법·표 전체·해석은 [docs/BENCHMARK.md](docs/BENCHMARK.md)에 있습니다.
-
-| 질문 | 결과 |
-|---|---|
-| 표준 교대는 어떻게 도나(DC, 6시드) | 처리량 70 ± 21건/h, 교통 대기 비율 0.20, 교착 0, 근접사고 0, 이동 중 접촉 6시간에 1건, 알람 22건/h |
-| 고장이 잦으면(로봇당 1시간에 1회, 메시지 손실 2%, 고속문 고장) | 처리량 약 30% 감소, 알람 약 110건/h. 점유-예약 불일치·접촉 0, MTTR 약 3분 |
-| 교통 제어가 없으면 | DC 처리량 14건/h(안전 필드끼리 막힘). 교착이 계속 생기는 1차선 양방향 격자에서 예약만 41건/h, 교착 해소를 더하면 92건/h(시간당 약 1,800건 자동 해소) |
-| 몇 대가 적정한가 | 포화 수요 격자는 20–30대에서 최대(약 275건/h), 40대부터 혼잡 붕괴. DC 토트 AMR은 피커 6명 기준 16–20대에서 최대 |
-| 안전 준수의 비용 | 협업 피킹 존 사람 감속을 0.6 → 0.3 m/s(ISO 3691-4 조건)로 낮춰 근접사고 51 → 0건/h, 대신 토트 처리 한계 약 54 → 41건/h |
-| 측정이 찾아낸 것 | 결함 23건(교착 반복, 사람·지게차 상호 대기, 경계 조건)과 코드 리뷰 결함 5건을 재현·수정·회귀 테스트로 고정. 남측 고속문 단일 장애점, 명령할 수 없는 유닛과의 밀집 상호 대기 같은 설계 약점을 기록 |
+[docs/BENCHMARK.md](docs/BENCHMARK.md)와 `results/`의 수치는 이전 측정입니다. 측정 방법과 지표 정의는 참고할 수 있지만, 최신 교통 코드의 전체 성능 결과로 읽으면 안 됩니다.
 
 ## 구조
 
-```
+```text
 fleet/
-  site_dc.py      물류센터 레이아웃(노드·차선·차종 제한·구역·카메라·고속문)
-  layout.py       그래프·구역·검증, 격자 창고
-  vda5050.py      메시지 생성·검증(order/instantActions/state/factsheet)
-  bus.py          프로세스 내 MQTT 모사(지연·손실·두절 주입)
-  vehicle.py      VDA 5050 차량(주행·안전 필드·고장·충전·원격 조종)과 차종 제원
-  control.py      관제 코어(예약·교착·우회·인지·점유 감시·알람 판정)
-  geometry.py     거리·다각형·차체 간격 계산       scenario.py  시나리오 프리셋
-  traffic.py      잠금 테이블·순환 탐지      planner.py   시간 기반 A*
-  perception.py   추적·예측 점유              facility.py  고속문 장치와 감독
-  alarms.py       ISA-18.2 알람과 SOP 정의    dispatcher.py 작업 배정·충전·주차
-  process_dc.py   입고·적치·출고·토트 피킹 공정  process.py   공정 인터페이스와 격자 공정
-  agents*.py      사람·지게차·타사 로봇
-  ops.py          운영 명령·감사·WMS·교대 인계  autoop.py    가상 운영자
-  sim.py          현장 시뮬레이션·평가기·사고 기록  server.py  HTTP·SSE 서버
-  bench.py        벤치마크(멀티프로세스, 결과 JSON에 git rev 기록)   jdamr.py  실물 로봇 읽기
-web/              관제 화면(바닐라 JS, 캔버스 지도)
-tests/            단위·시스템·HTTP 테스트(Python 88, node 7)
-docs/             설계·현장·운영·벤치마크 문서와 리서치 원문
+  site_dc.py      물류센터 레이아웃              layout.py      그래프·구역·검증
+  vda5050.py      VDA 5050 메시지                schema.py      공식 JSON 스키마 검증
+  bus.py          프로세스 내 버스               mqtt.py        MQTT 3.1.1 클라이언트
+  vehicle.py      차량·안전 필드·고장            control.py     예약·교착·우회·인지
+  traffic.py      잠금·순환 탐지                 planner.py     시간 기반 A*
+  perception.py   추적·예측 점유                 facility.py    고속문 장치와 감독
+  alarms.py       알람과 SOP                     dispatcher.py  작업 배정·충전·WMS
+  process_dc.py   물류센터 공정                  agents*.py     사람·지게차·타사 로봇
+  ops.py          운영 명령·감사·인계            sim.py         시뮬레이션·평가기
+  server.py       시뮬레이션 HTTP·SSE            fms.py         실운영 서비스
+  agvsim.py       MQTT 차량·문 시뮬레이터        auth.py        계정·세션·CSRF·API 키
+  store.py        SQLite·감사 체인               bench.py       벤치마크
+web/              관제 화면
+sites/            물류센터·격자 LIF와 사이드카
+tools/            재현·상호운용·화면 점검 도구
+tests/            단위·시스템·HTTP·MQTT·런타임 시험
+docs/             설계·현장·안전·연동·운영·벤치마크 문서
 results/          벤치마크 결과 JSON
 ```
 
 ## HTTP API
 
-| 메서드·경로 | 설명 |
-|---|---|
-| `GET /api/stream` | SSE: 0.25초 주기 스냅숏(차량·알람·예약·추적·문·KPI) |
-| `GET /api/snapshot`, `/api/layout`, `/api/meta`, `/api/history` | 현재 상태, 레이아웃(차선·구역·문·벽), 메타, 10초 추세 |
-| `POST /api/command` | 운영 명령(`{"cmd": ..., "confirm": true}`). 헤더 `X-Operator`(퍼센트 인코딩)에 운영자 이름 |
-| `POST /api/wms/orders` | WMS 주문. 새 주문 201, 같은 `order_id`·같은 내용 200, 다른 내용 409 |
-| `GET /api/audit`, `/api/handover` | 감사 로그, 교대 인계 기록 |
-| `GET /api/incident/{id}` | 사고 전후 재생 프레임 |
-| `GET /api/vda5050/{serial}`, `/api/local/{serial}` | 차량별 최근 VDA 5050 메시지, 원격 조종용 로컬 뷰 |
-| `POST /api/control` | 시뮬레이션 배속·일시정지·재시작·가상 운영자 |
-| `GET /health` | 헬스체크 |
+| 메서드·경로 | 권한 | 설명 |
+|---|---|---|
+| `POST /api/login`, `/api/logout`, `GET /api/me` | 공개·세션 | 로그인, 로그아웃, 현재 사용자와 CSRF 토큰 |
+| `GET /api/stream` | viewer | 차량·알람·예약·추적·문·KPI의 SSE 스냅숏 |
+| `GET /api/snapshot`, `/api/layout`, `/api/meta`, `/api/history` | viewer | 현재 상태, 레이아웃, 메타, 추세 |
+| `POST /api/command` | operator, 일부 supervisor | 확인과 CSRF 검사가 있는 운영 명령 |
+| `POST /api/wms/orders`, `GET /api/wms/events?after=N` | WMS API 키 | 멱등 주문과 작업 이벤트 커서 조회 |
+| `GET /api/audit`, `/api/audit/verify`, `/api/handover` | viewer | 감사 로그·체인 검증·교대 인계 |
+| `GET /api/incident/{id}`, `/api/vda5050/{serial}`, `/api/local/{serial}` | viewer | 사고 재생, VDA 5050 메시지, 원격 조종용 보기 |
+| `POST /api/control` | supervisor | 배속·일시정지·재시작·가상 운영자 제어 |
+| `GET /health` | 공개 | 헬스체크 |
 
 ## 검증
 
 ```bash
 cd ~/fleet-control-tower
-python3 -m unittest discover -s tests      # Python 88개
-node --test tests/test_logic.cjs            # 화면 계산 함수 7개
-python3 -m fleet.bench --scenario standard --strategies none,locks,locks+resolve \
-    --seeds 1,2,3 --duration 3600 --out results/dc_strategies.json
+python3 -m unittest discover -s tests -t .  # Python 297개(doctest 포함)
+node --test tests/test_logic.cjs             # 화면 계산 함수 7개
+bash tools/benchmarks.sh shift               # 8시간 교대 시나리오
 ```
 
-벤치 결과 JSON에는 설정 전체와 git 커밋(작업 트리가 바뀌어 있으면 `+dirty`)이 함께 기록됩니다.
+- 벤치 결과 JSON에는 설정과 Python 버전, git 커밋을 기록합니다. 추적 파일이 바뀐 상태면 커밋 뒤에 `+dirty`가 붙습니다.
+- 실운영 경로는 `tools/mqtt_interop_check.py`와 Docker 종단 시험으로 검사합니다. 이전 통합 버전의 검사 기록은 통과했으며 최신 교통 코드 반영 뒤 전체 종단 회귀는 남아 있습니다.
+- `tools/ui_check.mjs`는 헤드리스 Chrome으로 로그인, 지도, KPI, CSRF, 로그아웃을 확인합니다. 이전 통합 버전에서 15개 항목을 통과했으며 최신 교통 코드 반영 뒤 다시 검사할 예정입니다.
 
 ## 문서
 
 | 문서 | 내용 |
 |---|---|
-| [docs/DESIGN.md](docs/DESIGN.md) | 구성, 충돌 관리 3계층, 교통 제어 결정, VDA 5050 매핑, 통제 불가 유닛, 설비 연동, 통신 두절, 알람 설계 |
-| [docs/SITE.md](docs/SITE.md) | 현장 배치, 차량·현장 치수와 출처, 통제 불가 유닛, 모델 한계 |
-| [docs/RUNBOOK.md](docs/RUNBOOK.md) | 교대 흐름, 알람 처리 원칙, 상황별 대응표, 비상 계획표, 사고 보고서·인계 양식, 훈련 |
-| [docs/BENCHMARK.md](docs/BENCHMARK.md) | 재현 방법, 지표 정의, 결과, 측정으로 찾아 고친 결함 |
-| [docs/research/](docs/research/) | 표준·교통 제어·안전(01), 채용 공고·이상 대처(02), 현장·차량 제원(03) 조사 원문 |
+| [docs/DESIGN.md](docs/DESIGN.md) | 구성, 충돌 관리, 교통 제어, VDA 5050 매핑, 통제 불가 유닛, 설비와 알람 |
+| [docs/SITE.md](docs/SITE.md) | 현장 배치, 차량·현장 치수, 인지·행동 모델, 설계 기준 수요 |
+| [docs/SAFETY.md](docs/SAFETY.md) | 관제의 안전상 위치, 구역 분류, 위험성 평가, 안전 지표 |
+| [docs/INTEGRATION.md](docs/INTEGRATION.md) | MQTT·VDA 5050·LIF·WMS·인증·재기동 복구 |
+| [docs/RUNBOOK.md](docs/RUNBOOK.md) | 교대 흐름, 알람 대응, 비상 계획, 재기동, 보고서와 인계 |
+| [docs/BENCHMARK.md](docs/BENCHMARK.md) | 방법, 대수 산정, 교대 결과, 운영 방식, 민감도, 결함 기록 |
+| [docs/research/](docs/research/) | 표준·교통 제어·안전, 채용 공고, 현장·차량 제원 조사 원문 |
 
 ## 한계
 
-- 현장은 시뮬레이션입니다. 실물 연동은 JD-AMR 1대의 상태 읽기뿐이고, 사람·지게차 행동은 규칙 기반 모델입니다.
-- 메시지 버스는 프로세스 안의 모사입니다. MQTT 브로커, 데이터베이스 영속화, 인증·권한, 다중 관제석은 없습니다.
-- AGF의 원호 선회는 같은 시간의 제자리 회전으로 근사합니다.
-- 엘리베이터 연동과 VDA 5050 3.0(zone·map 배포)은 구현하지 않았습니다.
-- 관제가 추정한 근접사고는 실제(평가기)보다 많이 잡힙니다. 추적 위치의 불확실성을 보수적으로 두었기 때문이며, 그만큼 사고 기록이 많이 쌓입니다.
-- 남측 고속문이 고장 나면 출고 스테이징에 갈 수 없습니다. 고장 훈련으로 찾은 설계상의 단일 장애점이며 테스트로 고정해 두었습니다.
-- 알람은 표준 교대에서 시간당 약 22건으로 ISA-18.2 목표(시간당 6–12건)보다 많습니다. 대부분 무작위 고장·통신 두절 알람입니다.
-- 명령할 수 없는 유닛(보행자·수동 지게차·타사 로봇)이 차로에 끼어드는 경우의 접촉 위험이 드물게 남습니다(표준 6시간에 0–1건, 사람 밀집 6시간에 5건). 관제 예약으로는 막지 못하고 차량 안전 필드와 속도 제한에 기댑니다.
+- 현장과 행동은 시뮬레이션입니다. 실차 상호운용과 현장 위험성 평가는 하지 않았습니다.
+- 사람·수동 지게차 행동, 고장률, 통신 두절률, 카메라 오차와 수요는 가정입니다. 현장 WMS 이력과 실측 사이클로 다시 보정해야 합니다.
+- 관제가 추정하는 사람 궤적은 움직임이 시작된 뒤 관측 이력이 쌓이기 전까지 정지로 볼 수 있습니다. 차량 탑재 안전 기능이 사람 보호를 맡아야 합니다.
+- AGF의 원호 선회는 제자리 회전 시간과 회전 영역 예약으로 근사합니다.
+- 이중화, 다중 관제석, 장기 보존 관측 체계, 엘리베이터 연동, VDA 5050 3.0 zone·map 배포는 구현하지 않았습니다.
+- [docs/BENCHMARK.md](docs/BENCHMARK.md)와 `results/`의 기존 수치는 최신 교통 코드 전체를 다시 잰 결과가 아닙니다. 전체 148회 재검증이 끝날 때까지 차량 추천 대수와 처리량 비교는 확정값으로 쓰지 않습니다.
