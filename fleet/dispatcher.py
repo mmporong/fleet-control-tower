@@ -273,6 +273,8 @@ class Dispatcher:
         return "pickup" if task.leg == 0 else "dropoff" if task.leg == len(task.stops) - 1 else "stop"
 
     def _advance_job(self, rec: RobotRecord, now: float) -> None:
+        if rec.serial in self.m.cancel_pending:
+            return
         if not rec.route or not self.m.route_done(rec):
             return
         task = self.tasks.get(rec.task_id) if rec.task_id else None
@@ -300,6 +302,10 @@ class Dispatcher:
                                        task.id):
                 self._end(task, "FAILED", now, f"{nxt.node} 경로 없음")
                 self.m.clear_route(rec)
+        elif purpose == "recover" and rec.resume:
+            self.m._resume_standoff_order(rec)
+        elif purpose == "evade" and rec.serial in self.m._standoff_recovery:
+            self.m._resume_standoff_order(rec)
         elif purpose == "evade" and rec.resume:
             goal, p, acts, task_id = rec.resume
             if self.m.assign_route(rec, goal, p, list(acts), task_id):
@@ -529,19 +535,24 @@ class Dispatcher:
         self.emit("REQUEUED", task, self.m.now, note=why)
         self.m.event("task_requeued", task.id, f"{task.id} 재대기: {why}", "warn")
 
-    def detach(self, rec: RobotRecord, why: str) -> None:
+    def detach(self, rec: RobotRecord, why: str, terminal_purpose: str = "recover") -> None:
         """Take the task away from a robot that keeps its reservations until it stops."""
         task = self.tasks.get(rec.task_id) if rec.task_id else None
         if task and task.started_at is None:
             self._requeue(task, why)
+        self.m._standoff_recovery.pop(rec.serial, None)
+        rec.resume = None
         rec.task_id = None
         rec.goal_actions = {}
         if rec.route:
             rec.route = rec.route[: rec.base_end + 1]
-            rec.purpose = "recover"
+            rec.purpose = terminal_purpose
         else:
-            rec.purpose = ""
-        self.m.instant(rec.serial, "cancelOrder")
+            rec.purpose = terminal_purpose if terminal_purpose == "manual_handoff" else ""
+        if self.m.on_order is not None:
+            self.m.on_order(rec)       # persist the terminal path before the repeated cancel can take effect
+        if rec.serial not in self.m.cancel_pending:
+            self.m._send_cancel(rec, rec.state_order_id)
 
     def _fault_requeue(self, now: float) -> None:
         if self.m.mode == "RESYNC":

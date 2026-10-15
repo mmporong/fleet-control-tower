@@ -295,14 +295,15 @@ class Operations:
 
     def cmd_set_mode_manual(self, a: dict) -> str:
         rec = self._robot(a)
-        if rec.task_id:
-            self.sim.dispatcher.detach(rec, "원격 조종 인계")
-        self.sim.manager.clear_route(rec)
+        rec.manual_handoff_at = self.sim.manager.now
+        self.sim.dispatcher.detach(rec, "원격 조종 인계", terminal_purpose="manual_handoff")
         self.sim.manager.instant(rec.serial, "x_setOperatingMode", {"mode": "MANUAL"})
         return f"{rec.serial} 원격 조종 인계(작업 재대기, 1배속 고정)"
 
     def cmd_set_mode_auto(self, a: dict) -> str:
         rec = self._robot(a)
+        if rec.purpose == "manual_handoff":
+            raise CommandError("원격 조종 인계 상태 확인 대기 중")
         self.sim.manager.instant(rec.serial, "x_setOperatingMode", {"mode": "AUTOMATIC"})
         return f"{rec.serial} 자동 복귀 요청(노드 0.6 m 이내에서만 수락)"
 

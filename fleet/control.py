@@ -159,6 +159,7 @@ class RobotRecord:
     connection: str = "OFFLINE"
     rx: deque = field(default_factory=lambda: deque(maxlen=120))   # (received at, latency s) of state/vis
     has_state: bool = False
+    state_has_pose: bool = False          # the latest state itself carried agvPosition
     action_results: dict = field(default_factory=dict)   # actionId -> resultDescription of failed actions
     factsheet_asked: float = -1e9
     swing_since: float | None = None      # standing inside a stopped forklift's swept circle since
@@ -198,6 +199,7 @@ class RobotRecord:
     reach: float | None = None           # batteryState.reach: metres the vehicle can still drive
     mode_sent_at: float = -1e9
     pause_sent_at: float = -1e9
+    manual_handoff_at: float = -1e9
     fault_since: float | None = None
     busy_s: float = 0.0
     wait_s: float = 0.0
@@ -232,6 +234,8 @@ class FleetManager:
         self._restored: dict[str, dict] = {}         # serial -> snapshot waiting for the vehicle's first state
         self.on_order = None                          # callback(rec) just before an order is published
         self.cancel_pending: dict[str, tuple[str, float]] = {}   # serial -> (canceled orderId, when sent)
+        self.cancel_action: dict[str, str] = {}        # serial -> latest cancelOrder actionId awaiting confirmation
+        self._standoff_recovery: dict[str, dict] = {}  # serial -> task/order data kept across a confirmed cancel
         self.planner = Planner(layout)
         self.locks = LockTable()
         self.tracker = Tracker()
@@ -401,6 +405,7 @@ class FleetManager:
         # optional fields (agvPosition, velocity, loads, paused, distanceSinceLastNode, safetyState parts) keep
         # a safe default when a vehicle leaves them out; the schema gate already rejected malformed ones
         p = msg.get("agvPosition")
+        rec.state_has_pose = bool(p)
         if p:
             rec.x, rec.y, rec.theta = p["x"], p["y"], p["theta"]
             rec.positioned = bool(p.get("positionInitialized", True))
@@ -563,8 +568,20 @@ class FleetManager:
                                     actions)
         self.bus.publish(t, msg, self.now)
 
-    def instant(self, serial: str, action_type: str, params: dict | None = None) -> None:
-        self._instant(self.robots[serial], [action(action_type, self._aid(action_type), "NONE", params)])
+    def instant(self, serial: str, action_type: str, params: dict | None = None,
+                action_id: str | None = None) -> str:
+        action_id = action_id or self._aid(action_type)
+        self._instant(self.robots[serial], [action(action_type, action_id, "NONE", params)])
+        return action_id
+
+    def _send_cancel(self, rec: RobotRecord, order_id: str) -> None:
+        """Persist and publish one cancelOrder attempt, retaining its acknowledgement identity."""
+        action_id = self._aid("cancelOrder")
+        self.cancel_pending[rec.serial] = (order_id, self.now)
+        self.cancel_action[rec.serial] = action_id
+        if self.on_order is not None:
+            self.on_order(rec)
+        self.instant(rec.serial, "cancelOrder", action_id=action_id)
 
     def _send_order(self, rec: RobotRecord) -> None:
         new = rec.last_order is None or rec.last_order["orderId"] != rec.order_id
@@ -636,12 +653,15 @@ class FleetManager:
     # ================================================================ restart: snapshot, restore, resync
     def robot_snapshot(self, rec: RobotRecord) -> dict:
         """What a restarted manager needs to take a vehicle back without releasing anything twice."""
+        pending = self.cancel_pending.get(rec.serial)
         return {"serial": rec.serial, "manufacturer": rec.manufacturer, "route": list(rec.route),
                 "order_id": rec.order_id, "update_id": rec.update_id, "base_end": rec.base_end,
                 "cur_idx": rec.cur_idx, "sent_base_end": rec.sent_base_end, "purpose": rec.purpose,
                 "task_id": rec.task_id, "last_node": rec.last_node, "last_order": rec.last_order,
                 "goal_actions": {str(k): v for k, v in rec.goal_actions.items()},
                 "resume": list(rec.resume) if rec.resume else None,
+                "cancel_order_id": pending[0] if pending else None,
+                "cancel_action_id": self.cancel_action.get(rec.serial) if pending else None,
                 # the reservations exactly as the lock table held them, and when: on a restart the newest
                 # snapshot that claims a resource wins (it can only have been taken after the other released it)
                 "held": sorted(self.locks.resources_of(rec.serial)), "saved_at": round(self.now, 3)}
@@ -668,7 +688,13 @@ class FleetManager:
             rec.last_seen = self.now          # silence is counted from the restart, not from the epoch
             rec.goal_actions = {int(k): v for k, v in (snap.get("goal_actions") or {}).items()}
             rec.resume = tuple(snap["resume"]) if snap.get("resume") else None
+            rec.manual_handoff_at = self.now if rec.purpose == "manual_handoff" else -1e9
             rec.order_pending = False
+            cancel_order_id = snap.get("cancel_order_id")
+            if cancel_order_id:
+                self.cancel_pending[serial] = (str(cancel_order_id), self.now)
+                if snap.get("cancel_action_id"):
+                    self.cancel_action[serial] = str(snap["cancel_action_id"])
             self._restored[serial] = snap
         # reservations: each resource goes to the newest snapshot that claims it
         claims: dict[str, tuple[float, str]] = {}
@@ -723,6 +749,64 @@ class FleetManager:
         snap = self._restored.pop(rec.serial, None)
         if snap is None:
             return
+        if rec.purpose == "manual_handoff":
+            if not self._finish_manual_handoff(rec):
+                rec.manual_handoff_at = self.now
+                if self.on_order is not None:
+                    self.on_order(rec)
+                if rec.mode != "MANUAL":
+                    self.instant(rec.serial, "x_setOperatingMode", {"mode": "MANUAL"})
+            return
+        if rec.purpose == "recover" and not rec.task_id and not rec.resume:
+            pending = self.cancel_pending.get(rec.serial)
+            expected_order = pending[0] if pending is not None else rec.order_id
+            stopped = rec.state_remaining == 0 and not rec.driving and rec.dist_since <= 1e-6 \
+                and rec.last_node is not None
+            if stopped:
+                self.cancel_pending.pop(rec.serial, None)
+                self.cancel_action.pop(rec.serial, None)
+                self.clear_route(rec)
+                self.locks.retain_only(rec.serial, {node_res(rec.last_node)})
+            elif rec.state_order_id == expected_order and rec.state_remaining > 0:
+                action_id = self.cancel_action.get(rec.serial)
+                status = rec.actions.get(action_id) if action_id else None
+                if status in (None, "FAILED"):
+                    self._send_cancel(rec, rec.state_order_id)
+                    self.event("resync_mismatch", rec.serial, "재기동 뒤 작업 해제 주문 취소 재요청", "warn")
+            else:
+                self._guard_cancel_mismatch(rec, expected_order)
+            return
+        standoff_resume = rec.resume and (
+            rec.purpose == "recover" and len(rec.resume) in (4, 5, 6)
+            or rec.purpose == "evade" and len(rec.resume) == 6)
+        if standoff_resume:
+            goal, purpose, goal_actions, task_id = rec.resume[:4]
+            avoid = set(rec.resume[4]) if len(rec.resume) >= 5 else set()
+            blocked = str(rec.resume[5]) if len(rec.resume) == 6 and rec.resume[5] else ""
+            stopped = rec.state_remaining == 0 and not rec.driving and rec.dist_since <= 1e-6 \
+                and rec.last_node is not None
+            recovery = {"goal": goal, "purpose": purpose, "goal_actions": list(goal_actions),
+                        "task_id": task_id, "avoid": avoid,
+                        "confirmed": rec.purpose == "evade" or stopped, "blocked": blocked}
+            self._standoff_recovery[rec.serial] = recovery
+            if blocked:
+                self.robot_paused.add(rec.serial)
+                self.alarms.set("RESERVATION_MISMATCH", rec.serial, True, self.now, blocked)
+            elif rec.purpose == "evade" and rec.state_order_id == rec.order_id and rec.state_remaining > 0:
+                self.event("resync_ok", rec.serial, f"재동기화: 대치 회피 주문 {rec.order_id} 이어서 진행", "info")
+            elif stopped and rec.state_order_id == rec.order_id:
+                self._resume_standoff_order(rec, recovery)
+            elif rec.state_order_id == rec.order_id and rec.state_remaining > 0:
+                action_id = self.cancel_action.get(rec.serial)
+                status = rec.actions.get(action_id) if action_id else None
+                if status in (None, "FAILED"):
+                    self._send_cancel(rec, rec.state_order_id)
+                    self.event("standoff_cancel", rec.serial, "재기동 뒤 대치 주문 취소 재요청", "warn")
+            else:
+                self.robot_paused.add(rec.serial)
+                self._block_standoff_recovery(
+                    rec, recovery, f"{rec.serial} 대치 복구 중 다른 주문 {rec.state_order_id} 진행 감지")
+            return
         if not snap.get("route") and not rec.task_id:
             if rec.state_order_id and rec.state_remaining > 0:
                 # driving an order the snapshot never saw (sent, then the manager stopped before saving):
@@ -763,8 +847,7 @@ class FleetManager:
             self.robot_paused.add(rec.serial)
             self.alarms.set("RESERVATION_MISMATCH", rec.serial, True, self.now,
                             f"{rec.serial} 재기동 뒤 보고 구간이 다른 차량 예약과 겹침: {', '.join(taken)}")
-        self.instant(rec.serial, "cancelOrder")
-        self.cancel_pending[rec.serial] = (rec.state_order_id, self.now)
+        self._send_cancel(rec, rec.state_order_id)
         if why:
             self.event("resync_mismatch", rec.serial, why, "warn")
 
@@ -772,11 +855,182 @@ class FleetManager:
         """cancelOrder goes out at QoS 0: resend until the vehicle's state no longer runs that order."""
         for serial, (order_id, sent) in list(self.cancel_pending.items()):
             rec = self.robots.get(serial)
-            if rec is None or rec.state_order_id != order_id or rec.state_remaining == 0:
+            recovery = self._standoff_recovery.get(serial)
+            fresh = rec is not None and rec.last_seen > sent
+            stopped = fresh and rec.state_remaining == 0 \
+                and not rec.driving and rec.dist_since <= 1e-6 and rec.last_node is not None
+            finished = stopped
+            if finished:
                 del self.cancel_pending[serial]
-            elif self.now - sent > 3.0 and rec.connection == "ONLINE":
-                self.instant(serial, "cancelOrder")
-                self.cancel_pending[serial] = (order_id, self.now)
+                self.cancel_action.pop(serial, None)
+                if recovery is not None and rec is not None:
+                    if stopped and rec.state_order_id == order_id:
+                        recovery["confirmed"] = True
+                    else:
+                        self._block_standoff_recovery(
+                            rec, recovery, f"{serial} 대치 취소 중 다른 주문 {rec.state_order_id} 진행 감지")
+            elif recovery is not None and fresh and rec.state_order_id != order_id:
+                del self.cancel_pending[serial]
+                self.cancel_action.pop(serial, None)
+                self._block_standoff_recovery(
+                    rec, recovery, f"{serial} 대치 취소 중 다른 주문 {rec.state_order_id} 진행 감지")
+            elif recovery is None and fresh and rec.state_order_id and rec.state_order_id != order_id:
+                self._guard_cancel_mismatch(rec, order_id)
+            elif rec is not None and self.now - sent > 3.0 and rec.connection == "ONLINE":
+                action_id = self.cancel_action.get(serial)
+                status = rec.actions.get(action_id) if action_id else None
+                if status in (None, "FAILED"):
+                    self._send_cancel(rec, order_id)
+        for rec in self.robots.values():
+            if rec.purpose != "manual_handoff" or rec.serial in self._restored:
+                continue
+            if self._finish_manual_handoff(rec):
+                continue
+            if rec.mode != "MANUAL" and rec.connection == "ONLINE" \
+                    and self.now - rec.manual_handoff_at > 3.0:
+                rec.manual_handoff_at = self.now
+                if self.on_order is not None:
+                    self.on_order(rec)
+                self.instant(rec.serial, "x_setOperatingMode", {"mode": "MANUAL"})
+        for serial, recovery in list(self._standoff_recovery.items()):
+            if not recovery.get("confirmed") or recovery.get("blocked"):
+                continue
+            rec = self.robots.get(serial)
+            if rec is None:
+                del self._standoff_recovery[serial]
+                continue
+            self._resume_standoff_order(rec, recovery)
+
+    def _finish_manual_handoff(self, rec: RobotRecord) -> bool:
+        """Finish a persisted handoff only after a newer, stopped MANUAL state arrives."""
+        if rec.purpose != "manual_handoff" or rec.last_seen <= rec.manual_handoff_at \
+                or rec.mode != "MANUAL" or rec.state_remaining != 0 \
+                or rec.driving or rec.dist_since > 1e-6 or not rec.state_has_pose or not rec.positioned \
+                or rec.factsheet is None or rec.length <= 0.0 or rec.width <= 0.0:
+            return False
+        self.cancel_pending.pop(rec.serial, None)
+        self.cancel_action.pop(rec.serial, None)
+        keep = self._occupied(rec)
+        self.clear_route(rec)
+        rec.manual_handoff_at = -1e9
+        self.locks.retain_only(rec.serial, keep)
+        if self.on_order is not None:
+            self.on_order(rec)
+        self.event("manual_handoff", rec.serial, "원격 조종 인계 상태 확인", "info")
+        return True
+
+    def _guard_cancel_mismatch(self, rec: RobotRecord, expected_order: str) -> None:
+        """Hold a newly reported order, stop it, and replace only the cancel aimed at the stale order."""
+        taken = self._hold_reported(rec)
+        reason = f"{rec.serial} 작업 해제 중 다른 주문 {rec.state_order_id} 진행 감지"
+        if taken:
+            reason += f" · 보고 구간 예약 충돌: {', '.join(taken)}"
+        self.robot_paused.add(rec.serial)
+        self.alarms.set("RESERVATION_MISMATCH", rec.serial, True, self.now, reason)
+        if rec.state_order_id and rec.state_order_id != expected_order:
+            self._send_cancel(rec, rec.state_order_id)
+
+    def _block_standoff_recovery(self, rec: RobotRecord, recovery: dict, reason: str) -> None:
+        """Persist a recovery that needs operator review and keep its old order frozen."""
+        recovery["blocked"] = reason
+        rec.purpose = "recover"
+        rec.resume = (recovery["goal"], recovery["purpose"], recovery["goal_actions"],
+                      recovery["task_id"], sorted(recovery["avoid"]), reason)
+        self.robot_paused.add(rec.serial)
+        self.alarms.set("RESERVATION_MISMATCH", rec.serial, True, self.now, reason)
+        if self.on_order is not None:
+            self.on_order(rec)
+
+    def _resume_standoff_order(self, rec: RobotRecord, recovery: dict | None = None) -> bool:
+        """Release a confirmed-cancelled base and restore the same task with fresh action ids."""
+        recovery = recovery or self._standoff_recovery.get(rec.serial)
+        if self.mode != "RUNNING" or recovery is None or recovery.get("blocked") \
+                or not recovery.get("confirmed") or rec.state_remaining != 0 \
+                or rec.driving or rec.dist_since > 1e-6 or rec.last_node is None:
+            return False
+        if rec.purpose == "evade" and rec.route and not self.route_done(rec):
+            return False                 # finish the safe fallback route before restoring the original task
+        task_id = recovery["task_id"]
+        task = self.dispatcher.tasks.get(task_id) if self.dispatcher is not None and task_id else None
+        if rec.task_id != task_id or self.dispatcher is not None \
+                and (task is None or task.state != "ACTIVE" or task.robot != rec.serial):
+            self._block_standoff_recovery(
+                rec, recovery, f"{rec.serial} 대치 취소 뒤 작업 소유권 변경: {task_id}")
+            return False
+        keep = self._occupied(rec)
+        if rec.last_node:
+            keep.add(node_res(rec.last_node))
+        self.locks.retain_only(rec.serial, keep)
+        rec.route = []
+        rec.goal_actions = {}
+        rec.rot_zone = {}
+        rec.base_end = rec.cur_idx = rec.sent_base_end = 0
+        rec.order_pending = False
+        rec.wait = rec.pending_block = None
+        rec.purpose = "recover"
+        rec.task_id = recovery["task_id"]
+        if not self.can_take_route(rec):
+            return False
+        avoid = set(recovery["avoid"])
+        avoid.discard(rec.last_node)
+        avoid.discard(recovery["goal"])
+        actions = []
+        unsafe = []
+        for a in recovery["goal_actions"]:
+            state = rec.actions.get(a["actionId"])
+            if state == "FINISHED":
+                continue
+            cancel_failed = state == "FAILED" and rec.action_results.get(a["actionId"]) == "cancelOrder"
+            if state in ("RUNNING", "INITIALIZING") or state == "FAILED" and not cancel_failed:
+                unsafe.append(a["actionId"])
+                continue
+            actions.append({**a, "actionId": self._aid(f"recover-{a['actionType']}")})
+        if unsafe:
+            self._block_standoff_recovery(
+                rec, recovery, f"{rec.serial} 대치 취소 뒤 동작 상태 불일치: {', '.join(unsafe)}")
+            return False
+        if not self.assign_route(rec, recovery["goal"], recovery["purpose"], actions,
+                                 recovery["task_id"], avoid_nodes=avoid):
+            return False
+        rec.resume = None
+        self._standoff_recovery.pop(rec.serial, None)
+        self.event("standoff_replan", rec.serial,
+                   f"대치 주문 취소 확인 후 {recovery['goal']} 재계획", "warn")
+        return True
+
+    def _cancel_for_standoff(self, rec: RobotRecord, avoid_nodes: set[str]) -> bool:
+        """Cancel a released order at a node, retaining its task until cancellation is confirmed."""
+        if rec.serial in self.cancel_pending or rec.serial in self._standoff_recovery or not rec.route or not rec.goal:
+            return False
+        task = self.dispatcher.tasks.get(rec.task_id) if self.dispatcher is not None and rec.task_id else None
+        if not rec.task_id or self.dispatcher is not None \
+                and (task is None or task.state != "ACTIVE" or task.robot != rec.serial):
+            return False
+        goal_actions = list(rec.goal_actions.get(len(rec.route) - 1, []))
+        states = [rec.actions.get(a["actionId"]) for a in goal_actions]
+        if any(state in ("FAILED", "RUNNING", "INITIALIZING") for state in states):
+            return False
+        goal_actions = [a for a, state in zip(goal_actions, states) if state != "FINISHED"]
+        goal, purpose, task_id = rec.goal, rec.purpose, rec.task_id
+        self._standoff_recovery[rec.serial] = {
+            "goal": goal,
+            "purpose": purpose,
+            "goal_actions": goal_actions,
+            "task_id": task_id,
+            "avoid": set(avoid_nodes),
+            "confirmed": False,
+        }
+        rec.resume = (goal, purpose, goal_actions, task_id, sorted(avoid_nodes), "")
+        rec.purpose = "recover"
+        if self.on_order is not None:
+            self.on_order(rec)              # persist the recovery marker before cancelOrder can take effect
+            if self.mode != "RUNNING":
+                rec.purpose, rec.resume = purpose, None
+                del self._standoff_recovery[rec.serial]
+                return False
+        self._send_cancel(rec, rec.state_order_id)
+        self.event("standoff_cancel", rec.serial, "지게차 장기 대치: 현재 노드에서 주문 취소 요청", "warn")
+        return True
 
     def _orphan_tasks(self) -> None:
         """Tasks restored as ACTIVE whose vehicle no longer runs them: requeue (or fail if loaded)."""
@@ -815,6 +1069,8 @@ class FleetManager:
 
     # ================================================================ routes
     def can_take_route(self, rec: RobotRecord) -> bool:
+        if rec.purpose == "manual_handoff":
+            return False
         if rec.mode != "AUTOMATIC" or rec.fatal or rec.connection != "ONLINE" or not rec.has_state:
             return False
         if rec.last_node is None or rec.driving or rec.dist_since > 1e-6:
@@ -919,6 +1175,8 @@ class FleetManager:
         return pen
 
     def route_done(self, rec: RobotRecord) -> bool:
+        if rec.purpose == "manual_handoff":
+            return False
         if rec.purpose == "recover" and rec.route and rec.state_remaining == 0 and not rec.driving \
                 and rec.dist_since < 1e-6:
             return True   # canceled order: the vehicle stopped wherever it could
@@ -971,6 +1229,13 @@ class FleetManager:
         self._nudge_idle_blockers()
         self._monitor_occupancy()
         for rec in order:
+            recovery = self._standoff_recovery.get(rec.serial)
+            recovery_holds_order = recovery is not None and (
+                self.mode != "RUNNING" or not recovery.get("confirmed")
+                or recovery.get("blocked") or rec.purpose != "evade")
+            if rec.serial in self.cancel_pending or recovery_holds_order \
+                    or rec.purpose in ("recover", "manual_handoff"):
+                continue
             if rec.order_pending and rec.route and rec.connection == "ONLINE":
                 if rec.last_order is None or rec.last_order["orderId"] != rec.order_id:
                     if self.can_take_route_now(rec):
@@ -1386,6 +1651,8 @@ class FleetManager:
     def _needed(self, rec: RobotRecord) -> set[str] | None:
         if not rec.has_state or rec.connection != "ONLINE":
             return None                      # keep everything while we cannot see the robot
+        if rec.purpose == "manual_handoff":
+            return None                      # keep the released base until a stopped MANUAL state confirms handoff
         if rec.mode != "AUTOMATIC":
             return self._occupied(rec)
         if not rec.route or rec.state_order_id != rec.order_id:
@@ -1460,6 +1727,8 @@ class FleetManager:
     def _extend(self, rec: RobotRecord) -> None:
         if not rec.route or rec.mode != "AUTOMATIC" or rec.connection != "ONLINE" or rec.fatal:
             return
+        if rec.serial in self.cancel_pending or rec.purpose in ("recover", "manual_handoff"):
+            return                    # the released base is frozen until cancelOrder is confirmed
         if self.fire_alarm or self.mode in ("HOLD", "ESTOP", "FIRE"):
             return                    # fire alarm or fleet stop: release nothing beyond what vehicles already have
         if rec.last_order is None or rec.last_order["orderId"] != rec.order_id:
@@ -1887,7 +2156,7 @@ class FleetManager:
         Forklifts and the external robot have right of way: we cannot command
         them, so a standoff is only broken by moving our own robot.
         """
-        if self.cfg.strategy == "none":
+        if self.cfg.strategy == "none" or self.mode != "RUNNING":
             return
         stalled_ext = {k: v for k, v in self.external.items() if self.now - v.get("moved", self.now) > 4.0}
         stalled_fl = [tr for tr in self.tracker.tracks.values()
@@ -1902,6 +2171,12 @@ class FleetManager:
                 if turn_at is not None:
                     circles.append((tr, self.layout.nodes[turn_at].pos))
         for rec in self.robots.values():
+            released_standoff = self._released_standoff_truck(rec, stalled_fl)
+            if released_standoff is not None:
+                avoid = {n for n in self.layout.nodes
+                         if dist(self.layout.nodes[n].pos, (released_standoff.x, released_standoff.y)) < 4.5}
+                if self._cancel_for_standoff(rec, avoid):
+                    continue
             in_swing = not rec.driving and any(
                 dist(c, (rec.x, rec.y)) < SWING_RADIUS + rec.length / 2 + 0.2 for _tr, c in circles)
             if not in_swing:
@@ -1949,10 +2224,34 @@ class FleetManager:
             if rec.route and rec.goal:
                 resume = (rec.goal, rec.purpose, rec.goal_actions.get(len(rec.route) - 1, []), rec.task_id)
             if self.assign_route(rec, spot, "evade", task_id=rec.task_id):
-                rec.resume = resume
+                if rec.serial not in self._standoff_recovery:
+                    rec.resume = resume
                 rec.escape_from = escape
                 self.counters["evasions"] += 1
                 self.event("yield", rec.serial, f"양보 회피: {reason} → {spot}", "info")
+
+    def _released_standoff_truck(self, rec: RobotRecord, stalled_fl: list):
+        """Confirmed stopped truck holding a node-stationary robot inside an already released base."""
+        if self.mode != "RUNNING":
+            return None
+        if rec.serial in self.cancel_pending or rec.serial in self._standoff_recovery:
+            return None
+        if rec.connection != "ONLINE" or rec.mode != "AUTOMATIC" or rec.fatal or rec.charging or not rec.task_id:
+            return None
+        task = self.dispatcher.tasks.get(rec.task_id) if self.dispatcher is not None else None
+        if self.dispatcher is not None and (task is None or task.state != "ACTIVE" or task.robot != rec.serial):
+            return None
+        if rec.safety_field != "PROTECTIVE" or not rec.field_cause.startswith("forklift:"):
+            return None
+        if rec.protective_since is None or self.now - rec.protective_since < self.cfg.standoff_alarm_s:
+            return None
+        if rec.last_node is None or rec.driving or rec.dist_since > 1e-6 or self._goal_action_running(rec):
+            return None
+        if not rec.route or rec.state_order_id != rec.order_id or rec.state_remaining <= 0 \
+                or rec.cur_idx >= rec.base_end or rec.route[rec.cur_idx] != rec.last_node:
+            return None
+        near = [tr for tr in stalled_fl if tr.confirmed and dist((tr.x, tr.y), (rec.x, rec.y)) < 4.5]
+        return min(near, key=lambda tr: (dist((tr.x, tr.y), (rec.x, rec.y)), tr.id)) if near else None
 
     def _nudge_idle_blockers(self) -> None:
         if self.dispatcher is None:

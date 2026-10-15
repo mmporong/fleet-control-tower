@@ -3,7 +3,7 @@
 팔레트 물류센터의 자율 지게차(AGF)와 토트 AMR을 VDA 5050으로 운영하는 관제 시스템입니다. 같은 관제 코어를 설계 검증용 시뮬레이터와 MQTT 기반 실운영 서비스에서 사용합니다.
 
 - **시뮬레이션 관제탑**(`fleet.server`): 수동 지게차, 피커, 보행자, 타사 청소 로봇, 천장 카메라가 있는 현장에서 교통 제어와 이상 대응 절차를 검증하고 차량 대수를 산정합니다.
-- **실운영 관제 서비스**(`fleet.fms`): MQTT 브로커 건너편 차량을 VDMA LIF 레이아웃, SQLite 영속화, 재기동 재동기화, 계정과 권한, WMS 이벤트와 함께 운영합니다. 동봉한 차량 시뮬레이터(`fleet.agvsim`)와 mosquitto를 쓴 종단 시험 이력이 있으며, 최신 교통 코드의 전체 종단 회귀와 실차 상호운용 시험은 남아 있습니다.
+- **실운영 관제 서비스**(`fleet.fms`): MQTT 브로커 건너편 차량을 VDMA LIF 레이아웃, SQLite 영속화, 재기동 재동기화, 계정과 권한, WMS 이벤트와 함께 운영합니다. 동봉한 차량 시뮬레이터(`fleet.agvsim`)와 mosquitto를 연결해 운송 완료, 고속문 열림, 무효 메시지 거부와 감사 로그를 검증했습니다. 실차 상호운용 시험은 아직 하지 않았습니다.
 
 관제는 안전 기능이 아닙니다. 사람 보호는 차량 탑재 안전 기능과 현장 설계가 맡고, 관제는 위험에 노출되는 상황을 줄이는 운영 계층입니다([docs/SAFETY.md](docs/SAFETY.md)).
 
@@ -43,7 +43,7 @@
 | 5 | 표준 메시징과 API | `fleet/vda5050.py`, `fleet/schema.py`, `fleet/mqtt.py`, `fleet/server.py` |
 | 6 | 상위 시스템·설비 연동과 실패 주입 | WMS API, `fleet/facility.py`, 문 고장 훈련 |
 | 7 | 데이터와 KPI | 화면 KPI와 추세, `fleet/bench.py`, 결과 JSON |
-| 8 | 결함 주입 기반 검증 | 훈련 명령, Python 297개·Node 7개 시험, [BENCHMARK.md](docs/BENCHMARK.md) |
+| 8 | 결함 주입 기반 검증 | 훈련 명령, Python 336개·Node 7개 시험, [BENCHMARK.md](docs/BENCHMARK.md) |
 | 9 | 배포와 운영성 | `Dockerfile`, 인증·권한, 헬스체크, 읽기 전용 모드 |
 | 10 | 사고 조사와 문서화 | 사고 재생, 보고서·인계 양식, 비상 계획표([RUNBOOK.md](docs/RUNBOOK.md)) |
 
@@ -97,10 +97,10 @@ docker run --rm -p 127.0.0.1:8095:8095 -v fct-data:/data fleet-control-tower
 
 | 확인 항목 | 현재 상태 |
 |---|---|
-| Python 동작 시험 | 현재 공개 기준 코드에서 297개 통과. 단위·시스템·HTTP·MQTT·런타임 회귀를 포함 |
+| Python 동작 시험 | 현재 코드에서 336개 통과. 단위·시스템·HTTP·MQTT·런타임 회귀를 포함 |
 | 화면 계산 시험 | Node 시험 7개 통과 |
-| MQTT·Docker 종단 시험 | 이전 통합 버전에서 차량 시뮬레이터와 mosquitto를 연결해 운송·문 제어·무효 메시지 거부·감사 로그를 확인. 최신 교통 코드의 전체 종단 회귀는 남아 있음 |
-| 브라우저 UI | 이전 통합 버전에서 로그인·지도·KPI·CSRF·로그아웃 점검 15개를 통과. 최신 교통 코드 반영 뒤 화면 회귀는 다시 확인할 예정 |
+| MQTT·Docker 종단 시험 | 현재 코드에서 MQTT 상호운용 9개 통과. 운송 완료·문 열림·무효 메시지 거부·감사 체인을 확인했고 정상 처리의 내부 오류와 감사 문제는 0개 |
+| 브라우저 UI | 현재 코드에서 로그인·지도·KPI·CSRF·로그아웃 점검 15개 통과 |
 | 대수 산정·8시간 교대 | 최신 코드 재검증 중. 전체 148회 벤치가 끝나기 전에는 추천 대수와 처리량을 확정하지 않음 |
 
 [docs/BENCHMARK.md](docs/BENCHMARK.md)와 `results/`의 수치는 이전 측정입니다. 측정 방법과 지표 정의는 참고할 수 있지만, 최신 교통 코드의 전체 성능 결과로 읽으면 안 됩니다.
@@ -147,14 +147,14 @@ results/          벤치마크 결과 JSON
 
 ```bash
 cd ~/fleet-control-tower
-python3 -m unittest discover -s tests -t .  # Python 297개(doctest 포함)
+python3 -m unittest discover -s tests -t .  # Python 336개(doctest 포함)
 node --test tests/test_logic.cjs             # 화면 계산 함수 7개
 bash tools/benchmarks.sh shift               # 8시간 교대 시나리오
 ```
 
 - 벤치 결과 JSON에는 설정과 Python 버전, git 커밋을 기록합니다. 추적 파일이 바뀐 상태면 커밋 뒤에 `+dirty`가 붙습니다.
-- 실운영 경로는 `tools/mqtt_interop_check.py`와 Docker 종단 시험으로 검사합니다. 이전 통합 버전의 검사 기록은 통과했으며 최신 교통 코드 반영 뒤 전체 종단 회귀는 남아 있습니다.
-- `tools/ui_check.mjs`는 헤드리스 Chrome으로 로그인, 지도, KPI, CSRF, 로그아웃을 확인합니다. 이전 통합 버전에서 15개 항목을 통과했으며 최신 교통 코드 반영 뒤 다시 검사할 예정입니다.
+- 실운영 경로는 `tools/mqtt_interop_check.py`와 Docker 종단 시험으로 검사합니다. 현재 코드에서 익명 연결 환경의 MQTT 상호운용 검사 9개와 운송·고속문 종단 시험을 통과했습니다. 인증·TLS 검사는 이전 통합 버전의 기록입니다.
+- `tools/ui_check.mjs`는 헤드리스 Chrome으로 로그인, 지도, KPI, CSRF, 로그아웃을 확인합니다. 현재 코드에서 15개 항목을 통과했습니다.
 
 ## 문서
 

@@ -521,6 +521,611 @@ class StandoffEvasionTests(unittest.TestCase):
         self.assertIsNone(m._evasion_spot(rec, set()))
 
 
+    def released_order(self):
+        from fleet.dispatcher import Stop, Task
+        sim = quiet_dc()
+        m = sim.manager
+        rec = m.robots["AGF-01"]
+        act = {"actionId": "drop-at-goal", "actionType": "drop", "blockingType": "HARD"}
+        self.assertTrue(m.assign_route(rec, "R4-01", "dropoff", [act], "T-loaded"))
+        rec.state_order_id = rec.order_id
+        rec.state_remaining = 3
+        rec.base_end = min(3, len(rec.route) - 1)
+        rec.sent_base_end = rec.base_end
+        rec.loaded = True
+        held = node_res(rec.route[rec.base_end])
+        m.locks.force(rec.serial, held)
+        sim.dispatcher.tasks["T-loaded"] = Task(
+            "T-loaded", "PALLET", "FORKLIFT", [Stop(rec.goal, "drop")], 0, m.now,
+            state="ACTIVE", robot=rec.serial, assigned_at=m.now, started_at=m.now - 10.0,
+        )
+        return sim, m, rec, held
+
+    def test_a_standoff_cancel_keeps_the_released_base_until_the_vehicle_confirms(self):
+        _sim, m, rec, held = self.released_order()
+        old_order, old_route = rec.order_id, list(rec.route)
+        sent = []
+        persisted = []
+        m.on_order = lambda saved: persisted.append(m.robot_snapshot(saved))
+        m.instant = lambda serial, kind, params=None, action_id=None: sent.append((serial, kind))
+
+        self.assertTrue(m._cancel_for_standoff(rec, set()))
+        self.assertEqual((persisted[0]["purpose"], len(persisted[0]["resume"])), ("recover", 6))
+        self.assertEqual((rec.order_id, rec.route), (old_order, old_route))
+        self.assertEqual(rec.purpose, "recover")
+        self.assertEqual(rec.resume[:2], (old_route[-1], "dropoff"))
+        self.assertEqual(m.locks.holder_of(held), rec.serial)
+        rec.order_pending = True
+        base_end = rec.base_end
+        m._extend(rec)
+        self.assertEqual(rec.base_end, base_end)       # no extension while cancellation is unconfirmed
+        orders = []
+        m._send_order = lambda candidate: orders.append(candidate.serial)
+        m.tick(m.now + 0.2, 0.2)
+        self.assertEqual(orders, [])                   # no order update may race the cancel request
+        m.now += 4.0
+        m._confirm_cancels()                         # delayed state: resend, do not release or replan
+        self.assertEqual(sent, [(rec.serial, "cancelOrder"), (rec.serial, "cancelOrder")])
+        self.assertEqual((rec.order_id, rec.route), (old_order, old_route))
+        self.assertEqual(m.locks.holder_of(held), rec.serial)
+
+        rec.connection = "OFFLINE"
+        m.now += 4.0
+        m._confirm_cancels()                         # no radio retries while the vehicle is unreachable
+        self.assertEqual(len(sent), 2)
+        self.assertEqual(m.locks.holder_of(held), rec.serial)
+
+    def test_a_confirmed_standoff_cancel_resumes_the_same_loaded_task(self):
+        _sim, m, rec, held = self.released_order()
+        old_order, goal = rec.order_id, rec.goal
+        goal_actions = list(rec.goal_actions[len(rec.route) - 1])
+        old_action_id = goal_actions[0]["actionId"]
+        m.instant = lambda *_args, **_kwargs: None
+        self.assertTrue(m._cancel_for_standoff(rec, set()))
+
+        rec.state_remaining = 0
+        rec.last_seen = m.now + 0.1                 # a state received after the cancel request
+        m._confirm_cancels()
+
+        self.assertNotEqual(rec.order_id, old_order)
+        self.assertEqual((rec.goal, rec.purpose, rec.task_id, rec.loaded),
+                         (goal, "dropoff", "T-loaded", True))
+        resumed = rec.goal_actions[len(rec.route) - 1]
+        self.assertEqual(resumed[0]["actionType"], goal_actions[0]["actionType"])
+        self.assertNotEqual(resumed[0]["actionId"], old_action_id)
+        self.assertNotIn(rec.serial, m.cancel_pending)
+        self.assertIsNone(m.locks.holder_of(held))
+        self.assertEqual(m.locks.holder_of(node_res(rec.last_node)), rec.serial)
+
+    def test_a_confirmed_recovery_does_not_erase_its_fallback_evasion_route(self):
+        _sim, m, rec, _held = self.released_order()
+        original_goal = rec.goal
+        m.instant = lambda *_args, **_kwargs: None
+        self.assertTrue(m._cancel_for_standoff(rec, {"NE22_8"}))
+        recovery = m._standoff_recovery[rec.serial]
+        real_assign = m.assign_route
+
+        direct_allowed = [False]
+
+        def no_direct_recovery(candidate, goal, purpose, *args, **kwargs):
+            if not direct_allowed[0] and goal == original_goal and purpose == "dropoff":
+                return False
+            return real_assign(candidate, goal, purpose, *args, **kwargs)
+
+        m.assign_route = no_direct_recovery
+        rec.state_remaining = 0
+        rec.last_seen = m.now + 0.1
+        m._confirm_cancels()
+        self.assertTrue(recovery["confirmed"])
+        self.assertEqual(rec.route, [])
+
+        self.assertTrue(real_assign(rec, "qNW10NW16_2", "evade", task_id=rec.task_id))
+        fallback = list(rec.route)
+        sent = []
+        m._send_order = lambda candidate: sent.append(candidate.serial)
+        m.mode = "HOLD"
+        m.tick(m.now + 0.2, 0.2)
+
+        self.assertEqual(rec.route, fallback)
+        self.assertEqual(rec.purpose, "evade")
+        self.assertEqual(sent, [])
+        m.mode = "RUNNING"
+        m.tick(m.now + 0.2, 0.2)
+        self.assertEqual(sent, [rec.serial])
+        self.assertIn(rec.serial, m._standoff_recovery)
+
+        direct_allowed[0] = True
+        rec.state_order_id = rec.order_id
+        rec.state_remaining = 0
+        rec.cur_idx = len(rec.route) - 1
+        rec.last_node = rec.route[-1]
+        rec.driving, rec.dist_since = False, 0.0
+        m._confirm_cancels()
+
+        self.assertEqual((rec.goal, rec.purpose, rec.task_id),
+                         (original_goal, "dropoff", "T-loaded"))
+        self.assertNotIn(rec.serial, m._standoff_recovery)
+
+    def test_a_restart_continues_a_confirmed_standoff_evasion_before_resuming(self):
+        _sim, m, rec, _held = self.released_order()
+        m.instant = lambda *_args, **_kwargs: None
+        self.assertTrue(m._cancel_for_standoff(rec, {"NE22_8"}))
+        rec.state_remaining = 0
+        rec.last_seen = m.now + 0.1
+        recovery = m._standoff_recovery[rec.serial]
+        recovery["confirmed"] = True
+        m.cancel_pending.pop(rec.serial, None)
+        m.cancel_action.pop(rec.serial, None)
+        self.assertTrue(m.assign_route(rec, "qNW10NW16_2", "evade", task_id=rec.task_id))
+        evasion_order, evasion_route = rec.order_id, list(rec.route)
+        snap = m.robot_snapshot(rec)
+
+        restored = FleetManager(m.layout, Bus(random.Random(97)))
+        restored.restore({rec.serial: snap})
+        rr = restored.robots[rec.serial]
+        rr.has_state, rr.connection, rr.mode = True, "ONLINE", "AUTOMATIC"
+        rr.last_node, rr.state_order_id = evasion_route[0], evasion_order
+        rr.state_remaining, rr.driving, rr.dist_since = 3, True, 0.2
+        restored._reconcile(rr)
+
+        self.assertEqual((rr.purpose, rr.route), ("evade", evasion_route))
+        self.assertIn(rr.serial, restored._standoff_recovery)
+        self.assertTrue(restored._standoff_recovery[rr.serial]["confirmed"])
+        self.assertNotIn(rr.serial, restored.cancel_pending)
+
+    def test_a_restart_does_not_mistake_an_ordinary_evasion_for_standoff_recovery(self):
+        _sim, m, rec, _held = self.released_order()
+        original = (rec.goal, rec.purpose, list(rec.goal_actions[len(rec.route) - 1]), rec.task_id)
+        self.assertTrue(m.assign_route(rec, "qNW10NW16_2", "evade", task_id=rec.task_id))
+        rec.resume = original
+        snap = m.robot_snapshot(rec)
+
+        restored = FleetManager(m.layout, Bus(random.Random(96)))
+        restored.restore({rec.serial: snap})
+        rr = restored.robots[rec.serial]
+        rr.has_state, rr.connection, rr.mode = True, "ONLINE", "AUTOMATIC"
+        rr.last_node, rr.state_order_id = rec.route[0], rec.order_id
+        rr.state_remaining, rr.driving, rr.dist_since = 3, True, 0.2
+        restored._reconcile(rr)
+
+        self.assertEqual((rr.purpose, rr.resume), ("evade", original))
+        self.assertNotIn(rr.serial, restored._standoff_recovery)
+        self.assertNotIn(rr.serial, restored.robot_paused)
+
+    def test_a_stale_zero_remaining_state_does_not_confirm_the_cancel(self):
+        _sim, m, rec, held = self.released_order()
+        m.instant = lambda *_args, **_kwargs: None
+        self.assertTrue(m._cancel_for_standoff(rec, set()))
+        rec.state_remaining = 0                         # no newer state was received
+        m._confirm_cancels()
+        self.assertIn(rec.serial, m.cancel_pending)
+        self.assertEqual(m.locks.holder_of(held), rec.serial)
+
+    def test_a_different_actual_order_keeps_the_old_order_frozen(self):
+        _sim, m, rec, _held = self.released_order()
+        old_order = rec.order_id
+        m.instant = lambda *_args, **_kwargs: None
+        self.assertTrue(m._cancel_for_standoff(rec, set()))
+        rec.order_pending = False
+        rec.last_order = {"orderId": old_order, "orderUpdateId": rec.update_id}
+        rec.last_order_at = -10.0
+        rec.state_order_id = "vendor-other-order"
+        rec.state_remaining = 2
+        rec.last_seen = m.now + 0.1
+        published = []
+        m.bus.publish = lambda topic, payload, now: published.append((topic, payload)) or True
+
+        m.tick(m.now + 0.2, 0.2)
+
+        recovery = m._standoff_recovery[rec.serial]
+        self.assertTrue(recovery["blocked"])
+        self.assertIn(rec.serial, m.robot_paused)
+        self.assertFalse(any("orderId" in payload for _topic, payload in published))
+
+    def test_a_failed_pre_cancel_snapshot_does_not_send_the_cancel(self):
+        _sim, m, rec, _held = self.released_order()
+        sent = []
+        m.on_order = lambda _saved: setattr(m, "mode", "HOLD")
+        m.instant = lambda serial, kind, params=None, action_id=None: sent.append((serial, kind))
+        self.assertFalse(m._cancel_for_standoff(rec, set()))
+        self.assertEqual(sent, [])
+        self.assertNotIn(rec.serial, m.cancel_pending)
+        self.assertEqual((rec.purpose, rec.resume), ("dropoff", None))
+
+    def test_finished_actions_are_not_replayed_and_failed_actions_block_recovery(self):
+        _sim, m, rec, _held = self.released_order()
+        action_id = rec.goal_actions[len(rec.route) - 1][0]["actionId"]
+        rec.actions[action_id] = "FINISHED"
+        m.instant = lambda *_args, **_kwargs: None
+        self.assertTrue(m._cancel_for_standoff(rec, set()))
+        rec.state_remaining = 0
+        rec.last_seen = m.now + 0.1
+        m._confirm_cancels()
+        self.assertEqual(rec.goal_actions, {})
+
+        _sim, m, rec, _held = self.released_order()
+        action_id = rec.goal_actions[len(rec.route) - 1][0]["actionId"]
+        rec.actions[action_id] = "FAILED"
+        self.assertFalse(m._cancel_for_standoff(rec, set()))
+
+    def test_an_action_that_finishes_while_cancel_is_pending_is_not_scheduled_twice(self):
+        _sim, m, rec, _held = self.released_order()
+        old_order = rec.order_id
+        action_id = rec.goal_actions[len(rec.route) - 1][0]["actionId"]
+        m.instant = lambda *_args, **_kwargs: None
+        self.assertTrue(m._cancel_for_standoff(rec, set()))
+        rec.actions[action_id] = "FINISHED"
+        rec.state_remaining = 0
+        rec.last_seen = m.now + 0.1
+        m._confirm_cancels()
+        self.assertNotEqual(rec.order_id, old_order)
+        self.assertEqual(rec.goal_actions, {})
+
+    def test_an_operator_reassignment_ends_recovery_then_the_generic_cancel_clears_the_route(self):
+        sim, m, rec, held = self.released_order()
+        m.instant = lambda *_args, **_kwargs: None
+        self.assertTrue(m._cancel_for_standoff(rec, set()))
+        sim.dispatcher.reassign("T-loaded")
+        self.assertIsNone(rec.task_id)
+        self.assertNotIn("T-loaded", sim.dispatcher.tasks)
+        self.assertNotIn(rec.serial, m._standoff_recovery)
+        self.assertIsNone(rec.resume)
+        self.assertIn(rec.serial, m.cancel_pending)
+        rec.state_remaining = 0
+        rec.last_seen = m.now + 0.1
+
+        m._confirm_cancels()
+        sim.dispatcher._advance_job(rec, m.now)
+        m._progress(rec)
+
+        self.assertNotIn(rec.serial, m.cancel_pending)
+        self.assertEqual((rec.route, rec.purpose), ([], ""))
+        self.assertIsNone(m.locks.holder_of(held))
+
+    def test_a_generic_detach_tracks_one_cancel_and_does_not_replace_its_running_action(self):
+        sim, m, rec, _held = self.released_order()
+        sent = []
+
+        def send(_serial, kind, _params=None, action_id=None):
+            sent.append(action_id)
+            return action_id
+
+        m.instant = send
+        sim.dispatcher.detach(rec, "고장 장기화")
+        first = sent[0]
+        self.assertEqual(m.cancel_pending[rec.serial][0], rec.state_order_id)
+        self.assertEqual(m.cancel_action[rec.serial], first)
+
+        sim.dispatcher.detach(rec, "고장 장기화")
+        self.assertEqual(sent, [first])
+        rec.actions[first] = "RUNNING"
+        m.now += 4.0
+        m._confirm_cancels()
+        self.assertEqual(sent, [first])
+
+        rec.actions[first] = "FAILED"
+        m.now += 0.2
+        m._confirm_cancels()
+        self.assertEqual(sent, [first, "cancelOrder-2"])
+        self.assertEqual(m.cancel_action[rec.serial], "cancelOrder-2")
+
+    def test_a_generic_detach_needs_a_new_stopped_state_before_releasing_its_route(self):
+        sim, m, rec, held = self.released_order()
+        m.instant = lambda *_args, **_kwargs: "cancel-generic"
+        sim.dispatcher.detach(rec, "고장 장기화")
+        _order_id, sent = m.cancel_pending[rec.serial]
+        rec.state_remaining = 0
+        rec.driving, rec.dist_since = False, 0.0
+        rec.last_seen = sent                    # the zero state predates the cancel request
+
+        m._confirm_cancels()
+        sim.dispatcher._advance_job(rec, m.now)
+        m._progress(rec)
+
+        self.assertIn(rec.serial, m.cancel_pending)
+        self.assertEqual(m.locks.holder_of(held), rec.serial)
+
+    def test_a_generic_detach_holds_and_cancels_a_new_actual_order(self):
+        sim, m, rec, _held = self.released_order()
+        sent = []
+        m.instant = lambda _serial, kind, _params=None, action_id=None: sent.append(kind) or action_id
+        sim.dispatcher.detach(rec, "고장 장기화")
+        reported = rec.route[min(1, len(rec.route) - 1)]
+        rec.state_order_id = "vendor-new-order"
+        rec.state_remaining = 4
+        rec.state_nodes = [(reported, 2, True)]
+        rec.last_seen = m.now + 0.1
+
+        m._confirm_cancels()
+
+        self.assertEqual(m.locks.holder_of(node_res(reported)), rec.serial)
+        self.assertIn(rec.serial, m.robot_paused)
+        self.assertTrue(m.alarms.is_active(f"RESERVATION_MISMATCH:{rec.serial}"))
+        self.assertEqual(m.cancel_pending[rec.serial][0], "vendor-new-order")
+        self.assertEqual(sent, ["cancelOrder", "cancelOrder"])
+
+    def test_a_restart_reissues_a_persisted_generic_detach_cancel(self):
+        sim, m, rec, _held = self.released_order()
+        m.instant = lambda *_args, **_kwargs: "cancel-before-restart"
+        sim.dispatcher.detach(rec, "고장 장기화")
+        snap = m.robot_snapshot(rec)
+        self.assertEqual((snap["cancel_order_id"], snap["cancel_action_id"]),
+                         (rec.state_order_id, m.cancel_action[rec.serial]))
+
+        restored = FleetManager(m.layout, Bus(random.Random(95)))
+        restored.run_id = "after-"
+        restored.restore({rec.serial: snap})
+        rr = restored.robots[rec.serial]
+        rr.has_state, rr.connection, rr.mode = True, "ONLINE", "AUTOMATIC"
+        rr.last_node, rr.state_order_id = rec.last_node, rec.state_order_id
+        rr.state_remaining, rr.driving, rr.dist_since = 3, False, 0.2
+        sent = []
+        restored.instant = lambda serial, kind, params=None, action_id=None: \
+            sent.append((serial, kind)) or action_id
+        restored._reconcile(rr)
+
+        self.assertEqual(sent, [(rec.serial, "cancelOrder")])
+        self.assertEqual(restored.cancel_pending[rec.serial][0], rec.state_order_id)
+        self.assertEqual(restored.cancel_action[rec.serial], "after-cancelOrder-1")
+        self.assertNotEqual(restored.cancel_action[rec.serial], snap["cancel_action_id"])
+        self.assertEqual((rr.purpose, rr.task_id), ("recover", None))
+
+    def test_a_restart_keeps_a_running_persisted_cancel_without_replacing_it(self):
+        sim, m, rec, _held = self.released_order()
+        m.instant = lambda *_args, **_kwargs: "cancel-before-restart"
+        sim.dispatcher.detach(rec, "고장 장기화")
+        snap = m.robot_snapshot(rec)
+
+        restored = FleetManager(m.layout, Bus(random.Random(951)))
+        restored.restore({rec.serial: snap})
+        rr = restored.robots[rec.serial]
+        rr.has_state, rr.connection, rr.mode = True, "ONLINE", "AUTOMATIC"
+        rr.last_node, rr.state_order_id = rec.last_node, rec.state_order_id
+        rr.state_remaining, rr.driving, rr.dist_since = 3, False, 0.2
+        rr.actions[snap["cancel_action_id"]] = "RUNNING"
+        sent = []
+        restored.instant = lambda serial, kind, params=None, action_id=None: \
+            sent.append((serial, kind)) or action_id
+
+        restored._reconcile(rr)
+
+        self.assertEqual(sent, [])
+        self.assertEqual(restored.cancel_pending[rec.serial][0], rec.state_order_id)
+        self.assertEqual(restored.cancel_action[rec.serial], snap["cancel_action_id"])
+
+    def test_a_restart_keeps_the_running_cancel_for_a_new_actual_order(self):
+        sim, m, rec, _held = self.released_order()
+        sim.dispatcher.detach(rec, "고장 장기화")
+        reported = rec.route[min(1, len(rec.route) - 1)]
+        rec.state_order_id = "vendor-new-order"
+        rec.state_remaining = 4
+        rec.state_nodes = [(reported, 2, True)]
+        rec.last_seen = m.now + 0.1
+        m._confirm_cancels()
+        persisted_action = m.cancel_action[rec.serial]
+        snap = m.robot_snapshot(rec)
+
+        restored = FleetManager(m.layout, Bus(random.Random(952)))
+        restored.run_id = "after-"
+        restored.restore({rec.serial: snap})
+        rr = restored.robots[rec.serial]
+        rr.has_state, rr.connection, rr.mode = True, "ONLINE", "AUTOMATIC"
+        rr.last_node, rr.state_order_id = rec.last_node, "vendor-new-order"
+        rr.state_remaining, rr.driving, rr.dist_since = 4, False, 0.2
+        rr.state_nodes = [(reported, 2, True)]
+        rr.actions[persisted_action] = "RUNNING"
+        sent = []
+        restored.instant = lambda serial, kind, params=None, action_id=None: \
+            sent.append((serial, kind, action_id)) or action_id
+
+        restored._reconcile(rr)
+
+        self.assertEqual(sent, [])
+        self.assertEqual(restored.cancel_pending[rec.serial][0], "vendor-new-order")
+        self.assertEqual(restored.cancel_action[rec.serial], persisted_action)
+
+    def test_only_a_cancel_failed_action_is_reissued_after_confirmation(self):
+        _sim, m, rec, _held = self.released_order()
+        action_id = rec.goal_actions[len(rec.route) - 1][0]["actionId"]
+        m.instant = lambda *_args, **_kwargs: None
+        self.assertTrue(m._cancel_for_standoff(rec, set()))
+        rec.actions[action_id] = "FAILED"
+        rec.action_results[action_id] = "cancelOrder"
+        rec.state_remaining = 0
+        rec.last_seen = m.now + 0.1
+        m._confirm_cancels()
+        resumed = rec.goal_actions[len(rec.route) - 1][0]
+        self.assertNotEqual(resumed["actionId"], action_id)
+
+        _sim, m, rec, _held = self.released_order()
+        old_order = rec.order_id
+        action_id = rec.goal_actions[len(rec.route) - 1][0]["actionId"]
+        m.instant = lambda *_args, **_kwargs: None
+        self.assertTrue(m._cancel_for_standoff(rec, set()))
+        rec.actions[action_id] = "FAILED"
+        rec.action_results[action_id] = "station error"
+        rec.state_remaining = 0
+        rec.last_seen = m.now + 0.1
+        m._confirm_cancels()
+        self.assertEqual(rec.order_id, old_order)
+        self.assertIn(rec.serial, m.robot_paused)
+
+    def test_a_blocked_action_recovery_stays_blocked_after_a_restart(self):
+        _sim, m, rec, held = self.released_order()
+        old_order = rec.order_id
+        action_id = rec.goal_actions[len(rec.route) - 1][0]["actionId"]
+        snapshots = []
+        m.on_order = lambda saved: snapshots.append(m.robot_snapshot(saved))
+        m.instant = lambda *_args, **_kwargs: None
+        self.assertTrue(m._cancel_for_standoff(rec, set()))
+        rec.actions[action_id] = "FAILED"
+        rec.action_results[action_id] = "station error"
+        rec.state_remaining = 0
+        rec.last_seen = m.now + 0.1
+        m._confirm_cancels()
+        snap = snapshots[-1]
+        self.assertIn("동작 상태 불일치", snap["resume"][5])
+
+        restored = FleetManager(m.layout, Bus(random.Random(98)))
+        restored.restore({rec.serial: snap})
+        rr = restored.robots[rec.serial]
+        rr.has_state, rr.connection, rr.mode = True, "ONLINE", "AUTOMATIC"
+        rr.last_node, rr.state_order_id = rec.last_node, old_order
+        rr.state_remaining, rr.driving, rr.dist_since = 0, False, 0.0
+        rr.actions = {}
+        restored._reconcile(rr)
+        restored.mode = "RUNNING"
+        restored._confirm_cancels()
+
+        self.assertEqual(rr.order_id, old_order)
+        self.assertTrue(restored._standoff_recovery[rr.serial]["blocked"])
+        self.assertIn(rr.serial, restored.robot_paused)
+        self.assertIsNone(restored.locks.holder_of(held))
+        self.assertEqual(restored.locks.holder_of(node_res(rr.last_node)), rr.serial)
+
+    def test_the_loaded_task_finishes_once_only_after_the_new_goal_action(self):
+        from types import SimpleNamespace
+        from fleet.dispatcher import Stop, Task
+        sim, m, rec, _held = self.released_order()
+        d = sim.dispatcher
+        task = Task("T-loaded", "PALLET", "FORKLIFT", [Stop(rec.goal, "drop")], 0, m.now,
+                    state="ACTIVE", robot=rec.serial, assigned_at=m.now, started_at=m.now - 10.0)
+        d.tasks[task.id] = task
+        events = []
+        d.process = SimpleNamespace(
+            on_stop_done=lambda *_args: events.append("stop"),
+            on_task_end=lambda *_args: events.append("end"),
+        )
+        m.instant = lambda *_args, **_kwargs: None
+        self.assertTrue(m._cancel_for_standoff(rec, set()))
+        rec.state_remaining = 0
+        rec.last_seen = m.now + 0.1
+        m._confirm_cancels()
+        action_id = rec.goal_actions[len(rec.route) - 1][0]["actionId"]
+        rec.state_order_id = rec.order_id
+        rec.cur_idx = rec.base_end = len(rec.route) - 1
+        rec.last_node, rec.driving, rec.dist_since = rec.goal, False, 0.0
+        rec.actions[action_id] = "WAITING"
+        d._advance_job(rec, m.now)
+        self.assertIn(task.id, d.tasks)
+        self.assertEqual(events, [])
+
+        rec.actions[action_id] = "FINISHED"
+        d._advance_job(rec, m.now)
+        d._advance_job(rec, m.now)
+        self.assertNotIn(task.id, d.tasks)
+        self.assertEqual(events, ["stop", "end"])
+
+    def test_a_restart_continues_the_persisted_cancel_before_resuming_the_task(self):
+        _sim, m, rec, held = self.released_order()
+        m.instant = lambda *_args, **_kwargs: None
+        avoid = {"NE22_8"}
+        self.assertIn(next(iter(avoid)), rec.route)
+        self.assertTrue(m._cancel_for_standoff(rec, avoid))
+        snap = m.robot_snapshot(rec)
+        self.assertEqual((snap["purpose"], len(snap["resume"]), set(snap["resume"][4])),
+                         ("recover", 6, avoid))
+
+        restored = FleetManager(m.layout, Bus(random.Random(99)))
+        restored.restore({rec.serial: snap})
+        rr = restored.robots[rec.serial]
+        rr.has_state, rr.connection, rr.mode = True, "ONLINE", "AUTOMATIC"
+        rr.last_node, rr.state_order_id = rec.last_node, rec.order_id
+        rr.state_remaining, rr.driving, rr.dist_since, rr.loaded = 0, False, 0.0, True
+        restored._reconcile(rr)
+
+        self.assertEqual((rr.order_id, rr.purpose), (snap["order_id"], "recover"))
+        self.assertIn(rr.serial, restored._standoff_recovery)
+        self.assertEqual(restored.locks.holder_of(held), rr.serial)
+        restored.mode = "RUNNING"
+        restored._confirm_cancels()
+
+        self.assertEqual((rr.goal, rr.purpose, rr.task_id, rr.loaded),
+                         (snap["resume"][0], "dropoff", "T-loaded", True))
+        self.assertTrue(avoid.isdisjoint(rr.route))
+        self.assertIsNone(restored.locks.holder_of(held))
+        self.assertEqual(restored.locks.holder_of(node_res(rr.last_node)), rr.serial)
+
+    def test_a_restart_keeps_a_running_standoff_cancel_without_replacing_it(self):
+        _sim, m, rec, _held = self.released_order()
+        self.assertTrue(m._cancel_for_standoff(rec, {"NE22_8"}))
+        snap = m.robot_snapshot(rec)
+        persisted_action = snap["cancel_action_id"]
+
+        restored = FleetManager(m.layout, Bus(random.Random(991)))
+        restored.run_id = "after-"
+        restored.restore({rec.serial: snap})
+        rr = restored.robots[rec.serial]
+        rr.has_state, rr.connection, rr.mode = True, "ONLINE", "AUTOMATIC"
+        rr.last_node, rr.state_order_id = rec.last_node, rec.order_id
+        rr.state_remaining, rr.driving, rr.dist_since, rr.loaded = 3, False, 0.0, True
+        rr.actions[persisted_action] = "RUNNING"
+        sent = []
+        restored.instant = lambda serial, kind, params=None, action_id=None: \
+            sent.append((serial, kind, action_id)) or action_id
+
+        restored._reconcile(rr)
+
+        self.assertEqual(sent, [])
+        self.assertEqual(restored.cancel_pending[rec.serial][0], rec.order_id)
+        self.assertEqual(restored.cancel_action[rec.serial], persisted_action)
+        self.assertIn(rec.serial, restored._standoff_recovery)
+
+    def test_a_confirmed_recovery_waits_for_running_mode_before_replanning_or_sending(self):
+        _sim, m, rec, held = self.released_order()
+        old_order = rec.order_id
+        sent = []
+        m.instant = lambda *_args, **_kwargs: None
+        m._send_order = lambda candidate: sent.append(candidate.order_id)
+        self.assertTrue(m._cancel_for_standoff(rec, set()))
+        rec.state_remaining = 0
+        rec.last_seen = m.now + 0.1
+        m.mode = "HOLD"
+
+        m._confirm_cancels()
+        self.assertEqual((rec.order_id, rec.purpose), (old_order, "recover"))
+        self.assertIn(rec.serial, m._standoff_recovery)
+        self.assertEqual(m.locks.holder_of(held), rec.serial)
+        m.tick(m.now + 0.2, 0.2)
+        self.assertEqual(sent, [])
+
+        m.mode = "RUNNING"
+        m._confirm_cancels()
+        self.assertNotEqual(rec.order_id, old_order)
+        self.assertNotIn(rec.serial, m._standoff_recovery)
+        self.assertIsNone(m.locks.holder_of(held))
+
+    def test_only_a_long_node_standoff_without_a_running_action_can_be_cancelled(self):
+        _sim, m, rec, _held = self.released_order()
+        tid = confirmed_track(m, "forklift", rec.x + 2.0, rec.y)
+        truck = m.tracker.tracks[tid]
+        rec.safety_field, rec.field_cause = "PROTECTIVE", "forklift:FL-R1"
+        rec.protective_since = m.now - m.cfg.standoff_alarm_s - 1.0
+        rec.driving, rec.dist_since, rec.charging = False, 0.0, False
+        self.assertIs(m._released_standoff_truck(rec, [truck]), truck)
+        for change in (
+                lambda: setattr(rec, "protective_since", m.now - m.cfg.standoff_alarm_s + 1.0),
+                lambda: setattr(rec, "dist_since", 0.1),
+                lambda: rec.actions.update({"drop-at-goal": "RUNNING"})):
+            rec.protective_since = m.now - m.cfg.standoff_alarm_s - 1.0
+            rec.dist_since = 0.0
+            rec.actions.clear()
+            change()
+            self.assertIsNone(m._released_standoff_truck(rec, [truck]))
+
+    def test_an_unloaded_active_task_can_recover_but_an_unassigned_robot_cannot(self):
+        _sim, m, rec, _held = self.released_order()
+        tid = confirmed_track(m, "forklift", rec.x + 2.0, rec.y)
+        truck = m.tracker.tracks[tid]
+        rec.safety_field, rec.field_cause = "PROTECTIVE", "forklift:FL-R1"
+        rec.protective_since = m.now - m.cfg.standoff_alarm_s - 1.0
+        rec.driving, rec.dist_since, rec.charging = False, 0.0, False
+        rec.loaded = False
+        self.assertIs(m._released_standoff_truck(rec, [truck]), truck)
+        rec.loaded, rec.task_id = True, None
+        self.assertIsNone(m._released_standoff_truck(rec, [truck]))
+
+
 class PickerTests(unittest.TestCase):
     def walking_picker(self):
         from fleet.agents import Walker
@@ -781,6 +1386,7 @@ class RestartTests(unittest.TestCase):
         m._confirm_cancels()
         self.assertGreater(len(w.bus._queue), before)
         rec.state_remaining = 0
+        rec.last_seen = m.now + 0.1
         m._confirm_cancels()
         self.assertNotIn("AMR-01", m.cancel_pending)
 

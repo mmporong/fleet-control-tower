@@ -21,14 +21,15 @@ class Scenario:
     description: str
     site: str = "dc"
     # ---- dc fleet and process
-    # fleet sized by measurement at the design peak within the site's waiting places (docs/BENCHMARK.md 3.1)
+    # Operating fleet stays within waiting-place limits; demand coverage is measured in docs/BENCHMARK.md.
     agf: int = 10
     amr: int = 14
     # demand: the site's design basis (docs/SITE.md section 5), fixed before any capacity was measured.
     # Inbound: 6 doors, one truck per door every 2 h (unloading, paperwork, swap) = 3.0 trucks/h at peak,
     # 2.4 in an average hour (10-16 pallets each). Outbound: inventory balance, the same pallets out.
-    # Totes: 6 pickers x 100 units/h (lower end of robot-assisted cases, 98-200 UPH) / 5.83 units per order
-    # = 103 orders/h at peak, 82 in an average hour. The fleet is sized to the peak (docs/BENCHMARK.md).
+    # Totes: design basis of 6 pickers x 100 units/person-hour (assumption) / 5.83 units per order
+    # = 103 orders/h at peak, 82 in an average hour. Operating picker counts do not rescale this demand.
+    # Public UPH case studies omit comparable work-unit/person denominators (docs/SITE.md section 5).
     trucks_h: float = DESIGN_AVG["trucks_h"]
     out_pallets_h: float = DESIGN_AVG["out_pallets_h"]
     tote_orders_h: float = DESIGN_AVG["tote_orders_h"]
