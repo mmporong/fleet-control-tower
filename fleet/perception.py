@@ -119,17 +119,18 @@ class Tracker:
         pairs = []
         for tid, tr in self.tracks.items():
             px, py = tr.predict(now)
-            gate = GATE.get(tr.cls, self.gate) + tr.sigma(now)
             for j, d in enumerate(dets):
+                same_class = d.cls == tr.cls
+                gate = (GATE.get(tr.cls, self.gate) if same_class else self.gate) + tr.sigma(now)
                 dd = math.hypot(d.x - px, d.y - py)
                 if dd <= gate:
-                    # associate by position; a detection of the other class costs extra so that a person next
-                    # to a truck still goes to the person's track, but a misread class does not start a new one
-                    pairs.append((dd + (0.0 if d.cls == tr.cls else 0.8), tid, j))
+                    # Match all same-class observations first. A close one-off misclassification may still use
+                    # the normal gate, but never the wider forklift gate or priority over the real truck.
+                    pairs.append((not same_class, dd, tid, j))
         pairs.sort()
         used_t: set[str] = set()
         used_d: set[int] = set()
-        for dd, tid, j in pairs:
+        for _other_class, _distance, tid, j in pairs:
             if tid in used_t or j in used_d:
                 continue
             used_t.add(tid)
@@ -241,6 +242,10 @@ class Tracker:
             moving = tr.speed >= STILL_SPEED
             base = BODY_RADIUS.get(tr.cls, 0.3) + CLEARANCE.get(tr.cls, 0.35)
             offsets = BODY_OFFSETS.get(tr.cls, (0.0,))
+            if offsets == (0.0,) and tr.resting:
+                # A stationary person's filter velocity can cross STILL_SPEED on camera noise alone. Require a
+                # clear departure until the displacement window changes the track back to moving.
+                moving = tr.speed >= 2 * STILL_SPEED
             if offsets != (0.0,) and tr.resting:
                 # a truck at rest by displacement: its velocity estimate is noise unless clearly above it, and
                 # its swept circle stays held until it has moved off

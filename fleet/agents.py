@@ -254,6 +254,11 @@ class Human:
                 blocked = True          # let a moving robot pass
                 break
             if abs(rv) <= 0.05 and gap < 0.6:
+                if self._at_shelf_face():
+                    # The tote AMR body circles keep their real 0.6 m width, so a picker already against the
+                    # shelf can walk past an aligned, standing AMR. The trial-step body check below still holds
+                    # them when an angled chassis intrudes into the walking line or the physical gap is < 6 cm.
+                    continue
                 if self.walker.idx < self.detour_until_idx:
                     if gap < 0.05:
                         blocked = True      # already walking around it; never walk into it
@@ -404,7 +409,7 @@ class Forklift:
         self.bx, self.by = n.x, n.y
         self.x, self.y = n.x, n.y
 
-    def _free_offset(self, heading: float, offset: float, robots=()) -> bool:
+    def _free_offset(self, heading: float, offset: float, robots=(), humans=()) -> bool:
         """Room beside the lane for the whole truck: no racks, walls or other vehicles."""
         nx, ny = -math.sin(heading), math.cos(heading)
         for d in (-1.2, -0.4, 0.4, 1.2, 2.2):
@@ -419,6 +424,9 @@ class Forklift:
                     return False
             for _rid, rx, ry, rr, _rv in robots:
                 if math.hypot(rx - px, ry - py) < rr + 0.6 + 0.3:
+                    return False
+            for person in humans:
+                if math.hypot(person.x - px, person.y - py) < person.radius + 0.6 + 0.3:
                     return False
         return True
 
@@ -494,8 +502,16 @@ class Forklift:
             self.lat_target = 0.0
         if abs(self.lat - self.lat_target) > 1e-3:
             mine = self.circles()
-            if any(math.hypot(rx - cx, ry - cy) < rr + cr + 0.5 for _i, rx, ry, rr, _v in robots
-                   for cx, cy, cr in mine):
+            step_lat = min(abs(self.lat_target - self.lat), 0.8 * dt)
+            delta_m = step_lat if self.lat_target > self.lat else -step_lat
+            dx_m, dy_m = -math.sin(heading) * delta_m, math.cos(heading) * delta_m
+            # A nearby person or robot may already be inside the comfort margin. Allow a sideways step that
+            # increases every close gap; otherwise a driver trying to give room can never move away.
+            nearby_bodies = [(rx, ry, rr) for _i, rx, ry, rr, _v in robots] + \
+                [(person.x, person.y, person.radius) for person in humans]
+            if any(math.hypot(rx - cx - dx_m, ry - cy - dy_m) < rr + cr + 0.5
+                   and math.hypot(rx - cx - dx_m, ry - cy - dy_m) < math.hypot(rx - cx, ry - cy) - 1e-9
+                   for rx, ry, rr in nearby_bodies for cx, cy, cr in mine):
                 self.v = 0.0          # something beside the truck: hold the sideways move
                 if self.blocked_since is None:
                     self.blocked_since = now
@@ -506,8 +522,7 @@ class Forklift:
                     self.blocked_since = None
                 self._stalled(now)
                 return
-            step_lat = min(abs(self.lat_target - self.lat), 0.8 * dt)
-            self.lat += step_lat if self.lat_target > self.lat else -step_lat
+            self.lat += delta_m
             self._place(heading)
             self.v = 0.4
             self.stall_since = None
@@ -529,7 +544,7 @@ class Forklift:
                 if self.blocked_since is None:
                     self.blocked_since = now
                 elif now - self.blocked_since > 8.0:
-                    side = next((o for o in (1.3, -1.3) if self._free_offset(heading, o, robots)), None)
+                    side = next((o for o in (1.3, -1.3) if self._free_offset(heading, o, robots, humans)), None)
                     if abs(rv) < 0.05 and side is not None:
                         # driver steers around a robot that stays put, with body clearance
                         self.passing[rid] = now + 15.0

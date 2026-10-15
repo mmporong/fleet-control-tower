@@ -1675,10 +1675,14 @@ class FleetManager:
 
     # ---------------------------------------------------------------- deadlocks
     def _field_blocker(self, rec: RobotRecord) -> str | None:
-        """The robot a protective-stopped robot stands facing, from the poses the FMS has (the standard state
-        says only that the field is violated, not by what): another robot within 4 m in front of it."""
-        if rec.safety_field != "PROTECTIVE" or rec.driving:
+        """A reported robot blocker, or a pose-based estimate when standard state gives no field cause."""
+        if rec.safety_field != "PROTECTIVE" or rec.driving or rec.charging or not rec.route \
+                or self.route_done(rec) or self._goal_action_running(rec):
             return None
+        if rec.field_cause:
+            kind, _, ident = rec.field_cause.partition(":")
+            other = self.robots.get(ident) if kind == "amr" else None
+            return ident if other is not None and other is not rec and other.has_state else None
         hx, hy = math.cos(rec.theta), math.sin(rec.theta)
         best = None
         for o in self.robots.values():
@@ -1748,8 +1752,9 @@ class FleetManager:
         return self._field_since.get(rec.serial, self.now)
 
     def _resolve(self, members: list[RobotRecord]) -> str | None:
-        candidates = sorted(members, key=lambda r: (self._priority(r) - (self.now - self._waiting_since(r)) / 2.0,
-                                                    r.loaded, r.serial))
+        candidates = sorted((r for r in members if self.can_take_route(r) and not r.charging),
+                            key=lambda r: (self._priority(r) - (self.now - self._waiting_since(r)) / 2.0,
+                                           r.loaded, r.serial))
         held_by_others = {}
         for m in members:
             held_by_others[m.serial] = {res_node(r) for o in members if o is not m
@@ -1937,7 +1942,7 @@ class FleetManager:
             if not forbidden:
                 continue
             rec.yield_next = self.now + 8.0
-            spot = self._evasion_spot(rec, forbidden, impassable=impassable if impassable else forbidden)
+            spot = self._evasion_spot(rec, forbidden, impassable=impassable)
             if spot is None:
                 continue
             resume = None

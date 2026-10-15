@@ -260,6 +260,67 @@ class StoppedTruckTests(unittest.TestCase):
         self.assertEqual(headings, {round(math.pi / 2, 3)})
 
 
+class TruckLateralClearanceTests(unittest.TestCase):
+    def truck(self):
+        sim = quiet_dc(rack_forklift=1)
+        f = next(f for f in sim.forklifts if f.id == "FL-R1")
+        f.idx = f.loop.index("qNE16_2NE22_8")
+        f.bx, f.by = sim.layout.nodes[f.loop[f.idx]].pos
+        f.heading = 0.0
+        f.lat, f.lat_target = 0.3, 1.3
+        f.keep_offset_until = 100.0
+        f._place(f.heading)
+        return f
+
+    def test_a_truck_can_step_sideways_away_from_a_close_robot(self):
+        f = self.truck()
+        obstacle = ("AGF-01", f.x - 2.7, f.y - 0.3, 0.57, 0.0)
+        before = min(math.hypot(obstacle[1] - x, obstacle[2] - y) - r - obstacle[3]
+                     for x, y, r in f.circles())
+        old_y = f.y
+        f.step(0.1, 20.0, [obstacle], [])
+        self.assertGreater(f.y, old_y)
+        after = min(math.hypot(obstacle[1] - x, obstacle[2] - y) - r - obstacle[3]
+                    for x, y, r in f.circles())
+        self.assertGreater(after, before)
+
+    def test_a_truck_does_not_step_sideways_toward_a_person(self):
+        from fleet.agents import Human
+        f = self.truck()
+        person = Human("H", "walker", f.x, f.y + 1.0, random.Random(1))
+        before = f.pos
+        for k in range(5):
+            f.step(0.1, 20.0 + k * 0.1, [], [person])
+        self.assertEqual(f.pos, before)
+
+    def test_a_truck_can_step_sideways_away_from_a_person(self):
+        from fleet.agents import Human
+        f = self.truck()
+        person = Human("H", "walker", f.x, f.y - 1.0, random.Random(1))
+        before = f.y
+        f.step(0.1, 20.0, [], [person])
+        self.assertGreater(f.y, before)
+
+    def test_a_passing_truck_chooses_the_side_without_a_person(self):
+        from fleet.agents import Human
+        f = self.truck()
+        f.lat = f.lat_target = 0.0
+        f._place(f.heading)
+        f.blocked_since = 0.0
+        robot = ("R", f.x + 3.0, f.y, 0.5, 0.0)
+        person = Human("H", "walker", f.x, f.y + 1.3, random.Random(1))
+        f.step(0.1, 20.0, [robot], [person])
+        self.assertLess(f.lat_target, 0.0)
+
+    def test_a_truck_does_not_step_sideways_toward_a_close_robot(self):
+        f = self.truck()
+        obstacle = ("AGF-01", f.x - 2.7, f.y + 0.3, 0.57, 0.0)
+        before = f.pos
+        f.step(0.1, 20.0, [obstacle], [])
+        self.assertEqual(f.pos, before)
+        self.assertEqual(f.v, 0.0)
+
+
 class AisleLightTests(unittest.TestCase):
     def test_the_light_is_red_while_a_robot_holds_a_place_in_the_aisle(self):
         sim = quiet_dc()
@@ -328,6 +389,81 @@ class AisleLightTests(unittest.TestCase):
 
 
 class FieldDeadlockTests(unittest.TestCase):
+    def field_pair(self):
+        sim = quiet_dc(agf=2)
+        m = sim.manager
+        a, b = m.robots["AGF-01"], m.robots["AGF-02"]
+        a.x, a.y, a.theta = 10.0, 48.4, 0.0
+        b.x, b.y = 13.3, 48.4
+        a.safety_field, a.driving, a.charging = "PROTECTIVE", False, False
+        a.route = [a.last_node, "BL10"]
+        a.cur_idx = a.base_end = 0
+        return m, a, b
+
+    def test_a_reported_person_or_truck_is_not_a_robot_deadlock(self):
+        m, a, _b = self.field_pair()
+        for cause in ("human:H1", "forklift:FL-R1", "external:EXT-1"):
+            with self.subTest(cause=cause):
+                a.field_cause = cause
+                self.assertIsNone(m._field_blocker(a))
+
+    def test_standard_field_violation_still_uses_pose_estimates(self):
+        m, a, b = self.field_pair()
+        a.field_cause = ""
+        self.assertEqual(m._field_blocker(a), b.serial)
+
+    def test_a_named_blocking_robot_is_used_during_a_turn(self):
+        m, a, b = self.field_pair()
+        a.theta = math.pi
+        a.field_cause = f"amr:{b.serial}"
+        self.assertEqual(m._field_blocker(a), b.serial)
+
+    def test_charging_working_or_idle_robots_do_not_start_field_waits(self):
+        for state in ("charging", "action", "idle"):
+            with self.subTest(state=state):
+                m, a, _b = self.field_pair()
+                if state == "charging":
+                    a.charging = True
+                elif state == "action":
+                    a.goal_actions = {0: [{"actionId": "pick"}]}
+                    a.actions = {"pick": "RUNNING"}
+                else:
+                    a.route = []
+                self.assertIsNone(m._field_blocker(a))
+
+    def assert_resolver_keeps_unsafe_order(self, configure):
+        sim = quiet_dc()
+        m = sim.manager
+        rec = m.robots["AGF-01"]
+        start = rec.last_node
+        goal = next(e.end for e in sim.layout.out_edges[start] if sim.layout.allowed(e, rec.vclass))
+        rec.route = [start, goal]
+        rec.order_id = rec.state_order_id = "order-in-progress"
+        rec.cur_idx = rec.base_end = rec.sent_base_end = 0
+        rec.driving, rec.dist_since, rec.charging = False, 0.0, False
+        rec.task_id, rec.wait = None, None
+        rec.goal_actions, rec.actions = {}, {}
+        configure(rec)
+        self.assertFalse(m.can_take_route(rec) and not rec.charging)
+        replanned = []
+        m._replan = lambda victim, *args, **kwargs: replanned.append(victim.serial) or True
+        m._evasion_spot = lambda *args, **kwargs: None
+        self.assertIsNone(m._resolve([rec]))
+        self.assertEqual(replanned, [])
+
+    def test_deadlock_resolver_does_not_replace_an_order_mid_edge(self):
+        self.assert_resolver_keeps_unsafe_order(lambda rec: setattr(rec, "dist_since", 0.5))
+
+    def test_deadlock_resolver_does_not_move_a_charging_robot(self):
+        self.assert_resolver_keeps_unsafe_order(lambda rec: setattr(rec, "charging", True))
+
+    def test_deadlock_resolver_does_not_interrupt_a_goal_action(self):
+        def goal_action(rec):
+            rec.goal_actions = {1: [{"actionId": "pick-running"}]}
+            rec.actions = {"pick-running": "RUNNING"}
+
+        self.assert_resolver_keeps_unsafe_order(goal_action)
+
     def test_a_robot_stopped_by_its_field_in_front_of_a_waiting_robot_closes_a_deadlock(self):
         # AGF-02 holds the node AGF-01 needs to turn; AGF-01 stands in AGF-02's protective field
         from fleet.traffic import WaitInfo
@@ -336,6 +472,7 @@ class FieldDeadlockTests(unittest.TestCase):
         a, b = m.robots["AGF-01"], m.robots["AGF-02"]
         a.x, a.y, b.x, b.y, b.theta = 10.0, 48.4, 13.3, 48.4, math.pi        # b faces west, a 3.3 m ahead
         b.safety_field, b.driving, b.wait = "PROTECTIVE", False, None
+        b.route, b.cur_idx, b.base_end = [b.last_node, "BL10"], 0, 0
         a.wait = WaitInfo(m.now - 10.0, "robot", node_res("BL11_5"), "AGF-02")
         self.assertEqual(m._field_blocker(b), "AGF-01")
         m._deadlocks()
@@ -346,7 +483,74 @@ class FieldDeadlockTests(unittest.TestCase):
         self.assertIsNone(m._field_blocker(b))
 
 
+class StandoffEvasionTests(unittest.TestCase):
+    @staticmethod
+    def ready_at_base_end(rec):
+        start = rec.last_node
+        rec.route = [start]
+        rec.order_id = rec.state_order_id = "order-at-base-end"
+        rec.cur_idx = rec.base_end = rec.sent_base_end = 0
+        rec.driving, rec.dist_since, rec.charging = False, 0.0, False
+        rec.goal_actions, rec.actions = {}, {}
+
+    def test_stopped_truck_neighbourhood_is_not_made_impassable(self):
+        from fleet.traffic import WaitInfo
+        sim = quiet_dc()
+        m = sim.manager
+        rec = m.robots["AGF-01"]
+        self.ready_at_base_end(rec)
+        tid = confirmed_track(m, "forklift", rec.x + 4.0, rec.y)
+        rec.wait = WaitInfo(m.now - 5.0, "forklift", node_res(rec.last_node), tid)
+        seen = []
+        m._evasion_spot = lambda _rec, forbidden, impassable=None: seen.append(
+            (set(forbidden), set(impassable or ()))) or None
+
+        m._yield_to_uncontrolled()
+
+        self.assertTrue(seen[0][0])
+        self.assertEqual(seen[0][1], set())
+
+    def test_an_actual_truck_block_is_still_impassable(self):
+        sim = quiet_dc()
+        m = sim.manager
+        rec = m.robots["AGF-01"]
+        rec.last_node = "qNE16_2NE22_8"
+        rec.route = [rec.last_node, "OUT"]
+        self.assertIsNotNone(m._evasion_spot(rec, set()))
+        m.blocks = {node_res("NE22_8")}
+        self.assertIsNone(m._evasion_spot(rec, set()))
+
+
 class PickerTests(unittest.TestCase):
+    def walking_picker(self):
+        from fleet.agents import Walker
+        sim = quiet_dc(pickers=1, amr=0)
+        (picker,) = [h for h in sim.humans if h.role == "picker"]
+        # A moving AMR can leave the picker a few centimetres inside the nominal 0.75 m shelf-face line.
+        picker.x, picker.y = 62.70, 14.0
+        picker.walker = Walker([(62.70, 19.0)])
+        picker.dwell_until = picker.frozen_until = 0.0
+        picker.distracted = picker.inattentive = False
+        return sim, picker
+
+    def test_a_picker_at_the_shelf_face_passes_a_stationary_aligned_amr(self):
+        from fleet.vehicle import tote_amr_spec
+        sim, picker = self.walking_picker()
+        body = tote_amr_spec().circles(62.0, 16.0, math.pi / 2)
+        robots = [("AMR-X", x, y, radius, 0.0) for x, y, radius in body]
+        for now in range(1, 5):
+            picker.step(1.0, float(now), sim.layout, robots, [])
+        self.assertGreater(picker.y, 17.0)
+
+    def test_a_picker_cannot_pass_an_amr_body_turned_across_the_path(self):
+        from fleet.vehicle import tote_amr_spec
+        sim, picker = self.walking_picker()
+        body = tote_amr_spec().circles(62.0, 16.0, 0.0)
+        robots = [("AMR-X", x, y, radius, 0.0) for x, y, radius in body]
+        for now in range(1, 5):
+            picker.step(1.0, float(now), sim.layout, robots, [])
+        self.assertLess(picker.y, 16.0)
+
     def test_a_picker_leaves_a_robot_that_is_done_even_if_it_cannot_drive_off(self):
         # the robot behind in a one-way pick aisle is done but stands still: the robot ahead waits for this picker
         from fleet.agents import Walker
@@ -471,6 +675,38 @@ class NearMissTests(unittest.TestCase):
 
 
 class TrackMergeTests(unittest.TestCase):
+    def test_a_nearby_person_does_not_take_a_stale_forklift_track(self):
+        tr = Tracker()
+        tr.update([Detection("forklift", 20.0, 6.2, "infra")], 0.0)
+        tr.update([Detection("forklift", 20.0, 6.2, "infra")], 0.5)
+        (truck_id,) = tr.tracks
+        tr.update([], 1.0)
+        tr.update([], 1.5)
+        tr.update([Detection("human", 20.1, 6.2, "infra"),
+                   Detection("forklift", 23.0, 6.2, "infra")], 2.0)
+        truck = tr.tracks[truck_id]
+        self.assertEqual((truck.cls, truck.hits), ("forklift", 3))
+        self.assertGreater(truck.x, 21.0)
+        people = [track for track in tr.tracks.values() if track.cls == "human"]
+        self.assertEqual(len(people), 1)
+        self.assertFalse(people[0].confirmed)
+
+    def test_one_close_misclassification_stays_on_the_existing_track(self):
+        tr = Tracker()
+        tr.update([Detection("forklift", 10.0, 10.0, "infra")], 0.0)
+        tr.update([Detection("forklift", 10.0, 10.0, "infra")], 0.5)
+        (truck_id,) = tr.tracks
+        tr.update([Detection("human", 10.1, 10.0, "infra")], 1.0)
+        self.assertEqual(list(tr.tracks), [truck_id])
+        self.assertEqual((tr.tracks[truck_id].cls, tr.tracks[truck_id].hits), ("forklift", 3))
+
+    def test_a_distant_other_class_does_not_use_the_forklift_gate(self):
+        tr = Tracker()
+        tr.update([Detection("forklift", 10.0, 10.0, "infra")], 0.0)
+        tr.update([Detection("forklift", 10.0, 10.0, "infra")], 0.5)
+        tr.update([Detection("human", 12.0, 10.0, "infra")], 1.0)
+        self.assertEqual(len(tr.tracks), 2)
+
     def test_two_people_side_by_side_stay_two_tracks(self):
         tr = Tracker()
         for t in (0.0, 0.5, 1.0):
@@ -487,6 +723,29 @@ class TrackMergeTests(unittest.TestCase):
                                    votes={"human": 1.0})
         tr._merge_duplicates()
         self.assertEqual(len(tr.tracks), 1)
+
+
+class HumanPredictionTests(unittest.TestCase):
+    def test_a_resting_person_does_not_sweep_from_camera_noise(self):
+        tr = Tracker()
+        rng = random.Random(6)
+        for k in range(12):
+            tr.update([Detection("human", 5.0 + rng.gauss(0, 0.25),
+                                 3.0 + rng.gauss(0, 0.25), "infra")], k * 0.5)
+        (person,) = tr.tracks.values()
+        self.assertTrue(person.resting)
+        self.assertGreater(person.speed, 0.3)                 # filter noise alone crosses STILL_SPEED
+        self.assertEqual(len(tr.predicted_discs(5.5, {"human": 2.0})), 1)
+
+    def test_a_person_walking_after_a_stop_is_predicted_again(self):
+        tr = Tracker()
+        for k in range(8):
+            tr.update([Detection("human", 5.0, 3.0, "infra")], k * 0.5)
+        for k in range(1, 5):
+            tr.update([Detection("human", 5.0 + 0.8 * k * 0.5, 3.0, "infra")], (7 + k) * 0.5)
+        (person,) = tr.tracks.values()
+        self.assertFalse(person.resting)
+        self.assertGreater(len(tr.predicted_discs(5.5, {"human": 2.0})), 1)
 
 
 class RestartTests(unittest.TestCase):
