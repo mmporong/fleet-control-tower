@@ -43,7 +43,7 @@
 | 5 | 표준 메시징과 API | `fleet/vda5050.py`, `fleet/schema.py`, `fleet/mqtt.py`, `fleet/server.py` |
 | 6 | 상위 시스템·설비 연동과 실패 주입 | WMS API, `fleet/facility.py`, 문 고장 훈련 |
 | 7 | 데이터와 KPI | 화면 KPI와 추세, `fleet/bench.py`, 결과 JSON |
-| 8 | 결함 주입 기반 검증 | 훈련 명령, Python 336개·Node 7개 시험, [BENCHMARK.md](docs/BENCHMARK.md) |
+| 8 | 결함 주입 기반 검증 | 훈련 명령, Python 340개·Node 7개 시험, [BENCHMARK.md](docs/BENCHMARK.md) |
 | 9 | 배포와 운영성 | `Dockerfile`, 인증·권한, 헬스체크, 읽기 전용 모드 |
 | 10 | 사고 조사와 문서화 | 사고 재생, 보고서·인계 양식, 비상 계획표([RUNBOOK.md](docs/RUNBOOK.md)) |
 
@@ -69,7 +69,7 @@ docker run --rm -p 127.0.0.1:8095:8095 -v fct-data:/data fleet-control-tower
 | 옵션 | 기본값 | 설명 |
 |---|---|---|
 | `--scenario` | `standard` | 아래 시나리오 중 하나 |
-| `--strategy` | `locks+resolve` | `none`(관제 없음), `locks`(예약만), `locks+resolve` |
+| `--strategy` | `locks+resolve` | `none`(관제 없음), `locks`(예약·일반 우회), `locks+resolve` |
 | `--speed` | `1` | 0.5·1·2·5·10배속. 원격 조종 중에는 1배속 이하 |
 | `--seed` | `7` | 난수 시드. 같은 코드와 실행 환경에서 비교 조건을 재현할 때 사용 |
 | `--auto-operator` | 꺼짐 | 가상 운영자가 SOP에 따라 알람을 확인하고 조치 |
@@ -97,10 +97,10 @@ docker run --rm -p 127.0.0.1:8095:8095 -v fct-data:/data fleet-control-tower
 
 | 확인 항목 | 현재 상태 |
 |---|---|
-| Python 동작 시험 | 현재 코드에서 336개 통과. 단위·시스템·HTTP·MQTT·런타임 회귀를 포함 |
+| Python 동작 시험 | 현재 코드에서 340개 통과. 단위·시스템·HTTP·MQTT·런타임 회귀를 포함 |
 | 화면 계산 시험 | Node 시험 7개 통과 |
-| MQTT·Docker 종단 시험 | 현재 코드에서 MQTT 상호운용 9개 통과. 운송 완료·문 열림·무효 메시지 거부·감사 체인을 확인했고 정상 처리의 내부 오류와 감사 문제는 0개 |
-| 브라우저 UI | 현재 코드에서 로그인·지도·KPI·CSRF·로그아웃 점검 15개 통과 |
+| MQTT·Docker 종단 시험 | `2370edf`에서 MQTT 상호운용 9개 통과. 운송 완료·문 열림·무효 메시지 거부·감사 체인을 확인했고 정상 처리의 내부 오류와 감사 문제는 0개 |
+| 브라우저 UI | `2370edf`에서 로그인·지도·KPI·CSRF·로그아웃 점검 15개 통과 |
 | 대수 산정·8시간 교대 | 최신 코드 재검증 중. 전체 148회 벤치가 끝나기 전에는 추천 대수와 처리량을 확정하지 않음 |
 
 [docs/BENCHMARK.md](docs/BENCHMARK.md)와 `results/`의 수치는 이전 측정입니다. 측정 방법과 지표 정의는 참고할 수 있지만, 최신 교통 코드의 전체 성능 결과로 읽으면 안 됩니다.
@@ -147,14 +147,14 @@ results/          벤치마크 결과 JSON
 
 ```bash
 cd ~/fleet-control-tower
-python3 -m unittest discover -s tests -t .  # Python 336개(doctest 포함)
+python3 -m unittest discover -s tests -t .  # Python 340개(doctest 포함)
 node --test tests/test_logic.cjs             # 화면 계산 함수 7개
 bash tools/benchmarks.sh shift               # 8시간 교대 시나리오
 ```
 
 - 벤치 결과 JSON에는 설정과 Python 버전, git 커밋을 기록합니다. 추적 파일이 바뀐 상태면 커밋 뒤에 `+dirty`가 붙습니다.
-- 실운영 경로는 `tools/mqtt_interop_check.py`와 Docker 종단 시험으로 검사합니다. 현재 코드에서 익명 연결 환경의 MQTT 상호운용 검사 9개와 운송·고속문 종단 시험을 통과했습니다. 인증·TLS 검사는 이전 통합 버전의 기록입니다.
-- `tools/ui_check.mjs`는 헤드리스 Chrome으로 로그인, 지도, KPI, CSRF, 로그아웃을 확인합니다. 현재 코드에서 15개 항목을 통과했습니다.
+- 실운영 경로는 `tools/mqtt_interop_check.py`와 Docker 종단 시험으로 검사합니다. `2370edf`에서 익명 연결 환경의 MQTT 상호운용 검사 9개와 운송·고속문 종단 시험을 통과했습니다. 인증·TLS 검사는 이전 통합 버전의 기록입니다.
+- `tools/ui_check.mjs`는 헤드리스 Chrome으로 로그인, 지도, KPI, CSRF, 로그아웃을 확인합니다. `2370edf`에서 15개 항목을 통과했습니다.
 
 ## 문서
 

@@ -597,6 +597,142 @@ class StandoffEvasionTests(unittest.TestCase):
         self.assertIsNone(m.locks.holder_of(held))
         self.assertEqual(m.locks.holder_of(node_res(rec.last_node)), rec.serial)
 
+    def test_a_confirmed_standoff_cancel_waits_for_the_protective_field_but_allows_evasion(self):
+        _sim, m, rec, held = self.released_order()
+        old_order, original_goal = rec.order_id, rec.goal
+        m.instant = lambda *_args, **_kwargs: None
+        rec.safety_field, rec.field_cause = "PROTECTIVE", "forklift:FL-R1"
+        rec.protective_since = m.now - m.cfg.standoff_alarm_s - 1.0
+        self.assertTrue(m._cancel_for_standoff(rec, {"NE22_8"}))
+        rec.state_remaining = 0
+        rec.driving, rec.dist_since = False, 0.0
+        rec.last_seen = m.now + 0.1
+
+        m._confirm_cancels()
+
+        self.assertEqual((rec.order_id, rec.purpose), (old_order, "recover"))
+        self.assertIn(rec.serial, m._standoff_recovery)
+        self.assertEqual(rec.route, [])
+        self.assertIsNone(m.locks.holder_of(held))
+        tid = confirmed_track(m, "forklift", rec.x, rec.y)
+        rec.swing_since = m.now - 6.0
+        m._evasion_spot = lambda *_args, **_kwargs: "qNW10NW16_2"
+
+        m._yield_to_uncontrolled()
+
+        self.assertEqual(rec.purpose, "evade")
+        self.assertEqual(rec.goal, "qNW10NW16_2")
+        self.assertIn(tid, m.tracker.tracks)
+
+        rec.state_order_id = rec.order_id
+        rec.state_remaining = 0
+        rec.cur_idx = rec.base_end = len(rec.route) - 1
+        rec.last_node = rec.route[-1]
+        rec.driving, rec.dist_since = False, 0.0
+        rec.safety_field, rec.field_cause = "CLEAR", ""
+        m._confirm_cancels()
+
+        self.assertEqual((rec.goal, rec.purpose), (original_goal, "dropoff"))
+        self.assertNotIn(rec.serial, m._standoff_recovery)
+
+    def test_an_unsafe_goal_action_blocks_protective_standoff_evasion(self):
+        for action_state in ("RUNNING", "INITIALIZING", "FAILED"):
+            with self.subTest(action_state=action_state):
+                _sim, m, rec, _held = self.released_order()
+                action_id = rec.goal_actions[len(rec.route) - 1][0]["actionId"]
+                m.instant = lambda *_args, **_kwargs: None
+                rec.safety_field, rec.field_cause = "PROTECTIVE", "forklift:FL-R1"
+                self.assertTrue(m._cancel_for_standoff(rec, {"NE22_8"}))
+                rec.actions[action_id] = action_state
+                if action_state == "FAILED":
+                    rec.action_results[action_id] = "station error"
+                rec.state_remaining = 0
+                rec.driving, rec.dist_since = False, 0.0
+                rec.last_seen = m.now + 0.1
+                confirmed_track(m, "forklift", rec.x, rec.y)
+                rec.swing_since = m.now - 6.0
+                m._evasion_spot = lambda *_args, **_kwargs: "qNW10NW16_2"
+                old_order = rec.order_id
+                sent = []
+                m._send_order = lambda candidate: sent.append(candidate.order_id)
+
+                m._confirm_cancels()
+                m._yield_to_uncontrolled()
+                m.tick(m.now + 0.2, 0.2)
+
+                recovery = m._standoff_recovery[rec.serial]
+                self.assertTrue(recovery.get("blocked"))
+                self.assertIn(rec.serial, m.robot_paused)
+                self.assertEqual(rec.purpose, "recover")
+                self.assertEqual(rec.order_id, old_order)
+                self.assertNotEqual(rec.goal, "qNW10NW16_2")
+                self.assertEqual(sent, [])
+
+    def test_a_cleared_standoff_retries_without_a_stale_avoid_cut(self):
+        _sim, m, rec, old_held = self.released_order()
+        m.instant = lambda *_args, **_kwargs: None
+        self.assertTrue(m._cancel_for_standoff(rec, {"NE36"}))
+        recovery = m._standoff_recovery[rec.serial]
+        recovery["goal"] = "SI1"
+        rec.resume = ("SI1", recovery["purpose"], recovery["goal_actions"],
+                      recovery["task_id"], ["NE36"], "")
+        rec.last_node = "qNE29_4NE36"
+        rec.x, rec.y = m.layout.nodes[rec.last_node].pos
+        current = node_res(rec.last_node)
+        m.locks.force(rec.serial, current)
+        rec.route = []
+        rec.state_remaining = 0
+        rec.driving, rec.dist_since = False, 0.0
+        rec.last_seen = m.now + 0.1
+        rec.safety_field, rec.field_cause = "CLEAR", ""
+
+        m._confirm_cancels()
+
+        self.assertEqual((rec.goal, rec.purpose, rec.task_id, rec.loaded),
+                         ("SI1", "dropoff", "T-loaded", True))
+        self.assertNotIn(rec.serial, m._standoff_recovery)
+        self.assertIn("NE36", rec.route)
+        self.assertEqual(m.locks.holder_of(current), rec.serial)
+        self.assertIsNone(m.locks.holder_of(old_held))
+        resumed = rec.goal_actions[len(rec.route) - 1]
+        self.assertEqual(resumed[0]["actionType"], "drop")
+
+    def test_a_stale_avoid_retry_still_waits_for_current_blocks_and_reservations(self):
+        from fleet.traffic import lane_res
+
+        for obstruction in ("block", "reservation"):
+            with self.subTest(obstruction=obstruction):
+                _sim, m, rec, old_held = self.released_order()
+                m.instant = lambda *_args, **_kwargs: None
+                self.assertTrue(m._cancel_for_standoff(rec, {"NE36"}))
+                recovery = m._standoff_recovery[rec.serial]
+                recovery["goal"] = "SI1"
+                rec.last_node = "qNE29_4NE36"
+                rec.x, rec.y = m.layout.nodes[rec.last_node].pos
+                current = node_res(rec.last_node)
+                m.locks.force(rec.serial, current)
+                rec.route = []
+                rec.state_remaining = 0
+                rec.driving, rec.dist_since = False, 0.0
+                rec.last_seen = m.now + 0.1
+                rec.safety_field, rec.field_cause = "CLEAR", ""
+                m._confirm_cancels()
+
+                self.assertGreater(len(rec.route), 1)
+                self.assertEqual(m.locks.holder_of(current), rec.serial)
+                self.assertIsNone(m.locks.holder_of(old_held))
+                first_lane = lane_res(m.layout.edge_between(rec.route[0], rec.route[1]).lane)
+                first_node = node_res(rec.route[1])
+                if obstruction == "block":
+                    m.blocks[first_node] = ("forklift", "FL-current")
+                else:
+                    m.locks.force("AGF-02", first_lane)
+                rec.state_order_id = rec.order_id
+                m._extend(rec)
+
+                self.assertEqual(rec.base_end, 0)
+                self.assertIsNotNone(rec.wait)
+
     def test_a_confirmed_recovery_does_not_erase_its_fallback_evasion_route(self):
         _sim, m, rec, _held = self.released_order()
         original_goal = rec.goal

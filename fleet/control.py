@@ -969,11 +969,6 @@ class FleetManager:
         rec.wait = rec.pending_block = None
         rec.purpose = "recover"
         rec.task_id = recovery["task_id"]
-        if not self.can_take_route(rec):
-            return False
-        avoid = set(recovery["avoid"])
-        avoid.discard(rec.last_node)
-        avoid.discard(recovery["goal"])
         actions = []
         unsafe = []
         for a in recovery["goal_actions"]:
@@ -989,8 +984,21 @@ class FleetManager:
             self._block_standoff_recovery(
                 rec, recovery, f"{rec.serial} 대치 취소 뒤 동작 상태 불일치: {', '.join(unsafe)}")
             return False
-        if not self.assign_route(rec, recovery["goal"], recovery["purpose"], actions,
-                                 recovery["task_id"], avoid_nodes=avoid):
+        if rec.safety_field == "PROTECTIVE":
+            return False                 # keep the original task frozen while a safe fallback evasion may run
+        if not self.can_take_route(rec):
+            return False
+        avoid = set(recovery["avoid"])
+        avoid.discard(rec.last_node)
+        avoid.discard(recovery["goal"])
+        resumed = self.assign_route(rec, recovery["goal"], recovery["purpose"], actions,
+                                    recovery["task_id"], avoid_nodes=avoid)
+        if not resumed and avoid:
+            # The snapshot describes the truck at the original standoff. Once the protective field is clear,
+            # retry without that stale cut; current blocks and reservations still gate route extension.
+            resumed = self.assign_route(rec, recovery["goal"], recovery["purpose"], actions,
+                                        recovery["task_id"])
+        if not resumed:
             return False
         rec.resume = None
         self._standoff_recovery.pop(rec.serial, None)
@@ -2171,6 +2179,9 @@ class FleetManager:
                 if turn_at is not None:
                     circles.append((tr, self.layout.nodes[turn_at].pos))
         for rec in self.robots.values():
+            recovery = self._standoff_recovery.get(rec.serial)
+            if recovery is not None and recovery.get("blocked"):
+                continue
             released_standoff = self._released_standoff_truck(rec, stalled_fl)
             if released_standoff is not None:
                 avoid = {n for n in self.layout.nodes
