@@ -28,6 +28,15 @@
     return STATUS[st] || { rank: 20, color: '#94a3b8', tone: 'muted', label: st || '—' };
   }
 
+  // Displacement-based travel direction is not the forklift's body orientation.
+  function trackMotion(meta) {
+    const speed = meta?.stopped === true ? 0 : meta?.stopped === false && Number.isFinite(meta.speed) && meta.speed >= 0 ? meta.speed : null;
+    const heading = speed > 0 && Number.isFinite(meta?.heading) ? meta.heading : null;
+    return { speed, heading, vx: heading == null ? 0 : speed * Math.cos(heading), vy: heading == null ? 0 : speed * Math.sin(heading) };
+  }
+
+  function forkliftMarkerRadius(scale) { return Math.max(10, Math.min(22, 1.3 * scale)); }
+
   /** Exception-first ordering: abnormal units on top, then longest wait, then id. */
   function exceptionSort(robots) {
     return robots.slice().sort((a, b) => {
@@ -149,10 +158,10 @@
   /** Nearest entity to a world point within a radius. items: [{id, x, y}] */
   function pick(items, x, y, radius) {
     let best = null;
-    let bestD = radius;
+    let bestD = Infinity;
     for (const it of items) {
       const d = Math.hypot(it.x - x, it.y - y);
-      if (d <= bestD) {
+      if (d <= (it.hitRadius ?? radius) && d <= bestD) {
         best = it;
         bestD = d;
       }
@@ -215,6 +224,6 @@
     return vals.map((v, i) => `${i ? 'L' : 'M'}${((i / (vals.length - 1)) * w).toFixed(1)},${(h - ((v - min) / span) * h).toFixed(1)}`).join(' ');
   }
 
-  return { STATUS, linkInfo, statusInfo, exceptionSort, fitTransform, applyView, toScreen, toWorld, zoomAt, lerp, lerpAngle, placeMapLabels,
+  return { STATUS, linkInfo, statusInfo, trackMotion, forkliftMarkerRadius, exceptionSort, fitTransform, applyView, toScreen, toWorld, zoomAt, lerp, lerpAngle, placeMapLabels,
     pick, fmtDuration, fmtClock, fmtNum, alarmStateLabel, alarmLoad, sparkPath };
 });

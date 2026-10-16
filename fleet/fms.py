@@ -226,6 +226,9 @@ class Runtime:
             "tracks": [[tr.id, tr.cls, round(tr.x, 2), round(tr.y, 2), round(tr.vx, 2), round(tr.vy, 2),
                         round(tr.sigma(self.now), 2), round(self.now - tr.last_seen, 1)]
                        for tr in m.tracker.tracks.values()],
+            "track_motion": {tr.id: {"heading": getattr(tr, "heading", None), "stopped": tr.stopped,
+                                      "speed": 0.0 if tr.stopped else tr.pace}
+                             for tr in m.tracker.tracks.values()},
             "external": [], "locks": locks_n, "lanes": locks_l,
             "blocks": {k: list(v) for k, v in m.blocks.items()},
             "doors": m.doors.views(self.now) if m.doors is not None else [],

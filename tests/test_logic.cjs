@@ -3,6 +3,59 @@ const test = require('node:test');
 const assert = require('node:assert');
 const L = require('../web/logic.js');
 
+test('minimum zoom keeps forklift labels and leaders outside the full visible marker', () => {
+  for (const scale of [3.05, 5.08, 17, 100]) {
+    const r = L.forkliftMarkerRadius(scale) + 5;
+    const obstacle = { x: 70-r, y: 70-r, w: 2*r, h: 2*r };
+    const placed = L.placeMapLabels([{ id:'forklift', x:70, y:70, w:52, h:19 }], [obstacle], 180, 160);
+    assert.ok(placed.length > 0);
+    for (const p of placed) {
+      assert.ok(p.box.x+p.box.w <= obstacle.x || p.box.x >= obstacle.x+obstacle.w || p.box.y+p.box.h <= obstacle.y || p.box.y >= obstacle.y+obstacle.h);
+      assert.ok(Math.hypot(p.leader.from[0]-70,p.leader.from[1]-70) >= r);
+    }
+  }
+});
+
+test('visible marker edges remain selectable at minimum zoom and the nearest target wins', () => {
+  const scale = 3.05, radius = L.forkliftMarkerRadius(scale);
+  const forklift = { id:'forklift', x:0, y:0, hitRadius:(radius+4)/scale };
+  assert.strictEqual(L.pick([forklift],(radius-1)/scale,0,1.2),forklift);
+  assert.strictEqual(L.pick([forklift],(radius+5)/scale,0,1.2),null);
+  const near = { id:'near', x:1, y:0 };
+  assert.strictEqual(L.pick([forklift,near],1.1,0,1.2),near);
+});
+
+test('stationary forklift motion does not turn sensor velocity noise into a travel direction', () => {
+  for (const heading of [-Math.PI, -1.3, 0, 2.8]) {
+    const motion = L.trackMotion({ stopped: true, heading, speed: 0.9 });
+    assert.deepStrictEqual(motion, { speed: 0, heading: null, vx: 0, vy: 0 });
+  }
+});
+
+test('moving forklift travel direction uses displacement heading and pace', () => {
+  const motion = L.trackMotion({ stopped: false, heading: Math.PI / 2, speed: 1.2 });
+  assert.strictEqual(motion.speed, 1.2);
+  assert.strictEqual(motion.heading, Math.PI / 2);
+  assert.ok(Math.abs(motion.vx) < 1e-9);
+  assert.ok(Math.abs(motion.vy - 1.2) < 1e-9);
+});
+
+test('missing or unconfirmed forklift direction stays unknown instead of using raw velocity', () => {
+  assert.deepStrictEqual(L.trackMotion(), { speed: null, heading: null, vx: 0, vy: 0 });
+  assert.deepStrictEqual(L.trackMotion({ stopped: false, heading: null, speed: 0.8 }),
+    { speed: 0.8, heading: null, vx: 0, vy: 0 });
+});
+
+test('invalid forklift motion values cannot produce a direction line', () => {
+  for (const meta of [{ stopped: false, heading: 0, speed: NaN },
+    { stopped: false, heading: Infinity, speed: 1 }, { stopped: false, heading: 0, speed: -1 }]) {
+    const motion = L.trackMotion(meta);
+    assert.strictEqual(motion.heading, null);
+    assert.strictEqual(motion.vx, 0);
+    assert.strictEqual(motion.vy, 0);
+  }
+});
+
 test('exception-first ordering puts faults and long waits on top', () => {
   const rows = L.exceptionSort([
     { id: 'A', st: 'MOVING', wait_s: 0 }, { id: 'B', st: 'WAITING', wait_s: 5 },

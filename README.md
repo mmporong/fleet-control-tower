@@ -7,12 +7,12 @@
 
 관제는 안전 기능이 아닙니다. 사람 보호는 차량 탑재 안전 기능과 현장 설계가 맡고, 관제는 위험에 노출되는 상황을 줄이는 운영 계층입니다([docs/SAFETY.md](docs/SAFETY.md)).
 
-![차량 이동과 지도 확대·넓게 보기](docs/img/map-demo.gif)
+![넓게 보기 관제 화면과 차량 이동](docs/img/map-demo.gif)
 
 <details>
 <summary>정지 화면 보기</summary>
 
-![관제 화면](docs/img/overview.png)
+![넓게 보기 관제 화면](docs/img/overview.png)
 
 </details>
 
@@ -50,7 +50,7 @@
 | 5 | 표준 메시징과 API | `fleet/vda5050.py`, `fleet/schema.py`, `fleet/mqtt.py`, `fleet/server.py` |
 | 6 | 상위 시스템·설비 연동과 실패 주입 | WMS API, `fleet/facility.py`, 문 고장 훈련 |
 | 7 | 데이터와 KPI | 화면 KPI와 추세, `fleet/bench.py`, 결과 JSON |
-| 8 | 결함 주입 기반 검증 | 훈련 명령, Python 344개·Node 13개 시험, [BENCHMARK.md](docs/BENCHMARK.md) |
+| 8 | 결함 주입 기반 검증 | 훈련 명령, Python 346개·Node 19개 시험, [BENCHMARK.md](docs/BENCHMARK.md) |
 | 9 | 배포와 운영성 | `Dockerfile`, 인증·권한, 헬스체크, 읽기 전용 모드 |
 | 10 | 사고 조사와 문서화 | 사고 재생, 보고서·인계 양식, 비상 계획표([RUNBOOK.md](docs/RUNBOOK.md)) |
 
@@ -67,7 +67,7 @@ python3 -m fleet.server --scenario standard --speed 5
 
 로그인 없이 화면만 확인할 때는 개발용 `--no-auth`를 씁니다. 루프백 주소에서만 허용됩니다. MQTT 브로커에 실운영 서비스와 차량 시뮬레이터를 연결하는 방법은 [docs/INTEGRATION.md](docs/INTEGRATION.md)에 있습니다.
 
-지도는 **넓게 보기**가 기본이며, 보조 패널은 지도 아래에 표시합니다. 넓은 화면에서 **패널 나란히 보기**를 누르면 보조 패널을 지도 옆으로 옮길 수 있습니다. 확대·축소와 전체 맞춤도 지원합니다. 차량 종류는 그림 기호, 상태는 색, 이동 경로·예약·대기 관계는 선으로 구분합니다. 구역 이름은 지도 위쪽 연결선으로 표시하고, 유닛 이름과 연결선은 다른 기호·랙·글자를 피할 자리가 있을 때 표시합니다. 지도 아래의 **지도 기호와 선 읽는 법**에서 뜻을 확인할 수 있습니다.
+지도는 **넓게 보기**가 기본이며, 보조 패널은 지도 아래에 표시합니다. 넓은 화면에서 **패널 나란히 보기**를 누르면 보조 패널을 지도 옆으로 옮길 수 있습니다. 확대·축소와 전체 맞춤도 지원합니다. 차량 종류는 그림 기호, 상태는 색, 이동 경로·예약·대기 관계는 선으로 구분합니다. 수동 지게차는 고정된 그림 기호로 종류·위치를 표시합니다. 차체 방위는 측정하지 않으며, 이동 방향이 확인됐을 때만 추정 방향선을 표시합니다. 정지로 판정되면 방향선을 생략하며, 순간 속도 잡음으로 기호를 회전시키지 않습니다. 구역 이름은 지도 위쪽 연결선으로 표시하고, 유닛 이름과 연결선은 다른 기호·랙·글자를 피할 자리가 있을 때 표시합니다. 지도 아래의 **지도 기호와 선 읽는 법**에서 뜻을 확인할 수 있습니다.
 
 ```bash
 cd ~/fleet-control-tower
@@ -159,12 +159,12 @@ results/          벤치마크 결과 JSON
 
 ```bash
 cd ~/fleet-control-tower
-python3 -m unittest discover -s tests -t .  # Python 344개(doctest 포함)
-node --test tests/test_logic.cjs             # 화면 계산 함수 13개
+python3 -m unittest discover -s tests -t .  # Python 346개(doctest 포함)
+node --test tests/test_logic.cjs             # 화면 계산 함수 19개
 WORKERS=4 bash tools/benchmarks.sh shift     # 8시간 교대 시나리오
 ```
 
-- `07ac6b5`의 관제 코드로 Python 344개, 현재 화면 코드로 Node 13개 시험 통과를 확인했습니다. 화면 시험에는 혼잡한 지도의 라벨·연결선 겹침 회피를 포함합니다.
+- 현재 코드로 Python 346개, Node 19개 시험 통과를 확인했습니다. 화면 시험에는 센서 잡음이 있는 지게차의 정지·이동 구분, 최소 배율의 기호 선택, 혼잡한 지도의 라벨·연결선 겹침 회피를 포함합니다.
 - 벤치 결과 JSON에는 설정과 Python 버전, git 커밋을 기록합니다. 추적 파일이 바뀐 상태면 커밋 뒤에 `+dirty`가 붙습니다.
 - 실운영 경로는 `tools/mqtt_interop_check.py`와 Docker 종단 시험으로 검사합니다. `2370edf`에서 익명 브로커 환경의 MQTT 검사 9/9, WMS 주문 완료·고속문 열림·감사 로그 검사 통과를 확인했습니다. 인증·TLS 환경 각 9/9는 앞선 검증 이력이며 그 이후 소스에서는 재시험하지 않았습니다.
 - `tools/ui_check.mjs`는 헤드리스 Chrome으로 로그인·KPI·CSRF·로그아웃과 지도 확대·이동·넓게 보기·차량 선택·레이어·범례를 확인합니다. 데스크톱, 태블릿, 모바일과 데스크톱 200% 확대에 해당하는 절반 CSS 뷰포트에서 잘림과 라벨·연결선 겹침도 검사합니다.

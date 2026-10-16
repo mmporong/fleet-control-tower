@@ -481,9 +481,10 @@
     if (S.sel.kind === 'track') {
       const t = s.tracks.find((x) => x[0] === id);
       if (!t) { body.innerHTML = '<div class="empty">추적이 끝났습니다(소실·만료)</div>'; return; }
+      const motion = t[1] === 'forklift' ? L.trackMotion(s.track_motion?.[id]) : { speed: Math.hypot(t[4], t[5]) };
       html = `<div class="unit-head"><strong>${esc(t[0])}</strong><span class="tag warn">${t[1] === 'human' ? '사람' : '지게차'} · 통제 불가</span></div>
-        <div class="kv"><div><span class="kicker">위치</span><b>${t[2].toFixed(1)}, ${t[3].toFixed(1)}</b></div><div><span class="kicker">속도</span><b>${Math.hypot(t[4], t[5]).toFixed(2)} m/s</b></div><div><span class="kicker">위치 불확실성</span><b>±${t[6].toFixed(2)} m</b></div><div><span class="kicker">마지막 관측</span><b>${t[7]}초 전</b></div></div>
-        <div class="note">관제는 명령할 수 없습니다. 예측 점유 구간의 노드·레인을 예약에서 제외해 로봇이 들어가지 않게 합니다.</div>`;
+        <div class="kv"><div><span class="kicker">위치</span><b>${t[2].toFixed(1)}, ${t[3].toFixed(1)}</b></div><div><span class="kicker">추정 속도</span><b>${motion.speed == null ? '미확정' : motion.speed === 0 ? '정지' : `${motion.speed.toFixed(2)} m/s`}</b></div><div><span class="kicker">위치 불확실성</span><b>±${t[6].toFixed(2)} m</b></div><div><span class="kicker">마지막 관측</span><b>${t[7]}초 전</b></div></div>
+        <div class="note">관제는 명령할 수 없습니다. 예측 점유 구간의 노드·레인을 예약에서 제외해 로봇이 들어가지 않게 합니다.${t[1] === 'forklift' ? ' 지게차 기호는 종류·위치를 나타냅니다. 차체 방위는 측정하지 않으며, 방향선은 추정 이동 방향입니다.' : ''}</div>`;
     } else if (S.sel.kind === 'ext') {
       const x = s.external.find((e) => e.id === id);
       if (!x) { body.innerHTML = '<div class="empty">외부 로봇 신호 없음</div>'; return; }
@@ -677,7 +678,7 @@
     }
     for (const tr of s.tracks) {
       const [x, y] = P(tr[2], tr[3]);
-      const radius = tr[1] === 'human' ? Math.max(7, .4 * k) : 2 * k;
+      const radius = tr[1] === 'human' ? Math.max(7, .4 * k) : L.forkliftMarkerRadius(k) + 5;
       obstacles.push({ x: x - radius, y: y - radius, w: radius * 2, h: radius * 2 });
     }
     for (const ext of s.external) {
@@ -971,11 +972,16 @@
     for (const tr of s.tracks) {
       const [id, cls, x, y, vx, vy, sig] = tr;
       const [px, py] = P(x, y);
-      if (S.layers.predict && Math.hypot(vx, vy) >= 0.3) {
+      const motion = cls === 'forklift' ? L.trackMotion(s.track_motion?.[id]) : { vx, vy };
+      if (S.layers.predict && Math.hypot(motion.vx, motion.vy) >= 0.3) {
         const horizon = cls === 'human' ? 2 : 4;
-        const [qx, qy] = P(x + vx * horizon, y + vy * horizon);
+        const [qx, qy] = P(x + motion.vx * horizon, y + motion.vy * horizon);
         ctx.strokeStyle = cls === 'human' ? 'rgba(194,65,12,.6)' : 'rgba(161,98,7,.6)';
         ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(qx, qy); ctx.stroke();
+        if (cls === 'forklift') {
+          const a = Math.atan2(qy - py, qx - px);
+          ctx.beginPath(); ctx.moveTo(qx - 6 * Math.cos(a - .5), qy - 6 * Math.sin(a - .5)); ctx.lineTo(qx, qy); ctx.lineTo(qx - 6 * Math.cos(a + .5), qy - 6 * Math.sin(a + .5)); ctx.stroke();
+        }
       }
       if (S.layers.predict) {
         ctx.fillStyle = 'rgba(194,65,12,.08)';
@@ -988,13 +994,19 @@
         ctx.beginPath(); ctx.arc(px, py - head, head, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
         ctx.beginPath(); ctx.roundRect(px - head * 1.3, py + head * .3, head * 2.6, head * 1.8, 2); ctx.fill(); ctx.stroke();
       } else {
-        const ang = Math.hypot(vx, vy) > 0.1 ? Math.atan2(vy, vx) : 0;
-        ctx.save(); ctx.translate(px, py); ctx.rotate(-ang);
-        ctx.fillStyle = '#a16207'; ctx.fillRect(-1.8 * k, -0.58 * k, 2.4 * k, 1.17 * k);
-        ctx.fillStyle = '#ca8a04'; ctx.fillRect(0.6 * k, -0.42 * k, 1.2 * k, 0.16 * k); ctx.fillRect(0.6 * k, 0.26 * k, 1.2 * k, 0.16 * k);
+        // Screen-upright type marker: the detections do not measure body orientation.
+        const size = L.forkliftMarkerRadius(k);
+        ctx.save(); ctx.translate(px, py); ctx.scale(size / 20, size / 20);
+        ctx.fillStyle = '#fffbeb'; ctx.strokeStyle = '#d6b37a'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.arc(0, 0, 20, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = '#a16207'; ctx.fillRect(-14, -1, 19, 10);
+        ctx.strokeStyle = '#a16207'; ctx.lineWidth = 2.5;
+        ctx.beginPath(); ctx.moveTo(-3, -1); ctx.lineTo(-3, -11); ctx.lineTo(7, -11); ctx.lineTo(7, 9); ctx.moveTo(11, -12); ctx.lineTo(11, 10); ctx.lineTo(18, 10); ctx.stroke();
+        ctx.fillStyle = '#713f12';
+        for (const wx of [-9, 4]) { ctx.beginPath(); ctx.arc(wx, 10, 3, 0, Math.PI * 2); ctx.fill(); }
         ctx.restore();
       }
-      if (S.sel && S.sel.kind === 'track' && S.sel.id === id) { ctx.strokeStyle = '#1761c4'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(px, py, 0.9 * k, 0, Math.PI * 2); ctx.stroke(); }
+      if (S.sel && S.sel.kind === 'track' && S.sel.id === id) { ctx.strokeStyle = '#1761c4'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(px, py, cls === 'forklift' ? L.forkliftMarkerRadius(k) + 4 : 0.9 * k, 0, Math.PI * 2); ctx.stroke(); }
     }
     // evaluation layer: ground truth
     if (S.layers.truth) {
@@ -1067,8 +1079,10 @@
 
   function entities() {
     const s = S.snap;
+    const scale = mapTransform().t.scale;
     const items = robotPositions().map((r) => ({ kind: 'robot', id: r.id, x: r.dx, y: r.dy, r }));
-    for (const t of s.tracks) items.push({ kind: 'track', id: t[0], x: t[2], y: t[3], t });
+    for (const t of s.tracks) items.push({ kind: 'track', id: t[0], x: t[2], y: t[3], t,
+      hitRadius: t[1] === 'forklift' ? (L.forkliftMarkerRadius(scale) + 4) / scale : undefined });
     for (const x of s.external) items.push({ kind: 'ext', id: x.id, x: x.x, y: x.y, e: x });
     return items;
   }
@@ -1096,7 +1110,10 @@
     const tip = $('tip');
     if (!hit) { resetMapHint(); return; }
     if (hit.kind === 'robot') tip.textContent = `${hit.id} · ${hit.r.label} · 배터리 ${Math.round(hit.r.bat)}%`;
-    else if (hit.kind === 'track') tip.textContent = `${hit.t[1] === 'human' ? '사람' : '지게차'} ${hit.id} · ${Math.hypot(hit.t[4], hit.t[5]).toFixed(1)} m/s · 관측 ${hit.t[7]}초 전`;
+    else if (hit.kind === 'track') {
+      const speed = hit.t[1] === 'forklift' ? L.trackMotion(S.snap.track_motion?.[hit.id]).speed : Math.hypot(hit.t[4], hit.t[5]);
+      tip.textContent = `${hit.t[1] === 'human' ? '사람' : '지게차'} ${hit.id} · ${speed == null ? '속도 미확정' : speed === 0 ? '정지' : `${speed.toFixed(1)} m/s`} · 관측 ${hit.t[7]}초 전`;
+    }
     else tip.textContent = `${hit.id} · 외부 로봇(명령 불가) · 예정 ${hit.e.itinerary.slice(1, 3).join('→')}`;
   });
   canvas.addEventListener('pointerleave', resetMapHint);

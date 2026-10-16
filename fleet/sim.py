@@ -812,6 +812,8 @@ class Simulation:
             },
             "tracks": [[tr.id, tr.cls, round(tr.x, 2), round(tr.y, 2), round(tr.vx, 2), round(tr.vy, 2),
                         round(tr.sigma(self.now), 2), round(self.now - tr.last_seen, 1)] for tr in tracks],
+            "track_motion": {tr.id: {"heading": getattr(tr, "heading", None), "stopped": tr.stopped,
+                                      "speed": 0.0 if tr.stopped else tr.pace} for tr in tracks},
             "external": [{"id": k, "x": round(v["x"], 2), "y": round(v["y"], 2), "itinerary": v["itinerary"]}
                          for k, v in m.external.items()],
             "locks": locks_n, "lanes": locks_l,

@@ -117,6 +117,7 @@ try {
     }));
   })()`);
   check('지도 기호 6종과 선 설명 표시', await evaluate(`document.querySelectorAll('.symbol-key>div').length===6 && document.querySelectorAll('.line-key>span').length===5`));
+  check('추적 이동 정보에 정지·이동 방향·속도 제공', await evaluate(`fetch('/api/snapshot').then(r=>r.json()).then(s=>s.tracks.some(t=>t[1]==='forklift') && s.tracks.every(t=>{const m=s.track_motion?.[t[0]];return m && typeof m.stopped==='boolean' && (m.heading===null || Number.isFinite(m.heading)) && Number.isFinite(m.speed) && m.speed>=0 && (!m.stopped || m.speed===0);}))`));
   check('데스크톱 라벨이 유닛·다른 글자를 가리지 않음', await waitFor(`!!window.__mapLabels`) && await labelsClear());
   const desktopFit = await sceneFits();
   check('전체 맞춤에서 현장 전체가 지도 안에 표시', desktopFit.fits, JSON.stringify(desktopFit));
@@ -173,6 +174,18 @@ try {
     check(`${name}: 지도 제어가 화면 안에 들어옴`, await evaluate('[...document.querySelectorAll(".map-tools button")].filter(e=>getComputedStyle(e).display!=="none").every(e=>{const r=e.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth+1&&r.width>=44&&r.height>=44;})'));
     const fit = await sceneFits();
     check(`${name}: 전체 맞춤에서 현장 잘림 없음`, fit.fits, JSON.stringify(fit));
+    if (name === 'mobile') {
+      for (let i=0;i<5;i++) await click('#map-zoom-out');
+      await sleep(150);
+      check('모바일 60%에서도 지게차 기호·라벨·연결선 겹침 없음', await labelsClear() && await leadersClear());
+      const edge = await evaluate(`fetch('/api/snapshot').then(r=>r.json()).then(s=>{const t=s.tracks.find(t=>t[1]==='forklift');if(!t)return null;const c=document.getElementById('map').getBoundingClientRect(),v=window.__mapTransform,[x,y]=FleetLogic.toScreen(v,t[2],t[3]);return {x:x+c.x+FleetLogic.forkliftMarkerRadius(v.scale)-1,y:y+c.y,id:t[0]};})`);
+      if (edge) {
+        await send('Input.dispatchMouseEvent', { type:'mousePressed',x:edge.x,y:edge.y,button:'left',clickCount:1 });
+        await send('Input.dispatchMouseEvent', { type:'mouseReleased',x:edge.x,y:edge.y,button:'left',clickCount:1 }); await sleep(150);
+        check('모바일 60%에서 지게차 기호 가장자리 선택 가능', await evaluate(`document.querySelector('.unit-head strong')?.textContent===${JSON.stringify(edge.id)}`));
+      } else check('모바일 최소 배율에서 선택 가능한 지게차 있음', false);
+      await click('#map-fit'); await sleep(150);
+    }
     await shot(`04_${name}.png`);
   }
   await viewport(1600,1800);
@@ -206,6 +219,12 @@ try {
       await send('Input.dispatchMouseEvent', { type:'mouseReleased',x:unitPoint.x,y:unitPoint.y,button:'left',clickCount:1 }); await sleep(150);
       check('지도에서 차량 선택 시 상세 정보 갱신', await evaluate('document.querySelector(".unit-head strong")?.textContent') === unitPoint.id);
     } else check('선택 가능한 지도 차량 있음', false);
+    const forklift = await evaluate(`fetch('/api/snapshot').then(r=>r.json()).then(s=>{const c=document.getElementById('map').getBoundingClientRect();for(const t of s.tracks){if(t[1]!=='forklift'||!s.track_motion?.[t[0]]?.stopped)continue;const [x,y]=FleetLogic.toScreen(window.__mapTransform,t[2],t[3]);if(y+c.y>c.y+60&&y+c.y<innerHeight-50)return {x:x+c.x,y:y+c.y,id:t[0]};}return null;})`);
+    if (forklift) {
+      await send('Input.dispatchMouseEvent', { type:'mousePressed',x:forklift.x,y:forklift.y,button:'left',clickCount:1 });
+      await send('Input.dispatchMouseEvent', { type:'mouseReleased',x:forklift.x,y:forklift.y,button:'left',clickCount:1 }); await sleep(150);
+      check('정지 지게차 선택 시 정지·차체 방위 미측정 설명 표시', await evaluate(`document.querySelector('.unit-head strong')?.textContent===${JSON.stringify(forklift.id)} && document.getElementById('unit-body').textContent.includes('정지') && document.getElementById('unit-body').textContent.includes('차체 방위는 측정하지 않으며')`));
+    } else check('선택 가능한 정지 지게차 있음', false);
   } finally {
     if (!wasPaused && await setPause(false) !== 200) throw new Error('hover cleanup: resume failed');
   }
