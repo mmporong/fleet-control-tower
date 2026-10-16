@@ -150,14 +150,14 @@ try {
   await sleep(150);
   check('이동 중 지도 기호가 상단 설명 영역을 가리지 않음', await evaluate(`(()=>{const c=document.getElementById('map'),ratio=c.width/c.clientWidth,d=c.getContext('2d').getImageData(0,0,c.width,Math.floor(14*ratio)).data;for(let i=0;i<d.length;i+=4)if(d[i]!==248||d[i+1]!==250||d[i+2]!==252)return false;return true;})()`));
   await click('#map-fit'); await sleep(150);
-  const beforeWide = await bounds('map');
+  const defaultWide = await bounds('map');
+  check('처음 열면 넓게 보기와 아래 보조 패널이 기본', await evaluate('document.querySelector(".work").classList.contains("map-wide") && document.getElementById("map-wide").getAttribute("aria-expanded")==="true" && document.getElementById("map-wide").textContent==="패널 나란히 보기" && document.querySelector(".side").getBoundingClientRect().top >= document.getElementById("map-panel").getBoundingClientRect().bottom'));
   await click('#map-wide'); await sleep(200);
-  const afterWide = await bounds('map');
-  check('넓게 보기가 실제 지도 폭을 키움', afterWide.width > beforeWide.width * 1.1 && await evaluate('document.getElementById("map-wide").getAttribute("aria-expanded")') === 'true', `${beforeWide.width} → ${afterWide.width}px`);
-  check('넓게 보기에서 보조 패널은 지도 아래에 배치', await evaluate('document.querySelector(".side").getBoundingClientRect().top >= document.getElementById("map-panel").getBoundingClientRect().bottom'));
-  await shot('03_wide.png');
+  const beside = await bounds('map');
+  check('패널 나란히 보기로 지도 폭이 줄고 보조 패널이 옆으로 이동', defaultWide.width > beside.width * 1.1 && await evaluate('document.getElementById("map-wide").getAttribute("aria-expanded")==="false" && document.getElementById("map-wide").textContent==="넓게 보기" && document.querySelector(".side").getBoundingClientRect().left >= document.getElementById("map-panel").getBoundingClientRect().right'), `${defaultWide.width} → ${beside.width}px`);
   await click('#map-wide'); await sleep(150);
-  check('넓게 보기 해제 시 원래 폭 복귀', Math.abs((await bounds('map')).width - beforeWide.width) < 1);
+  check('넓게 보기로 기본 폭과 아래 보조 패널 복귀', Math.abs((await bounds('map')).width - defaultWide.width) < 1 && await evaluate('document.getElementById("map-wide").getAttribute("aria-expanded")==="true" && document.querySelector(".side").getBoundingClientRect().top >= document.getElementById("map-panel").getBoundingClientRect().bottom'));
+  await shot('03_wide.png');
   const canvasBox = await bounds('map');
   await send('Input.dispatchMouseEvent', { type: 'mouseWheel', x: canvasBox.x + canvasBox.width / 2, y: canvasBox.y + 100, deltaY: -120, deltaX: 0 }); await sleep(150);
   check('마우스 휠 확대', await evaluate('document.getElementById("map-zoom").textContent') === '115%');
@@ -175,7 +175,7 @@ try {
     check(`${name}: 전체 맞춤에서 현장 잘림 없음`, fit.fits, JSON.stringify(fit));
     await shot(`04_${name}.png`);
   }
-  await viewport(1600,1500);
+  await viewport(1600,1800);
   await evaluate('window.scrollTo(0,0); true'); await sleep(200);
   await click('#layers [data-k="ids"]'); await sleep(150);
   check('ID 레이어를 끄면 차량 이름이 사라짐', await evaluate('document.querySelector("#layers [data-k=ids]").getAttribute("aria-pressed")==="false" && !window.__mapLabels.placed.some(l=>l.id.startsWith("robot-"))'));
@@ -190,15 +190,26 @@ try {
   await send('Input.dispatchKeyEvent', { type:'keyUp',key:' ',code:'Space' });
   check('범례 펼치기가 그림 설명을 복원', await evaluate('document.querySelector(".map-key").open && document.querySelector(".symbol-key").getBoundingClientRect().height>0'));
   await evaluate('window.scrollTo(0,0); true');
-  const unitPoint = await evaluate(`fetch('/api/snapshot').then(r=>r.json()).then(s=>{const c=document.getElementById('map').getBoundingClientRect();for(const r of s.robots){const [x,y]=FleetLogic.toScreen(window.__mapTransform,r.x,r.y);if(y+c.y>c.y+60&&y+c.y<innerHeight-50)return {x:x+c.x,y:y+c.y,id:r.id};}return null;})`);
-  if (unitPoint) {
-    const beforeHover = await bounds('layers');
-    await send('Input.dispatchMouseEvent', { type:'mouseMoved',x:unitPoint.x,y:unitPoint.y }); await sleep(100);
-    check('호버 안내가 지도 아래에 표시되고 레이아웃은 고정', Math.abs((await bounds('layers')).y - beforeHover.y) < 1 && await evaluate('document.getElementById("tip").textContent') !== '기호 위에 포인터를 올리면 이름과 상태를 표시합니다.');
-    await send('Input.dispatchMouseEvent', { type:'mousePressed',x:unitPoint.x,y:unitPoint.y,button:'left',clickCount:1 });
-    await send('Input.dispatchMouseEvent', { type:'mouseReleased',x:unitPoint.x,y:unitPoint.y,button:'left',clickCount:1 }); await sleep(150);
-    check('지도에서 차량 선택 시 상세 정보 갱신', await evaluate('document.querySelector(".unit-head strong")?.textContent') === unitPoint.id);
-  } else check('선택 가능한 지도 차량 있음', false);
+  // Keep the snapshot target still while the stream and drawing interpolation settle.
+  const wasPaused = await evaluate('fetch("/api/snapshot").then(r=>r.json()).then(s=>s.run.paused)');
+  const setPause = value => evaluate(`fetch('/api/me').then(r=>r.json()).then(me=>fetch('/api/control',{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':me.csrf},body:JSON.stringify({action:'pause',value:${value}})})).then(r=>r.status)`);
+  if (!wasPaused && await setPause(true) !== 200) throw new Error('hover setup: pause failed');
+  try {
+    await sleep(800);
+    const unitPoint = await evaluate(`fetch('/api/snapshot').then(r=>r.json()).then(s=>{const c=document.getElementById('map').getBoundingClientRect();for(const r of s.robots){const [x,y]=FleetLogic.toScreen(window.__mapTransform,r.x,r.y);if(y+c.y>c.y+60&&y+c.y<innerHeight-50)return {x:x+c.x,y:y+c.y,id:r.id};}return null;})`);
+    if (unitPoint) {
+      const beforeHover = await bounds('layers');
+      await send('Input.dispatchMouseEvent', { type:'mouseMoved',x:unitPoint.x,y:unitPoint.y }); await sleep(100);
+      const afterHover = await bounds('layers'), hint = await evaluate('document.getElementById("tip").textContent');
+      check('호버 안내가 지도 아래에 표시되고 레이아웃은 고정', Math.abs(afterHover.y - beforeHover.y) < 1 && hint.includes(unitPoint.id), JSON.stringify({before:beforeHover.y,after:afterHover.y,hint}));
+      await send('Input.dispatchMouseEvent', { type:'mousePressed',x:unitPoint.x,y:unitPoint.y,button:'left',clickCount:1 });
+      await send('Input.dispatchMouseEvent', { type:'mouseReleased',x:unitPoint.x,y:unitPoint.y,button:'left',clickCount:1 }); await sleep(150);
+      check('지도에서 차량 선택 시 상세 정보 갱신', await evaluate('document.querySelector(".unit-head strong")?.textContent') === unitPoint.id);
+    } else check('선택 가능한 지도 차량 있음', false);
+  } finally {
+    if (!wasPaused && await setPause(false) !== 200) throw new Error('hover cleanup: resume failed');
+  }
+  await sleep(300);
   await shot('05_overview.png');
   await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
   check('축소 동작 설정에서 UI 전환 모션 제거', await evaluate('getComputedStyle(document.getElementById("toast")).transitionDuration') === '0s');
