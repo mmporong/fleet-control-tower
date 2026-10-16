@@ -80,6 +80,67 @@
     return a + (b - a) * t;
   }
 
+  /** Place annotations in free screen space; omit a label when no readable position fits. */
+  function placeMapLabels(labels, obstacles, width, height) {
+    const occupied = obstacles.slice();
+    const placed = [];
+    const leaders = [];
+    const overlaps = (a, b) => a.x < b.x + b.w + 3 && a.x + a.w + 3 > b.x && a.y < b.y + b.h + 3 && a.y + a.h + 3 > b.y;
+    const contains = (r, x, y) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
+    const hitsRect = (line, r) => {
+      let low = 0, high = 1;
+      for (const [a, b, min, max] of [[line.from[0], line.to[0], r.x, r.x + r.w], [line.from[1], line.to[1], r.y, r.y + r.h]]) {
+        const delta = b - a;
+        if (Math.abs(delta) < 1e-9) { if (a < min || a > max) return false; }
+        else {
+          const first = (min - a) / delta, last = (max - a) / delta;
+          low = Math.max(low, Math.min(first, last)); high = Math.min(high, Math.max(first, last));
+          if (low > high) return false;
+        }
+      }
+      return true;
+    };
+    const crosses = (a, b) => {
+      const dx = a.to[0] - a.from[0], dy = a.to[1] - a.from[1];
+      const ex = b.to[0] - b.from[0], ey = b.to[1] - b.from[1];
+      const ox = b.from[0] - a.from[0], oy = b.from[1] - a.from[1], det = dx * ey - dy * ex;
+      if (Math.abs(det) < 1e-9) {
+        if (Math.abs(ox * dy - oy * dx) > 1e-9) return false;
+        return Math.max(Math.min(a.from[0], a.to[0]), Math.min(b.from[0], b.to[0])) <= Math.min(Math.max(a.from[0], a.to[0]), Math.max(b.from[0], b.to[0])) &&
+          Math.max(Math.min(a.from[1], a.to[1]), Math.min(b.from[1], b.to[1])) <= Math.min(Math.max(a.from[1], a.to[1]), Math.max(b.from[1], b.to[1]));
+      }
+      const t = (ox * ey - oy * ex) / det, u = (ox * dy - oy * dx) / det;
+      return t >= 0 && t <= 1 && u >= 0 && u <= 1;
+    };
+    for (const label of labels.slice().sort((a, b) => (b.priority || 0) - (a.priority || 0) || a.id.localeCompare(b.id))) {
+      if (label.x < 0 || label.x > width || label.y < 0 || label.y > height) continue;
+      const w = label.w, h = label.h;
+      const gap = label.gap || 10;
+      const candidates = [[gap, -h - gap], [-w - gap, -h - gap], [gap, gap], [-w - gap, gap],
+        [-w / 2, -h - gap - 18], [-w / 2, gap + 18], [gap + 22, -h / 2], [-w - gap - 22, -h / 2]];
+      for (const [dx, dy] of candidates) {
+        const box = { x: label.x + dx, y: label.y + dy, w, h };
+        if (box.x < 6 || box.y < 6 || box.x + w > width - 6 || box.y + h > height - 6 || occupied.some(r => overlaps(box, r)) || leaders.some(line => hitsRect(line, box))) continue;
+        const to = [Math.max(box.x, Math.min(label.x, box.x + w)), Math.max(box.y, Math.min(label.y, box.y + h))];
+        const vx = to[0] - label.x, vy = to[1] - label.y, distance = Math.hypot(vx, vy);
+        let exit = 0;
+        for (const r of obstacles.filter(r => contains(r, label.x, label.y))) {
+          const tx = vx > 0 ? (r.x + r.w - label.x) / vx : vx < 0 ? (r.x - label.x) / vx : Infinity;
+          const ty = vy > 0 ? (r.y + r.h - label.y) / vy : vy < 0 ? (r.y - label.y) / vy : Infinity;
+          exit = Math.max(exit, Math.min(tx, ty));
+        }
+        const start = Math.min(1, exit + 2 / Math.max(1, distance));
+        const leader = { from: [label.x + vx * start, label.y + vy * start], to };
+        if (occupied.some(r => hitsRect(leader, r)) || leaders.some(line => crosses(leader, line))) continue;
+        occupied.push(box);
+        leaders.push(leader);
+        placed.push({ ...label, box, leader });
+        break;
+      }
+    }
+    return placed;
+  }
+
   function lerpAngle(a, b, t) {
     let d = ((b - a + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
     return a + d * t;
@@ -154,6 +215,6 @@
     return vals.map((v, i) => `${i ? 'L' : 'M'}${((i / (vals.length - 1)) * w).toFixed(1)},${(h - ((v - min) / span) * h).toFixed(1)}`).join(' ');
   }
 
-  return { STATUS, linkInfo, statusInfo, exceptionSort, fitTransform, applyView, toScreen, toWorld, zoomAt, lerp, lerpAngle,
+  return { STATUS, linkInfo, statusInfo, exceptionSort, fitTransform, applyView, toScreen, toWorld, zoomAt, lerp, lerpAngle, placeMapLabels,
     pick, fmtDuration, fmtClock, fmtNum, alarmStateLabel, alarmLoad, sparkPath };
 });

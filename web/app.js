@@ -20,6 +20,7 @@
   };
   const LAYERS = [['locks', '예약'], ['routes', '경로'], ['wait', '대기 관계'], ['predict', '사람·지게차 예측'], ['zones', '구역'],
     ['heat', '혼잡'], ['cams', '카메라 범위'], ['truth', '실제 위치(평가)'], ['ids', 'ID']];
+  const STRATEGY_LABELS = { 'locks+resolve': '예약·교착 해소', locks: '예약·일반 우회', none: '제어 없음(안전필드만)' };
   const TABS = [['fleet', '차량 목록'], ['site', '현장 현황'], ['tasks', '작업 큐'], ['zones', '구역 제어'], ['incidents', '사고 기록·재생'], ['log', '이벤트·감사'],
     ['vda', 'VDA 5050 검사기'], ['jdamr', '실물 JD-AMR'], ['drill', '훈련·시나리오'], ['trend', '추세']];
   const CMD_LABEL = {
@@ -186,7 +187,7 @@
     if (!r.ok) return;
     S.meta = r.body;
     $('scenario').innerHTML = Object.entries(S.meta.scenarios).map(([k, v]) => `<option value="${esc(k)}" title="${esc(v.description)}">${esc(v.title)}</option>`).join('');
-    $('strategy').innerHTML = S.meta.strategies.map((s) => `<option value="${esc(s)}">${esc({ 'locks+resolve': '예약+교착해소', locks: '예약만', none: '제어 없음(안전필드만)' }[s] || s)}</option>`).join('');
+    $('strategy').innerHTML = S.meta.strategies.map((s) => `<option value="${esc(s)}">${esc(STRATEGY_LABELS[s] || s)}</option>`).join('');
     $('speed').innerHTML = S.meta.speeds.map((v) => `<button type="button" data-v="${v}" aria-pressed="false">${v}×</button>`).join('');
     $('speed').onclick = (e) => { const b = e.target.closest('button'); if (b) control('speed', Number(b.dataset.v)); };
     $('scenario').onchange = () => ask('시나리오 전환', `${$('scenario').selectedOptions[0].textContent}로 다시 시작합니다. 현재 상태는 사라집니다.`, false,
@@ -247,7 +248,7 @@
     if (!s) return;
     $('clock').textContent = L.fmtClock(s.t);
     const dims = S.layout ? `${S.layout.width}×${S.layout.height} m` : '';
-    $('subtitle').textContent = `${s.scenario_title} · ${s.site === 'dc' ? '팔레트 물류센터' : '격자 창고'} ${dims} · 전략 ${({ 'locks+resolve': '예약+교착해소', locks: '예약만', none: '제어 없음' })[s.strategy] || s.strategy} · 시드 ${s.seed}`;
+    $('subtitle').textContent = `${s.scenario_title} · ${s.site === 'dc' ? '팔레트 물류센터' : '격자 창고'} ${dims} · 전략 ${STRATEGY_LABELS[s.strategy] || s.strategy} · 시드 ${s.seed}`;
     if ($('scenario').value !== s.scenario) $('scenario').value = s.scenario;
     if ($('strategy').value !== s.strategy) $('strategy').value = s.strategy;
     $('speed').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', Number(b.dataset.v) === s.run.speed));
@@ -581,6 +582,10 @@
   // ------------------------------------------------------------------ map
   const canvas = $('map');
   let drag = null;
+  const motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const mapHint = '기호 위에 포인터를 올리면 이름과 상태를 표시합니다.';
+  function resetMapHint() { $('tip').textContent = mapHint; }
+  canvas.addEventListener('focus', () => teleopStop());
 
   function setupCanvas(c) {
     const dpr = window.devicePixelRatio || 1;
@@ -593,13 +598,53 @@
   }
 
   function mapTransform() {
-    const base = L.fitTransform(S.layout.width, S.layout.height, canvas.clientWidth, canvas.clientHeight, 14);
+    const base = L.fitTransform(S.layout.width, S.layout.height, canvas.clientWidth - 24, canvas.clientHeight - 76, 12);
+    base.ox += 12;
+    base.oy += 60;
     return { base, t: L.applyView(base, S.view) };
   }
 
+  function updateMapView() {
+    $('map-zoom').textContent = `${Math.round(S.view.zoom * 100)}%`;
+    $('map-zoom-in').disabled = S.view.zoom >= 6;
+    $('map-zoom-out').disabled = S.view.zoom <= 0.6;
+    resetMapHint();
+  }
+  function zoomMap(factor, x = canvas.clientWidth / 2, y = canvas.clientHeight / 2) {
+    if (!S.layout) return;
+    S.view = L.zoomAt(S.view, mapTransform().base, x, y, factor);
+    updateMapView();
+  }
+  function fitMap() { S.view = { zoom: 1, panX: 0, panY: 0 }; updateMapView(); }
+  $('map-zoom-in').onclick = () => zoomMap(1.25);
+  $('map-zoom-out').onclick = () => zoomMap(1 / 1.25);
+  $('map-fit').onclick = fitMap;
+  $('map-wide').onclick = () => {
+    const wide = document.querySelector('.work').classList.toggle('map-wide');
+    $('map-wide').setAttribute('aria-expanded', wide);
+    $('map-wide').textContent = wide ? '패널 나란히 보기' : '넓게 보기';
+    fitMap();
+  };
+  canvas.addEventListener('keydown', e => {
+    if (e.key === '+' || e.key === '=') zoomMap(1.25);
+    else if (e.key === '-') zoomMap(1 / 1.25);
+    else if (e.key === '0' || e.key === 'Home') fitMap();
+    else if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
+      const dx = e.key === 'ArrowLeft' ? 40 : e.key === 'ArrowRight' ? -40 : 0;
+      const dy = e.key === 'ArrowUp' ? 40 : e.key === 'ArrowDown' ? -40 : 0;
+      S.view = { ...S.view, panX: S.view.panX + dx, panY: S.view.panY + dy };
+      updateMapView();
+    } else return;
+    e.preventDefault();
+    e.stopPropagation();
+  });
+  canvas.addEventListener('keyup', e => {
+    if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', '+', '=', '-', '0', 'Home'].includes(e.key)) e.stopPropagation();
+  });
+
   function robotPositions() {
     const s = S.snap;
-    const a = Math.min(1, (performance.now() - S.snapAt) / 260);
+    const a = motionPreference.matches ? 1 : Math.min(1, (performance.now() - S.snapAt) / 260);
     const prev = S.prev ? Object.fromEntries(S.prev.robots.map((r) => [r.id, r])) : {};
     return s.robots.map((r) => {
       const p = prev[r.id];
@@ -618,8 +663,58 @@
     const s = S.snap;
     const P = (x, y) => L.toScreen(t, x, y);
     const k = t.scale;
+    const labels = [];
+    const label = (id, text, x, y, priority = 0, color = '#334155', gap = 8) => {
+      ctx.font = '600 10px system-ui, sans-serif';
+      labels.push({ id, text, x, y, w: ctx.measureText(text).width + 10, h: 19, priority, color, gap });
+    };
+    const robots = robotPositions();
+    const obstacles = [{ x: 0, y: 0, w: W, h: 58 }];
+    for (const r of robots) {
+      const [x, y] = P(r.dx, r.dy);
+      const radius = Math.max(6, Math.hypot(r.len || 0.9, r.wid || 0.7) * k / 2 + 3);
+      obstacles.push({ x: x - radius, y: y - radius, w: radius * 2, h: radius * 2 });
+    }
+    for (const tr of s.tracks) {
+      const [x, y] = P(tr[2], tr[3]);
+      const radius = tr[1] === 'human' ? Math.max(7, .4 * k) : 2 * k;
+      obstacles.push({ x: x - radius, y: y - radius, w: radius * 2, h: radius * 2 });
+    }
+    for (const ext of s.external) {
+      const [x, y] = P(ext.x, ext.y), radius = .6 * k + 3;
+      obstacles.push({ x: x - radius, y: y - radius, w: radius * 2, h: radius * 2 });
+    }
+    for (const rack of S.layout.racks) {
+      const points = rack.map(p => P(...p));
+      const xs = points.map(p => p[0]), ys = points.map(p => p[1]);
+      obstacles.push({ x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) });
+    }
+    for (const node of S.layout.nodes.filter(n => ['inbound', 'outbound', 'charger', 'in_stage', 'out_stage', 'pack'].includes(n.kind))) {
+      const [x, y] = P(node.x, node.y), radius = Math.max(3, .35 * k + 1);
+      obstacles.push({ x: x - radius, y: y - radius, w: radius * 2, h: radius * 2 });
+    }
+    const callouts = [];
+    if (S.layers.zones) {
+      const names = { 'Z-IN': '입고 · 하역', 'Z-RACK': '팔레트 랙', 'Z-PICK': '협업 피킹', 'Z-PACK': '패킹', 'Z-OUT': '출고' };
+      let right = 0;
+      for (const z of S.layout.zones.filter(z => names[z.id]).sort((a, b) => a.polygon[0][0] - b.polygon[0][0])) {
+        if (W < 650 && z.id === 'Z-PACK') continue;
+        const x = (z.polygon[0][0] + z.polygon[2][0]) / 2;
+        const y = Math.max(...z.polygon.map(p => p[1]));
+        const [ax, ay] = P(x, y);
+        if (ax < 0 || ax > W || ay < 59 || ay > H) continue;
+        ctx.font = '600 11px system-ui, sans-serif';
+        const w = ctx.measureText(names[z.id]).width + 16;
+        const left = Math.max(right + 6, Math.min(W - w - 7, ax - w / 2));
+        if (left + w > W - 6) continue;
+        callouts.push({ text: names[z.id], x: left, w, ax, ay });
+        right = left + w;
+      }
+    }
     ctx.fillStyle = '#f8fafc';
     ctx.fillRect(0, 0, W, H);
+    ctx.save();
+    ctx.beginPath(); ctx.rect(0, 58, W, H - 58); ctx.clip();
     // floor & walls
     const [fx, fy] = P(0, S.layout.height);
     ctx.fillStyle = '#ffffff';
@@ -639,11 +734,9 @@
         ctx.fillStyle = fill;
         ctx.fill();
         if (dz.locked) { ctx.strokeStyle = '#b42332'; ctx.setLineDash([6, 4]); ctx.lineWidth = 1.5; ctx.stroke(); ctx.setLineDash([]); }
-        if (k > 9 && (dz.locked || dz.limit != null || z.kind !== 'aisle')) {
+        if (k > 9 && (dz.locked || dz.limit != null)) {
           const [lx, ly] = P(z.polygon[0][0] + 0.2, z.polygon[2][1] - 0.2);
-          ctx.fillStyle = dz.locked ? '#b42332' : dz.limit != null ? '#7a4f0c' : '#5b7083';
-          ctx.font = '10px system-ui';
-          ctx.fillText(`${z.name}${dz.locked ? ' · 봉쇄' : dz.limit != null ? ` · ${dz.limit} m/s` : ''}`, lx, ly + 10);
+          label(`zone-${z.id}`, `${z.name}${dz.locked ? ' · 봉쇄' : ` · ${dz.limit} m/s`}`, lx, ly, dz.locked ? 70 : 20, dz.locked ? '#b42332' : '#7a4f0c');
         }
       }
     }
@@ -658,6 +751,12 @@
     ctx.strokeStyle = '#cbd5e1';
     ctx.lineWidth = 1;
     for (const r of S.layout.racks) { poly(r); ctx.fill(); ctx.stroke(); }
+    // Area captions stay above the floor; their leaders are painted beneath traffic and vehicles.
+    ctx.strokeStyle = '#91a9c4'; ctx.lineWidth = 1;
+    for (const c of callouts) {
+      ctx.beginPath(); ctx.moveTo(c.x + c.w / 2, 41); ctx.lineTo(c.ax, 52); ctx.lineTo(c.ax, c.ay); ctx.stroke();
+      ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(c.ax, c.ay, 3, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    }
     // fire wall and rapid-roll doors: grey while normal, red only when failed or out of use (ISA-101)
     ctx.strokeStyle = '#94a3b8';
     ctx.lineWidth = Math.max(2, k * 0.25);
@@ -678,9 +777,7 @@
       ctx.setLineDash(open >= 1 ? [4, 3] : []);
       ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
       ctx.setLineDash([]);
-      ctx.fillStyle = bad ? '#b42332' : '#64748b';
-      ctx.font = `${Math.max(9, k * 0.55)}px system-ui, sans-serif`;
-      ctx.fillText(`${d.id}${bad ? (st.disabled ? ' 사용 중지' : ' 이상') : ''}`, ax + 4, (ay + by) / 2);
+      label(`door-${d.id}`, `방화문 ${d.id}${bad ? (st.disabled ? ' · 사용 중지' : ' · 이상') : ''}`, ax, (ay + by) / 2, bad ? 80 : 15, bad ? '#b42332' : '#53657a');
     }
     // roadmap
     ctx.strokeStyle = '#d6dee8';
@@ -732,7 +829,7 @@
           ctx.fillStyle = '#d6b37a'; ctx.strokeStyle = '#8a6a2f'; ctx.lineWidth = 1;
           ctx.fillRect(px - 0.5 * k, py - 0.5 * k, 1.0 * k, 1.0 * k); ctx.strokeRect(px - 0.5 * k, py - 0.5 * k, 1.0 * k, 1.0 * k);
         }
-        if (k > 7) { const [lx, ly] = P(node.x + dir * 1.55, node.y + 1.1); ctx.fillStyle = '#7a5a20'; ctx.font = '600 10px system-ui'; ctx.fillText(`${cnt}/${st.lane_capacity || 4}`, lx - 8, ly); }
+        if (k > 7) { const [lx, ly] = P(node.x + dir * 1.55, node.y + 1.1); label(`pallet-${n}`, `팔레트 ${cnt}/${st.lane_capacity || 4}`, lx, ly, 5, '#7a5a20'); }
       }
     };
     lane(st.in_stage, -1);
@@ -742,7 +839,7 @@
         const node = S.nodes[`SI${dock.slice(2)}`];
         if (!node) continue;
         const [px, py] = P(0.2, node.y + 1.6);
-        ctx.fillStyle = '#334155'; ctx.font = '600 10px system-ui'; ctx.fillText(`트럭 ${left}`, px, py);
+        label(`truck-${dock}`, `하역 잔여 ${left}`, px, py, 5);
       }
     }
     // stations
@@ -754,7 +851,7 @@
         const sz = 0.7 * k;
         ctx.fillRect(px - sz / 2, py - sz / 2, sz, sz);
         ctx.strokeRect(px - sz / 2, py - sz / 2, sz, sz);
-        if (k > 10 && n.kind !== 'park') { ctx.fillStyle = '#53657a'; ctx.font = '9px system-ui'; ctx.fillText(n.id, px - sz / 2, py - sz / 2 - 2); }
+        if (S.layers.ids && S.view.zoom >= 1.7 && n.kind !== 'park') label(`station-${n.id}`, n.id, px, py, -10, '#53657a');
       } else if (n.intersection) {
         ctx.fillStyle = '#c3cfdc';
         ctx.fillRect(px - 1.5, py - 1.5, 3, 3);
@@ -781,7 +878,6 @@
         }
       }
     }
-    const robots = robotPositions();
     const color = (r) => L.statusInfo(r.st).color;
     // reservations
     if (S.layers.locks) {
@@ -869,7 +965,7 @@
       ctx.fillStyle = '#0e7490';
       ctx.beginPath(); ctx.moveTo(px, py - r0); ctx.lineTo(px + r0, py); ctx.lineTo(px, py + r0); ctx.lineTo(px - r0, py); ctx.closePath(); ctx.fill();
       if (S.sel && S.sel.kind === 'ext' && S.sel.id === x.id) { ctx.strokeStyle = '#1761c4'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(px, py, r0 + 5, 0, Math.PI * 2); ctx.stroke(); }
-      if (S.layers.ids && k > 8) { ctx.fillStyle = '#0e7490'; ctx.font = '10px system-ui'; ctx.fillText(x.id, px + r0 + 2, py - 2); }
+      if (S.layers.ids && k > 5) label(`external-${x.id}`, `${x.id} · 외부 로봇`, px, py, 20, '#0e7490', r0 + 4);
     }
     // tracks (what the control room believes) with prediction
     for (const tr of s.tracks) {
@@ -887,8 +983,10 @@
       }
       if (cls === 'human') {
         ctx.fillStyle = '#0f172a';
-        ctx.beginPath(); ctx.arc(px, py, Math.max(3, 0.3 * k), 0, Math.PI * 2); ctx.fill();
-        ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke();
+        const head = Math.max(2.5, .2 * k);
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.arc(px, py - head, head, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        ctx.beginPath(); ctx.roundRect(px - head * 1.3, py + head * .3, head * 2.6, head * 1.8, 2); ctx.fill(); ctx.stroke();
       } else {
         const ang = Math.hypot(vx, vy) > 0.1 ? Math.atan2(vy, vx) : 0;
         ctx.save(); ctx.translate(px, py); ctx.rotate(-ang);
@@ -905,7 +1003,7 @@
         ctx.strokeStyle = h[4] ? '#16805b' : '#b42332';
         ctx.lineWidth = 2;
         ctx.beginPath(); ctx.arc(px, py, Math.max(4, 0.35 * k), 0, Math.PI * 2); ctx.stroke();
-        if (k > 8) { ctx.fillStyle = h[4] ? '#16805b' : '#b42332'; ctx.font = '9px system-ui'; ctx.fillText(`${h[0]}${h[4] ? '' : ' 미추적'}`, px + 5, py + 12); }
+        if (k > 8) label(`truth-${h[0]}`, `${h[0]}${h[4] ? '' : ' · 미추적'}`, px, py, h[4] ? -5 : 60, h[4] ? '#16805b' : '#b42332');
       }
       for (const f of s.truth.forklifts) {
         const [px, py] = P(f[1], f[2]);
@@ -942,14 +1040,29 @@
       if (r.field === 'PROTECTIVE') { ctx.strokeStyle = '#c2410c'; ctx.lineWidth = 2; ctx.strokeRect(-Lr / 2 - 2, -Wr / 2 - 2, Lr + 4, Wr + 4); }
       ctx.restore();
       if (S.sel && S.sel.kind === 'robot' && S.sel.id === r.id) { ctx.strokeStyle = '#1761c4'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(px, py, 0.85 * k, 0, Math.PI * 2); ctx.stroke(); }
-      if (S.layers.ids && k > 8) {
-        ctx.font = '600 9.5px system-ui';
-        ctx.fillStyle = r.st === 'PARKED' || r.st === 'IDLE' || r.st === 'CHARGING' ? '#8a9aad' : '#142538';
-        ctx.fillText(r.id.replace('AMR-', ''), px + 0.55 * k, py - 0.45 * k);
-      }
+      const selected = S.sel && S.sel.kind === 'robot' && S.sel.id === r.id;
+      if (selected || (S.layers.ids && k > 5)) label(`robot-${r.id}`, selected ? `${r.id} · ${r.label}` : r.id, px, py, selected ? 100 : r.st === 'PARKED' || r.st === 'CHARGING' ? 0 : 40, selected ? '#1761c4' : '#334155', Math.max(8, (r.len || .9) * k / 2));
       if (r.bat < 15) { ctx.fillStyle = '#b42332'; ctx.fillRect(px - 0.45 * k, py + 0.5 * k, 0.9 * k * (r.bat / 100), 2); }
     }
-    $('map-meta').textContent = `차량 ${s.robots.length} · 사람 추적 ${s.tracks.filter((x) => x[1] === 'human').length} · 예약 노드 ${Object.keys(s.locks).length} · 버스 손실 ${s.bus.dropped}${s.links_down.length ? ` · 통신 두절 ${s.links_down.join(',')}` : ''}`;
+    // A label never covers another label or a unit. Dense areas retain the shapes and reveal IDs on zoom.
+    const placed = L.placeMapLabels(labels, obstacles, W, H);
+    ctx.font = '600 10px system-ui, sans-serif';
+    for (const l of placed) {
+      const b = l.box;
+      ctx.strokeStyle = l.priority >= 100 ? '#1761c4' : '#9aaec5'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(...l.leader.from); ctx.lineTo(...l.leader.to); ctx.stroke();
+      ctx.fillStyle = 'rgba(255,255,255,.96)'; ctx.fillRect(b.x, b.y, b.w, b.h);
+      ctx.fillStyle = l.color; ctx.fillText(l.text, b.x + 5, b.y + 13);
+    }
+    ctx.restore();
+    for (const c of callouts) {
+      ctx.strokeStyle = '#91a9c4'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(c.x + c.w / 2, 41); ctx.lineTo(c.ax, 52); ctx.lineTo(c.ax, 58); ctx.stroke();
+      ctx.fillStyle = '#fff'; ctx.strokeStyle = '#cad7e6'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.roundRect(c.x, 15, c.w, 26, 4); ctx.fill(); ctx.stroke();
+      ctx.font = '600 11px system-ui, sans-serif'; ctx.fillStyle = '#334155'; ctx.fillText(c.text, c.x + 8, 32);
+    }
+    $('map-meta').textContent = `차량 ${s.robots.length}대 · 사람 추적 ${s.tracks.filter((x) => x[1] === 'human').length}명 · 예약 ${Object.keys(s.locks).length}곳${s.links_down.length ? ` · 통신 두절 ${s.links_down.join(',')}` : ''}`;
   }
 
   function entities() {
@@ -964,9 +1077,9 @@
     if (!S.layout) return;
     e.preventDefault();
     const rect = canvas.getBoundingClientRect();
-    S.view = L.zoomAt(S.view, mapTransform().base, e.clientX - rect.left, e.clientY - rect.top, e.deltaY < 0 ? 1.15 : 1 / 1.15);
+    zoomMap(e.deltaY < 0 ? 1.15 : 1 / 1.15, e.clientX - rect.left, e.clientY - rect.top);
   }, { passive: false });
-  canvas.addEventListener('pointerdown', (e) => { drag = { x: e.clientX, y: e.clientY, panX: S.view.panX, panY: S.view.panY, moved: false }; canvas.setPointerCapture(e.pointerId); });
+  canvas.addEventListener('pointerdown', (e) => { resetMapHint(); drag = { x: e.clientX, y: e.clientY, panX: S.view.panX, panY: S.view.panY, moved: false }; canvas.setPointerCapture(e.pointerId); });
   canvas.addEventListener('pointermove', (e) => {
     const rect = canvas.getBoundingClientRect();
     if (drag) {
@@ -978,29 +1091,29 @@
     }
     if (!S.layout || !S.snap) return;
     const w = L.toWorld(mapTransform().t, e.clientX - rect.left, e.clientY - rect.top);
+    if (e.clientY - rect.top < 58) { resetMapHint(); return; }
     const hit = L.pick(entities(), w[0], w[1], 1.2);
     const tip = $('tip');
-    if (!hit) { tip.hidden = true; return; }
-    tip.hidden = false;
-    tip.style.left = `${Math.min(e.clientX - rect.left + 12, rect.width - 200)}px`;
-    tip.style.top = `${e.clientY - rect.top + 12}px`;
-    if (hit.kind === 'robot') tip.textContent = `${hit.id} · ${hit.r.label} · ${hit.r.why || '정상'} · ${Math.round(hit.r.bat)}%`;
+    if (!hit) { resetMapHint(); return; }
+    if (hit.kind === 'robot') tip.textContent = `${hit.id} · ${hit.r.label} · 배터리 ${Math.round(hit.r.bat)}%`;
     else if (hit.kind === 'track') tip.textContent = `${hit.t[1] === 'human' ? '사람' : '지게차'} ${hit.id} · ${Math.hypot(hit.t[4], hit.t[5]).toFixed(1)} m/s · 관측 ${hit.t[7]}초 전`;
     else tip.textContent = `${hit.id} · 외부 로봇(명령 불가) · 예정 ${hit.e.itinerary.slice(1, 3).join('→')}`;
   });
-  canvas.addEventListener('pointerleave', () => { $('tip').hidden = true; });
+  canvas.addEventListener('pointerleave', resetMapHint);
   canvas.addEventListener('pointerup', (e) => {
     canvas.classList.remove('dragging');
     const wasDrag = drag && drag.moved;
     drag = null;
     if (wasDrag || !S.layout || !S.snap) return;
     const rect = canvas.getBoundingClientRect();
+    if (e.clientY - rect.top < 58) return;
     const w = L.toWorld(mapTransform().t, e.clientX - rect.left, e.clientY - rect.top);
     const hit = L.pick(entities(), w[0], w[1], 1.2);
     S.sel = hit ? { kind: hit.kind, id: hit.id } : null;
     renderAll();
   });
-  canvas.addEventListener('dblclick', () => { S.view = { zoom: 1, panX: 0, panY: 0 }; });
+  canvas.addEventListener('pointercancel', () => { drag = null; canvas.classList.remove('dragging'); });
+  canvas.addEventListener('dblclick', fitMap);
 
   // ------------------------------------------------------------------ tabs
   function renderTabs() {
