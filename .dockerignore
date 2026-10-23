@@ -4,3 +4,5 @@ results
 docs
 tests
 **/__pycache__
+**/node_modules
+web/3d

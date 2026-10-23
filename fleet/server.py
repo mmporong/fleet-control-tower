@@ -22,11 +22,12 @@ import math
 import os
 from pathlib import Path
 import random
+import re
 import socket
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 from .auth import (Auth, AuthError, Session, at_least, check_origin, check_state_change, cookie_token,
                    is_loopback_host, session_cookie)
@@ -42,6 +43,8 @@ WEB = Path(__file__).resolve().parents[1] / "web"
 STATIC = {"/": ("index.html", "text/html; charset=utf-8"),
           "/app.js": ("app.js", "text/javascript; charset=utf-8"),
           "/logic.js": ("logic.js", "text/javascript; charset=utf-8")}
+THREE_D_ASSET = re.compile(r"[A-Za-z0-9_-]+-[A-Za-z0-9_-]{8,}\.(?:js|css)\Z")
+THREE_D_MIME = {".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8"}
 MAX_BODY = 64 * 1024
 REQUEST_TIMEOUT_S = 15.0          # a connection that sends nothing (or reads nothing) this long is closed
 MAX_CONNECTIONS = 64              # open connections, live streams included; more are closed at once
@@ -306,6 +309,78 @@ def make_handler(runner: Runner, jdamr: JdamrReadOnly | None, auth: Auth | None,
             except OSError:
                 pass
 
+        def _file(self, path: Path, ctype: str, cache: str = "no-cache") -> None:
+            data = path.read_bytes()
+            self.send_response(200)
+            self.send_header("Content-Type", ctype)
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Cache-Control", cache)
+            self.end_headers()
+            self.wfile.write(data)
+
+        def _html_error(self, status: int, title: str, message: str) -> None:
+            body = ("<!doctype html><html lang=\"ko\"><meta charset=\"utf-8\">"
+                    f"<title>{title}</title><body><h1>{title}</h1><p>{message}</p>"
+                    '<p><a href="/">2D 관제로 돌아가기</a></p></body></html>').encode("utf-8")
+            self.send_response(status)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(body)
+
+        def _three_d(self, raw_path: str) -> bool:
+            """Serve only the built entry point and Vite's hashed JS/CSS assets under ``/3d/``."""
+            path = unquote(raw_path)
+            if path != raw_path or "\\" in path:
+                self._html_error(404, "파일을 찾을 수 없음", "요청한 3D 파일이 없습니다.")
+                return True
+            if path == "/3d":
+                self.send_response(302)
+                self.send_header("Location", "/3d/")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return True
+            if path == "/3d/":
+                web_root = WEB.resolve()
+                build_root = (WEB / "3d").resolve()
+                index = (build_root / "index.html").resolve()
+                try:
+                    build_root.relative_to(web_root)
+                    index.relative_to(build_root)
+                except ValueError:
+                    self._html_error(503, "3D 화면 준비 중", "현재 2D 관제 화면을 이용해 주세요.")
+                    return True
+                if not index.is_file():
+                    self._html_error(503, "3D 화면 준비 중", "현재 2D 관제 화면을 이용해 주세요.")
+                    return True
+                self._file(index, "text/html; charset=utf-8")
+                return True
+            prefix = "/3d/assets/"
+            if not path.startswith(prefix):
+                return False
+            name = path[len(prefix):]
+            if "/" in name or "\\" in name or not THREE_D_ASSET.fullmatch(name):
+                self._html_error(404, "파일을 찾을 수 없음", "요청한 3D 파일이 없습니다.")
+                return True
+            web_root = WEB.resolve()
+            build_root = (WEB / "3d").resolve()
+            root = (build_root / "assets").resolve()
+            asset = (root / name).resolve()
+            try:
+                build_root.relative_to(web_root)
+                root.relative_to(build_root)
+                asset.relative_to(root)
+            except ValueError:
+                self._html_error(404, "파일을 찾을 수 없음", "요청한 3D 파일이 없습니다.")
+                return True
+            ctype = THREE_D_MIME.get(asset.suffix)
+            if ctype is None or not asset.is_file():
+                self._html_error(404, "파일을 찾을 수 없음", "요청한 3D 파일이 없습니다.")
+                return True
+            self._file(asset, ctype, "public, max-age=31536000, immutable")
+            return True
+
         def do_GET(self) -> None:
             if self._dev_host_ok():
                 self._guarded(self._get)
@@ -320,13 +395,13 @@ def make_handler(runner: Runner, jdamr: JdamrReadOnly | None, auth: Auth | None,
             path = url.path
             if path in STATIC:
                 name, ctype = STATIC[path]
-                data = (WEB / name).read_bytes()
-                self.send_response(200)
-                self.send_header("Content-Type", ctype)
-                self.send_header("Content-Length", str(len(data)))
-                self.send_header("Cache-Control", "no-cache")
-                self.end_headers()
-                self.wfile.write(data)
+                self._file(WEB / name, ctype)
+                return
+            decoded_path = unquote(path)
+            if path == "/3d" or path.startswith("/3d/") or decoded_path.startswith("/3d/"):
+                if self._three_d(path):
+                    return
+                self._html_error(404, "파일을 찾을 수 없음", "요청한 3D 파일이 없습니다.")
                 return
             if path == "/health":
                 self._json({"ok": True, "sim_t": runner.sim.now})

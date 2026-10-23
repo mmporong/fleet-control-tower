@@ -1,11 +1,21 @@
+# Build the browser-only 3D view. Its output is copied into the Python server's public /3d/ directory.
+FROM node:22-alpine AS web3d-build
+WORKDIR /build/web3d
+COPY web3d/package.json web3d/package-lock.json ./
+RUN npm ci
+COPY web3d/index.html web3d/tsconfig.json web3d/vite.config.ts ./
+COPY web3d/src/ src/
+RUN npm run build
+
 # Control room in one container. The default command runs the simulated DC site + fleet manager + web UI on
 # port 8095; `python3 -m fleet.fms` / `fleet.agvsim` run the MQTT runtime from the same image (docs/INTEGRATION.md).
-# No third-party packages; the image only needs the Python runtime.
+# The Python service has no third-party runtime packages; Node is used only in the frontend build stage above.
 FROM python:3.12-slim
 WORKDIR /app
 COPY pyproject.toml ./
 COPY fleet/ fleet/
 COPY web/ web/
+COPY --from=web3d-build /build/web/3d/ web/3d/
 COPY sites/ sites/
 # accounts, sessions, the audit log and the runtime's tasks live in SQLite under /data (mount a volume to keep them)
 RUN mkdir /data && chown nobody /data

@@ -16,6 +16,37 @@
 
 </details>
 
+## 3D 창고 보기
+
+기존 관제 데이터를 React와 React Three Fiber로 입체적으로 표시합니다. 2D 지도에서 **3D 보기**를 누르거나 `/3d/`로 이동합니다.
+
+![실제 시뮬레이션 데이터로 표시한 3D 창고와 관제 현황](docs/img/warehouse-3d.png)
+
+<details>
+<summary>지게차 확대 화면 보기</summary>
+
+![선택한 자율 지게차의 포크·마스트·바퀴와 위치·배터리 정보](docs/img/forklift-3d.png)
+
+</details>
+
+- 자율 지게차·수동 지게차는 포크·마스트·바퀴·운전석을, 토트 AMR은 낮은 차체와 적재 상자를 구분해 표시합니다.
+- 랙의 팔레트 수량, 입출고 스테이징 화물, 차량의 위치·방향·적재 여부를 기존 시뮬레이션에서 가져옵니다. 랙 높이·외형·화물 치수와 개별 보관 위치의 세부 배치는 설명용입니다.
+- 전체 창고·입고·랙·피킹과 출고 카메라, 차량 선택과 근접 보기, 랙 숨기기, 화면 멈춤을 제공합니다. 화면 멈춤은 표시만 멈추며 제어 명령을 보내지 않습니다.
+- 수동 지게차와 사람은 시뮬레이터 좌표로 표현합니다. 2D 관제의 센서 추정값과 구분하며, MQTT 실운영 화면에서는 이 시뮬레이션 전용 보기를 열지 않습니다.
+- 3D 코드는 별도 경로에서 지연 로드합니다. 2D 화면에는 3D 라이브러리를 내려받지 않으며, 그래픽 지원 오류 때도 2D 관제를 사용할 수 있습니다.
+
+3D 빌드에는 Node.js 22.12 이상이 필요합니다. Python 서비스에는 외부 Python 패키지가 필요하지 않습니다.
+
+```bash
+cd ~/fleet-control-tower
+npm ci --prefix web3d
+npm run build --prefix web3d
+python3 -m fleet.server --scenario standard --speed 2 --no-jdamr
+# 로그인 후 http://127.0.0.1:8095/3d/
+```
+
+Docker 이미지는 3D 빌드를 포함합니다. 로컬 Python 실행에서는 위 빌드를 먼저 수행하며, 생성물 `web/3d/`는 Git 추적에서 제외합니다.
+
 ## 현재 단계
 
 | 단계 | 상태 | 근거와 남은 일 |
@@ -133,7 +164,8 @@ fleet/
   server.py       시뮬레이션 HTTP·SSE            fms.py         실운영 서비스
   agvsim.py       MQTT 차량·문 시뮬레이터        auth.py        계정·세션·CSRF·API 키
   store.py        SQLite·감사 체인               bench.py       벤치마크
-web/              관제 화면
+web/              2D 관제 화면·3D 빌드 산출물
+web3d/            React·React Three Fiber 3D 시뮬레이션 뷰
 sites/            물류센터·격자 LIF와 사이드카
 tools/            재현·상호운용·화면 점검 도구
 tests/            단위·시스템·HTTP·MQTT·런타임 시험

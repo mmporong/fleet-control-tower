@@ -4,9 +4,12 @@ from __future__ import annotations
 from http.cookiejar import CookieJar
 from http.server import ThreadingHTTPServer
 import json
+from pathlib import Path
+import tempfile
 import threading
 import time
 import unittest
+from unittest import mock
 from urllib.error import HTTPError
 from urllib.request import HTTPCookieProcessor, Request, build_opener
 
@@ -34,6 +37,14 @@ class Client:
                 return r.status, json.loads(r.read())
         except HTTPError as exc:
             return exc.code, json.loads(exc.read())
+
+    def raw(self, path: str):
+        req = Request(self.base + path, method="GET")
+        try:
+            with self.opener.open(req, timeout=5) as response:
+                return response.status, response.read(), response.headers
+        except HTTPError as exc:
+            return exc.code, exc.read(), exc.headers
 
     def login(self, name: str, password: str | None = None):
         status, res = self.call("POST", "/api/login", {"name": name, "password": password or PASSWORDS[name]})
@@ -81,6 +92,58 @@ class ServerTests(unittest.TestCase):
             self.assertEqual(anon.call("GET", path)[0], 401, path)
         self.assertEqual(anon.call("POST", "/api/command", {"cmd": "fleet_hold", "confirm": True})[0], 401)
         self.assertEqual(self.runner.sim.manager.mode, "RUNNING")
+
+    def test_3d_build_is_public_and_serves_only_index_and_hashed_assets(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            web = Path(tmp)
+            assets = web / "3d" / "assets"
+            assets.mkdir(parents=True)
+            (web / "3d" / "index.html").write_text(
+                '<script type="module" src="/3d/assets/index-12345678.js"></script>', encoding="utf-8")
+            (assets / "index-12345678.js").write_text("export const ready = true", encoding="utf-8")
+            (assets / "index-abcdefgh.css").write_text("body{color:#123}", encoding="utf-8")
+            with mock.patch("fleet.server.WEB", web):
+                anon = Client(self.base)
+                status, body, headers = anon.raw("/3d/")
+                self.assertEqual(status, 200)
+                self.assertIn(b"index-12345678.js", body)
+                self.assertEqual(headers.get_content_type(), "text/html")
+                status, body, headers = anon.raw("/3d/assets/index-12345678.js")
+                self.assertEqual(status, 200)
+                self.assertIn(b"ready", body)
+                self.assertEqual(headers.get_content_type(), "text/javascript")
+                self.assertIn("immutable", headers["Cache-Control"])
+                status, _, headers = anon.raw("/3d/assets/index-abcdefgh.css")
+                self.assertEqual(status, 200)
+                self.assertEqual(headers.get_content_type(), "text/css")
+                self.assertEqual(anon.call("GET", "/api/snapshot")[0], 401)
+
+    def test_3d_missing_build_and_unlisted_paths_fail_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            web = Path(tmp)
+            with mock.patch("fleet.server.WEB", web):
+                anon = Client(self.base)
+                status, body, _ = anon.raw("/3d/")
+                self.assertEqual(status, 503)
+                self.assertIn("2D 관제로 돌아가기".encode(), body)
+                self.assertNotIn(b"npm", body)
+                for path in ("/3d/index.html", "/3d/assets/missing-12345678.js",
+                             "/3d/assets/%2e%2e%2findex.html",
+                             "/3d%2fassets%2findex-12345678.js",
+                             "/3d/assets/index-12345678.js%2fextra",
+                             "/3d/assets/%5cindex-12345678.js"):
+                    self.assertEqual(anon.raw(path)[0], 404, path)
+
+    def test_3d_assets_cannot_follow_a_symlink_outside_the_build(self):
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as outside_tmp:
+            web = Path(tmp)
+            assets = web / "3d" / "assets"
+            assets.mkdir(parents=True)
+            outside = Path(outside_tmp) / "secret.js"
+            outside.write_text("secret", encoding="utf-8")
+            (assets / "link-12345678.js").symlink_to(outside)
+            with mock.patch("fleet.server.WEB", web):
+                self.assertEqual(Client(self.base).raw("/3d/assets/link-12345678.js")[0], 404)
 
     def test_snapshot_and_layout(self):
         c = self.operator()
