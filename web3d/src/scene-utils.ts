@@ -83,5 +83,7 @@ export function cameraTarget(layout: Layout, view: 'overview' | 'inbound' | 'rac
 
 export function cameraPosition(layout: Layout, target: THREE.Vector3) {
   const span = Math.max(layout.width, layout.height);
-  return target.clone().add(new THREE.Vector3(0, span * 1.2, 0));
+  const elevation = span * 1.2;
+  const tilt = THREE.MathUtils.degToRad(18);
+  return target.clone().add(new THREE.Vector3(0, elevation, elevation * Math.tan(tilt)));
 }

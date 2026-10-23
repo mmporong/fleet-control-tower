@@ -305,7 +305,7 @@ export default function WarehouseScene(props: SceneProps) {
       orthographic
       frameloop="demand"
       dpr={[1, 1.5]}
-      camera={{ position: [0, 106, 0], up: [0, 0, -1], zoom: 10.2, near: 0.1, far: 1000 }}
+      camera={{ position: [0, 106, 34.4], up: [0, 0, -1], zoom: 10.2, near: 0.1, far: 1000 }}
       shadows
       gl={{ antialias: true, alpha: false, powerPreference: 'high-performance' }}
       onPointerMissed={() => props.onSelect(null)}
