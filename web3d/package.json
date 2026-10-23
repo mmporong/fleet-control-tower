@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "tsc --noEmit && vite build",
-    "test": "node --experimental-strip-types --test src/model.test.mjs"
+    "test": "node --experimental-strip-types --test src/*.test.mjs"
   },
   "dependencies": {
     "@react-three/fiber": "9.8.2",

@@ -20,6 +20,8 @@
 
 기존 관제 데이터를 React와 React Three Fiber로 입체적으로 표시합니다. 2D 지도에서 **3D 보기**를 누르거나 `/3d/`로 이동합니다.
 
+[공개 3D 창고 데모](https://mmporong-portfolio.vercel.app/fleet-3d/index.html)는 저장된 시뮬레이션의 120–240초 구간을 8배속으로 반복합니다. 회전·확대·차량 선택을 지원하며 서버 연결 없이 기록을 재생합니다. 아래 Python 실행은 같은 3D 화면에 실행 중인 시뮬레이션 데이터를 연결합니다.
+
 ![실제 시뮬레이션 데이터로 표시한 3D 창고와 관제 현황](docs/img/warehouse-3d.png)
 
 <details>
@@ -46,6 +48,14 @@ python3 -m fleet.server --scenario standard --speed 2 --no-jdamr
 ```
 
 Docker 이미지는 3D 빌드를 포함합니다. 로컬 Python 실행에서는 위 빌드를 먼저 수행하며, 생성물 `web/3d/`는 Git 추적에서 제외합니다.
+
+정적 기록 재생본은 다음 명령으로 만들 수 있습니다. 기록에는 표준 시나리오·시드 7의 시뮬레이터 좌표·상태·재고를 저장합니다.
+
+```bash
+cd ~/fleet-control-tower
+VITE_FLEET_REPLAY=true npm run build --prefix web3d -- --base=./ --outDir=/tmp/fleet-3d-replay
+python3 tools/export_3d_replay.py --out /tmp/fleet-3d-replay/replay.json
+```
 
 ## 현재 단계
 

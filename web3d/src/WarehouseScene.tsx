@@ -14,6 +14,19 @@ import {
   zoneColor,
 } from './scene-utils';
 
+function selectedWorldPosition(
+  layout: SceneProps['layout'],
+  snapshot: SceneProps['snapshot'],
+  selected: SceneProps['selected'],
+) {
+  const robot = snapshot.robots.find((item) => item.id === selected && item.positioned);
+  if (robot) return new THREE.Vector3(...toWorld(layout, robot.x, robot.y, 0));
+  const forklift = snapshot.truth?.forklifts?.find(([id]) => id === selected);
+  if (forklift) return new THREE.Vector3(...toWorld(layout, forklift[1], forklift[2], 0));
+  const human = snapshot.truth?.humans?.find(([id]) => id === selected);
+  return human ? new THREE.Vector3(...toWorld(layout, human[1], human[2], 0)) : null;
+}
+
 function SceneCamera({
   layout,
   snapshot,
@@ -25,6 +38,7 @@ function SceneCamera({
   const { camera, gl } = useThree();
   const { size, invalidate } = useThree();
   const controlsRef = useRef<OrbitControls | null>(null);
+  const followPositionRef = useRef<THREE.Vector3 | null>(null);
   const snapshotRef = useRef(snapshot);
   snapshotRef.current = snapshot;
 
@@ -51,18 +65,11 @@ function SceneCamera({
     const robot = cameraView === 'selected'
       ? current.robots.find((item) => item.id === selected && item.positioned)
       : undefined;
-    const selectedTruth = cameraView === 'selected'
-      ? current.truth?.forklifts?.find(([id]) => id === selected)
-      : undefined;
-    const selectedHuman = cameraView === 'selected'
-      ? current.truth?.humans?.find(([id]) => id === selected)
-      : undefined;
+    const followedPosition = cameraView === 'selected'
+      ? selectedWorldPosition(layout, current, selected)
+      : null;
     const view = cameraView === 'selected' ? 'overview' : cameraView;
-    const target = selectedTruth
-      ? new THREE.Vector3(...toWorld(layout, selectedTruth[1], selectedTruth[2], 0))
-      : selectedHuman
-        ? new THREE.Vector3(...toWorld(layout, selectedHuman[1], selectedHuman[2], 0))
-      : cameraTarget(layout, view, robot);
+    const target = followedPosition ?? cameraTarget(layout, view, robot);
     const position = cameraPosition(layout, target, cameraView !== 'overview');
     camera.position.copy(position);
     camera.up.set(0, 1, 0);
@@ -74,8 +81,30 @@ function SceneCamera({
     }
     controlsRef.current?.target.copy(target);
     controlsRef.current?.update();
+    followPositionRef.current = followedPosition?.clone() ?? null;
     invalidate();
   }, [camera, cameraRevision, cameraView, invalidate, layout.height, layout.width, selected, size.height, size.width]);
+
+  useEffect(() => {
+    if (cameraView !== 'selected') {
+      followPositionRef.current = null;
+      return;
+    }
+    const currentPosition = selectedWorldPosition(layout, snapshot, selected);
+    if (!currentPosition) {
+      followPositionRef.current = null;
+      return;
+    }
+    const previousPosition = followPositionRef.current;
+    followPositionRef.current = currentPosition.clone();
+    if (!previousPosition) return;
+    const movement = currentPosition.sub(previousPosition);
+    if (movement.lengthSq() === 0) return;
+    camera.position.add(movement);
+    controlsRef.current?.target.add(movement);
+    controlsRef.current?.update();
+    invalidate();
+  }, [camera, cameraView, invalidate, layout, selected, snapshot]);
 
   return null;
 }
