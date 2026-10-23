@@ -141,14 +141,14 @@ export function App() {
     </section>
     <div className="workspace">
       <section className="scene-panel" aria-labelledby="scene-title">
-        <div className="scene-heading"><div><h2 id="scene-title">창고 전체</h2><span>{layout ? `${layout.width} × ${layout.height} m` : '지도 준비 중'} · 입고 → 보관 → 피킹 → 출고</span></div><button className="button" onClick={togglePause} disabled={!dataReady} aria-pressed={paused}>{paused ? '화면 재생' : '화면 멈춤'}</button></div>
+        <div className="scene-heading"><div><h2 id="scene-title">창고 · 위에서 보기</h2><span>{layout ? `${layout.width} × ${layout.height} m` : '지도 준비 중'} · 입고 → 보관 → 피킹 → 출고</span></div><button className="button" onClick={togglePause} disabled={!dataReady} aria-pressed={paused}>{paused ? '화면 재생' : '화면 멈춤'}</button></div>
         <div className="camera-bar" role="group" aria-label="카메라 위치">
           {([['overview','전체 창고'],['inbound','입고 도크'],['racks','팔레트 랙'],['outbound','피킹·출고']] as const).map(([view,label]) => <button key={view} disabled={!dataReady} aria-pressed={cameraView === view} onClick={() => camera(view)}>{label}</button>)}
         </div>
-        <div className="scene-stage" aria-label="마우스나 터치로 회전·확대할 수 있는 3D 창고. 차량 선택은 옆 목록에서도 가능합니다.">
+        <div className="scene-stage" aria-label="마우스나 터치로 이동·확대할 수 있는 위에서 본 3D 창고. 차량 선택은 옆 목록에서도 가능합니다.">
           {dataReady ? <SceneBoundary fallbackHref={fallbackHref}><Suspense fallback={<div className="scene-message">3D 창고를 불러오는 중입니다.</div>}><WarehouseScene layout={layout} snapshot={snapshot} selected={selected} onSelect={setSelected} cameraView={cameraView} cameraRevision={cameraRevision} showRoutes={showRoutes} showRacks={showRacks} paused={paused} reducedMotion={reducedMotion} /></Suspense></SceneBoundary> : <div className="scene-message"><strong>{error ? (REPLAY_MODE ? '저장된 기록을 확인해 주세요.' : '관제 연결을 확인해 주세요.') : '창고를 준비하고 있습니다.'}</strong><p>{REPLAY_MODE ? '랙과 차량을 저장된 시뮬레이션 기록에서 불러옵니다.' : '랙과 차량을 기존 관제 데이터에서 불러옵니다.'}</p><a href={fallbackHref}>{REPLAY_MODE ? '포트폴리오로 돌아가기' : '2D 관제 열기'}</a></div>}
         </div>
-        <footer className="scene-footer"><p>드래그로 회전 · 휠·핀치로 확대 · 차량 클릭으로 선택</p><div className="layer-controls"><label><input type="checkbox" checked={showRoutes} onChange={e => setShowRoutes(e.target.checked)} />차량 경로</label><label><input type="checkbox" checked={showRacks} onChange={e => setShowRacks(e.target.checked)} />랙·보관 화물</label></div></footer>
+        <footer className="scene-footer"><p>드래그로 이동 · 휠·핀치로 확대 · 차량 클릭으로 선택</p><div className="layer-controls"><label><input type="checkbox" checked={showRoutes} onChange={e => setShowRoutes(e.target.checked)} />차량 경로</label><label><input type="checkbox" checked={showRacks} onChange={e => setShowRacks(e.target.checked)} />랙·보관 화물</label></div></footer>
       </section>
       <aside className="details-panel" aria-label="선택 항목과 화면 설명">
         <div className="details-heading"><p className="eyebrow">OBJECT INSPECTOR</p><h2>차량 살펴보기</h2></div>

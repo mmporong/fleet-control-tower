@@ -45,11 +45,12 @@ function SceneCamera({
   useEffect(() => {
     const controls = new OrbitControls(camera, gl.domElement);
     controls.enableDamping = false;
+    controls.enableRotate = false;
     controls.enablePan = true;
+    controls.mouseButtons = { LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
+    controls.touches = { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_PAN };
     controls.minZoom = 1.5;
     controls.maxZoom = 90;
-    controls.minPolarAngle = 0.42;
-    controls.maxPolarAngle = Math.PI / 2.12;
     const render = () => invalidate();
     controls.addEventListener('change', render);
     controlsRef.current = controls;
@@ -70,12 +71,13 @@ function SceneCamera({
       : null;
     const view = cameraView === 'selected' ? 'overview' : cameraView;
     const target = followedPosition ?? cameraTarget(layout, view, robot);
-    const position = cameraPosition(layout, target, cameraView !== 'overview');
+    const position = cameraPosition(layout, target);
     camera.position.copy(position);
-    camera.up.set(0, 1, 0);
+    camera.up.set(0, 0, -1);
+    camera.lookAt(target);
     if (camera instanceof THREE.OrthographicCamera) {
-      const worldWidth = cameraView === 'overview' ? layout.width * 1.22 : cameraView === 'selected' ? 12 : 34;
-      const worldHeight = cameraView === 'overview' ? layout.height * 1.55 : cameraView === 'selected' ? 9 : 27;
+      const worldWidth = cameraView === 'overview' ? layout.width * 1.08 : cameraView === 'selected' ? 12 : 34;
+      const worldHeight = cameraView === 'overview' ? layout.height * 1.08 : cameraView === 'selected' ? 9 : 27;
       camera.zoom = Math.max(1.5, Math.min(size.width / worldWidth, size.height / worldHeight));
       camera.updateProjectionMatrix();
     }
@@ -303,7 +305,7 @@ export default function WarehouseScene(props: SceneProps) {
       orthographic
       frameloop="demand"
       dpr={[1, 1.5]}
-      camera={{ position: [58, 68, 55], zoom: 10.2, near: 0.1, far: 240 }}
+      camera={{ position: [0, 106, 0], up: [0, 0, -1], zoom: 10.2, near: 0.1, far: 1000 }}
       shadows
       gl={{ antialias: true, alpha: false, powerPreference: 'high-performance' }}
       onPointerMissed={() => props.onSelect(null)}

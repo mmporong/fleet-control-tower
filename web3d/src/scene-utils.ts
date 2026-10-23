@@ -81,8 +81,7 @@ export function cameraTarget(layout: Layout, view: 'overview' | 'inbound' | 'rac
   return new THREE.Vector3(0, 0, 0);
 }
 
-export function cameraPosition(layout: Layout, target: THREE.Vector3, close = false) {
+export function cameraPosition(layout: Layout, target: THREE.Vector3) {
   const span = Math.max(layout.width, layout.height);
-  const distance = close ? span * 0.34 : span * 0.82;
-  return target.clone().add(new THREE.Vector3(distance * 0.78, distance * 0.88, distance * 0.7));
+  return target.clone().add(new THREE.Vector3(0, span * 1.2, 0));
 }
