@@ -1,0 +1,43 @@
+{
+  "status": "local-experiment-only",
+  "candidateSourceCommit": "af1687096f7aaadc96e18e74bb48c32350d5824e",
+  "baselineSourceCommit": "d7cacc9b9b234958f8292866da4b651c75a1b1c1",
+  "deploymentApproved": false,
+  "reason": "일부 조건 접촉 지표 악화, 후보의 sizing 28개 및 전체 148개 미검증",
+  "tests": {
+    "python": 368,
+    "targetedIncludedInPython": 13,
+    "node2d": 19,
+    "node3d": 17
+  },
+  "sourceHashes": {
+    "fleet/control.py": "9834ef23b39b5c2a6412885cf6d047f4f0d4680bd1de286c5d6ef549de3c538a",
+    "fleet/geometry.py": "3d79d500f9baebcf6558be04c69bf062ded1fec417e5da6860e190a9bff5589b",
+    "fleet/vehicle.py": "377cd2e970175142199d2a3c18e7eb3902edb530ce5581b216b813ec604ea9c2",
+    "tests/test_incident_recovery.py": "8915baafed1a482fb0aeb523442f0531fa6ea88c286d43a6b1060d1357362532"
+  },
+  "files": {
+    "2d-tests.log": "15bccaf3802887ade2e2ceb10c9062f30343736cdd02bcf27b4e3ae41c733a97",
+    "3d-tests.log": "ce52ce8d882a4848a5a220249e0961d67e249575d8fb9abd27cb1b68c039bf13",
+    "baseline-agf11.json": "0fd3b84cfa811ae300c5166c19192c72d3257f15d740d01ad6ce8a6abbd944a6",
+    "baseline-neighbors.json": "3e00aa03064062c41e2fcbfe4ff0f4d1b3aaadc6fd74b7269660f7e7fe7117d1",
+    "baseline-shift-audit.json": "6abd6781c9f3b151e36e5cac92df10be7e15195bae54884df892768d015c37c7",
+    "baseline-shift.json": "15ff27ea94a2ebb1d06263204c6dae8287b85edcfd0660fbbb58810bbdae41a4",
+    "candidate-exact-circles-4jobs.json": "a1d2286d152012ddc1687224bc723213996f070581b64934cd3c8af27d57f1ee",
+    "candidate-full-test.json": "910f412dc1d58e6b38eeea57fea08fe4ce8b8668b1f40ef42a204a3538c8eef5",
+    "candidate-full-test.log": "7f129d69a6810929fd8e29d715ed3562c3dcc7050899b8184bc7cac53ca548c9",
+    "candidate-targeted-tests.log": "ea9a58a2540324875756f6d57f2ffebcaa4d675261039601b23bf0a3fa03caac",
+    "comparison-ui-review.json": "6462e5bbed27133f7f2f2bcb72284fdab2888710a027362c9af229461f28a203",
+    "core-review.md": "d33646c60053d18477b132256251e45e7a8ad3c56b8e634a476afa4a10789065",
+    "incomplete-narrow-band-4jobs.json": "aad6c49fc4f288b8ef8133c1e7b32416c4ed110574d95c75e811899e61096d09",
+    "regression-lateral-before.log": "1b4ecc16d7064163b8fea6bcb3c76509b069998ad064dcd8f5716bf00501eaa3",
+    "regression-overreservation-before.log": "726008b51283a27f75f1a1ef3307cf12e344447f85a5f1c12d86a4ddbdb62729",
+    "rejected-broad-circle-4jobs.json": "0f0d6d9c57abcb23b67fd929df7c7cc3312adc6ed762394b8c9504802c5b32ff",
+    "rejected-margin051-sizing.json": "b710a2cc0a20ab534263c9cbe40b4ce7c477cb243d1e35ea39ee274d32909f0d",
+    "doc-review.md": "6051b391d2f940d9f3560a75cf4eb1528538c6c8d83ca77ece8559065910de1f"
+  },
+  "logWhitespaceNormalization": [
+    "regression-lateral-before.log",
+    "regression-overreservation-before.log"
+  ]
+}

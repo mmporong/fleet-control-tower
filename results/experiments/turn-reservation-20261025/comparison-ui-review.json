@@ -1,0 +1,158 @@
+[
+  {
+    "width": 1600,
+    "text": "이동 중 접촉0 건2 건+2 증가",
+    "className": "comparison-result is-worsened",
+    "valueColor": "rgb(163, 41, 34)",
+    "changeColor": "rgb(96, 112, 128)",
+    "changeText": "+2 증가",
+    "rowWidth": 953.5625,
+    "rowScrollWidth": 954,
+    "allRows": [
+      {
+        "label": "적치",
+        "before": "3 건/h",
+        "after": "41 건/h",
+        "change": "+38 증가",
+        "className": "comparison-result is-improved",
+        "valueColor": "rgb(27, 115, 83)"
+      },
+      {
+        "label": "출고",
+        "before": "15 건/h",
+        "after": "37 건/h",
+        "change": "+22 증가",
+        "className": "comparison-result is-improved",
+        "valueColor": "rgb(27, 115, 83)"
+      },
+      {
+        "label": "토트",
+        "before": "95 건/h",
+        "after": "106 건/h",
+        "change": "+11 증가",
+        "className": "comparison-result is-improved",
+        "valueColor": "rgb(27, 115, 83)"
+      },
+      {
+        "label": "대기 작업",
+        "before": "40 건",
+        "after": "13 건",
+        "change": "−27 감소",
+        "className": "comparison-result is-improved",
+        "valueColor": "rgb(27, 115, 83)"
+      },
+      {
+        "label": "접촉",
+        "before": "6 건",
+        "after": "0 건",
+        "change": "−6 감소",
+        "className": "comparison-result is-improved",
+        "valueColor": "rgb(27, 115, 83)"
+      },
+      {
+        "label": "이동 중 접촉",
+        "before": "0 건",
+        "after": "2 건",
+        "change": "+2 증가",
+        "className": "comparison-result is-worsened",
+        "valueColor": "rgb(163, 41, 34)"
+      },
+      {
+        "label": "잠금 문제",
+        "before": "0 건",
+        "after": "0 건",
+        "change": "동일",
+        "className": "comparison-result is-unchanged",
+        "valueColor": "rgb(64, 85, 106)"
+      },
+      {
+        "label": "불일치",
+        "before": "0 건",
+        "after": "0 건",
+        "change": "동일",
+        "className": "comparison-result is-unchanged",
+        "valueColor": "rgb(64, 85, 106)"
+      }
+    ],
+    "pageOverflow": 0,
+    "errors": []
+  },
+  {
+    "width": 320,
+    "text": "이동 중 접촉0 건2 건+2 증가",
+    "className": "comparison-result is-worsened",
+    "valueColor": "rgb(163, 41, 34)",
+    "changeColor": "rgb(96, 112, 128)",
+    "changeText": "+2 증가",
+    "rowWidth": 272,
+    "rowScrollWidth": 272,
+    "allRows": [
+      {
+        "label": "적치",
+        "before": "3 건/h",
+        "after": "41 건/h",
+        "change": "+38 증가",
+        "className": "comparison-result is-improved",
+        "valueColor": "rgb(27, 115, 83)"
+      },
+      {
+        "label": "출고",
+        "before": "15 건/h",
+        "after": "37 건/h",
+        "change": "+22 증가",
+        "className": "comparison-result is-improved",
+        "valueColor": "rgb(27, 115, 83)"
+      },
+      {
+        "label": "토트",
+        "before": "95 건/h",
+        "after": "106 건/h",
+        "change": "+11 증가",
+        "className": "comparison-result is-improved",
+        "valueColor": "rgb(27, 115, 83)"
+      },
+      {
+        "label": "대기 작업",
+        "before": "40 건",
+        "after": "13 건",
+        "change": "−27 감소",
+        "className": "comparison-result is-improved",
+        "valueColor": "rgb(27, 115, 83)"
+      },
+      {
+        "label": "접촉",
+        "before": "6 건",
+        "after": "0 건",
+        "change": "−6 감소",
+        "className": "comparison-result is-improved",
+        "valueColor": "rgb(27, 115, 83)"
+      },
+      {
+        "label": "이동 중 접촉",
+        "before": "0 건",
+        "after": "2 건",
+        "change": "+2 증가",
+        "className": "comparison-result is-worsened",
+        "valueColor": "rgb(163, 41, 34)"
+      },
+      {
+        "label": "잠금 문제",
+        "before": "0 건",
+        "after": "0 건",
+        "change": "동일",
+        "className": "comparison-result is-unchanged",
+        "valueColor": "rgb(64, 85, 106)"
+      },
+      {
+        "label": "불일치",
+        "before": "0 건",
+        "after": "0 건",
+        "change": "동일",
+        "className": "comparison-result is-unchanged",
+        "valueColor": "rgb(64, 85, 106)"
+      }
+    ],
+    "pageOverflow": 0,
+    "errors": []
+  }
+]

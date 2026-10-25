@@ -1,0 +1,21 @@
+.......................................................................................................................................................................................................................................상태 저장 실패:
+Traceback (most recent call last):
+  File "/var/tmp/fleet-evolution-20261025/repo/fleet/fms.py", line 123, in step
+    self._save_snapshots()
+  File "/var/tmp/fleet-evolution-20261025/repo/fleet/fms.py", line 182, in _save_snapshots
+    self.store.save_robots({s: snap for s, (snap, _t) in changed.items()})
+  File "/var/tmp/fleet-evolution-20261025/repo/tests/test_review.py", line 1684, in broken
+    raise OSError("disk full")
+OSError: disk full
+
+.시험:
+NoneType: None
+
+시험:
+NoneType: None
+
+........................................................................................................................................
+----------------------------------------------------------------------
+Ran 368 tests in 230.104s
+
+OK

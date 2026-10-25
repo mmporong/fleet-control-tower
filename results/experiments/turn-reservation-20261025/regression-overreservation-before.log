@@ -1,0 +1,20 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_ TurnFieldReservationTests.test_exact_body_circles_do_not_reserve_the_far_parallel_queue _
+
+self = <tests.test_incident_recovery.TurnFieldReservationTests testMethod=test_exact_body_circles_do_not_reserve_the_far_parallel_queue>
+
+    def test_exact_body_circles_do_not_reserve_the_far_parallel_queue(self):
+        sim = Simulation(get("standard", **{"agf": 2, **QUIET}), seed=1, strategy="locks+resolve")
+        sim.run(2.0)
+        manager = sim.manager
+        rec = manager.robots["AGF-01"]
+        rec.route = ["qNE16_2NE22_8", "NE22_8", "R2-09"]
+
+>       self.assertNotIn(node_res("qNE22_8NE29_4"), manager._turn_approach_zone(rec, 1))
+E       AssertionError: 'N:qNE22_8NE29_4' unexpectedly found in ['N:qNE22_8NE29_4', 'N:qNW22_8NW29_4']
+
+tests/test_incident_recovery.py:137: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_incident_recovery.py::TurnFieldReservationTests::test_exact_body_circles_do_not_reserve_the_far_parallel_queue
+1 failed in 0.06s

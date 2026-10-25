@@ -1,0 +1,57 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_ TurnFieldReservationTests.test_perpendicular_agf_body_circle_blocks_the_forward_field_corner _
+
+self = <tests.test_incident_recovery.TurnFieldReservationTests testMethod=test_perpendicular_agf_body_circle_blocks_the_forward_field_corner>
+
+    def test_perpendicular_agf_body_circle_blocks_the_forward_field_corner(self):
+        sim = Simulation(get("standard", **{"agf": 2, **QUIET}), seed=1, strategy="locks+resolve")
+        sim.run(2.0)
+        manager = sim.manager
+        rec = manager.robots["AGF-01"]
+        blocker = manager.robots["AGF-02"]
+        vehicle = sim.vehicle(rec.serial)
+        blocker_vehicle = sim.vehicle(blocker.serial)
+        manager.locks.release_all(rec.serial)
+        manager.locks.release_all(blocker.serial)
+        rec.last_node = "PA14_3"
+        rec.x, rec.y = manager.layout.nodes[rec.last_node].pos
+        rec.route = [rec.last_node, "BL14_3", "BL11_5"]
+        rec.order_id = rec.state_order_id = "circle-corner"
+        rec.cur_idx = rec.base_end = rec.sent_base_end = 0
+        rec.last_seq = 0
+        rec.last_order = None
+        rec.order_pending = True
+        rec.driving = False
+        rec.dist_since = 0.0
+        manager.locks.force(rec.serial, node_res(rec.last_node))
+        manager.locks.force(blocker.serial, node_res("NW16_2"))
+        for a, b in zip(rec.route, rec.route[1:]):
+            manager.blocks.pop(lane_res(manager.layout.edge_between(a, b).lane), None)
+
+        # At 0.11 m before the turn (just outside the 0.10 m arrival tolerance), a perpendicular default
+        # AGF parked on NW16_2 has an actual chassis circle inside the approaching AGF's stopped field.
+        turn = manager.layout.nodes["BL14_3"]
+        origin = (turn.x, turn.y + 0.11)
+        blocker_node = manager.layout.nodes["NW16_2"]
+        forward_start = rec.length / 2
+        forward_end = forward_start + vehicle.spec.field_base + 0.15
+        field_half_width = rec.width / 2 + 0.25
+        intersects = False
+        for cx, cy, radius in blocker_vehicle.spec.circles(blocker_node.x, blocker_node.y, math.pi):
+            forward = origin[1] - cy
+            lateral = abs(cx - origin[0])
+            df = max(forward_start - forward, 0.0, forward - forward_end)
+            dl = max(lateral - field_half_width, 0.0)
+            intersects |= math.hypot(df, dl) <= radius
+        self.assertTrue(intersects)
+
+        manager._extend(rec)
+
+>       self.assertEqual(rec.base_end, 0)
+E       AssertionError: 2 != 0
+
+tests/test_incident_recovery.py:114: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_incident_recovery.py::TurnFieldReservationTests::test_perpendicular_agf_body_circle_blocks_the_forward_field_corner
+1 failed in 0.05s

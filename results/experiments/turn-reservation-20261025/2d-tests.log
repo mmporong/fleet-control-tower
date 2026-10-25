@@ -1,0 +1,124 @@
+TAP version 13
+# Subtest: minimum zoom keeps forklift labels and leaders outside the full visible marker
+ok 1 - minimum zoom keeps forklift labels and leaders outside the full visible marker
+  ---
+  duration_ms: 1.681845
+  type: 'test'
+  ...
+# Subtest: visible marker edges remain selectable at minimum zoom and the nearest target wins
+ok 2 - visible marker edges remain selectable at minimum zoom and the nearest target wins
+  ---
+  duration_ms: 0.17993
+  type: 'test'
+  ...
+# Subtest: stationary forklift motion does not turn sensor velocity noise into a travel direction
+ok 3 - stationary forklift motion does not turn sensor velocity noise into a travel direction
+  ---
+  duration_ms: 0.430934
+  type: 'test'
+  ...
+# Subtest: moving forklift travel direction uses displacement heading and pace
+ok 4 - moving forklift travel direction uses displacement heading and pace
+  ---
+  duration_ms: 0.109226
+  type: 'test'
+  ...
+# Subtest: missing or unconfirmed forklift direction stays unknown instead of using raw velocity
+ok 5 - missing or unconfirmed forklift direction stays unknown instead of using raw velocity
+  ---
+  duration_ms: 0.131428
+  type: 'test'
+  ...
+# Subtest: invalid forklift motion values cannot produce a direction line
+ok 6 - invalid forklift motion values cannot produce a direction line
+  ---
+  duration_ms: 0.096843
+  type: 'test'
+  ...
+# Subtest: exception-first ordering puts faults and long waits on top
+ok 7 - exception-first ordering puts faults and long waits on top
+  ---
+  duration_ms: 0.177465
+  type: 'test'
+  ...
+# Subtest: world/screen transforms round-trip and y flips
+ok 8 - world/screen transforms round-trip and y flips
+  ---
+  duration_ms: 0.133292
+  type: 'test'
+  ...
+# Subtest: zoom keeps the point under the cursor
+ok 9 - zoom keeps the point under the cursor
+  ---
+  duration_ms: 0.258878
+  type: 'test'
+  ...
+# Subtest: angle interpolation takes the short way round
+ok 10 - angle interpolation takes the short way round
+  ---
+  duration_ms: 0.316047
+  type: 'test'
+  ...
+# Subtest: alarm load follows the ISA-18.2 thresholds
+ok 11 - alarm load follows the ISA-18.2 thresholds
+  ---
+  duration_ms: 0.133092
+  type: 'test'
+  ...
+# Subtest: formatting helpers
+ok 12 - formatting helpers
+  ---
+  duration_ms: 0.162327
+  type: 'test'
+  ...
+# Subtest: link quality tone follows measured share and delay
+ok 13 - link quality tone follows measured share and delay
+  ---
+  duration_ms: 0.103595
+  type: 'test'
+  ...
+# Subtest: crowded map labels stay within the canvas and clear of units and each other
+ok 14 - crowded map labels stay within the canvas and clear of units and each other
+  ---
+  duration_ms: 4.762189
+  type: 'test'
+  ...
+# Subtest: selected map label gets the remaining space before a routine label
+ok 15 - selected map label gets the remaining space before a routine label
+  ---
+  duration_ms: 0.099978
+  type: 'test'
+  ...
+# Subtest: map annotations omit text when no free position fits
+ok 16 - map annotations omit text when no free position fits
+  ---
+  duration_ms: 0.744395
+  type: 'test'
+  ...
+# Subtest: map label placement is stable and preserves its inputs
+ok 17 - map label placement is stable and preserves its inputs
+  ---
+  duration_ms: 0.155954
+  type: 'test'
+  ...
+# Subtest: annotation leaders start outside vehicle bodies and avoid other text
+ok 18 - annotation leaders start outside vehicle bodies and avoid other text
+  ---
+  duration_ms: 0.275289
+  type: 'test'
+  ...
+# Subtest: offscreen units do not receive misleading labels at the viewport edge
+ok 19 - offscreen units do not receive misleading labels at the viewport edge
+  ---
+  duration_ms: 0.059562
+  type: 'test'
+  ...
+1..19
+# tests 19
+# suites 0
+# pass 19
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 47.586123
