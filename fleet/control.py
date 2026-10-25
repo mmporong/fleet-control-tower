@@ -20,7 +20,8 @@ from .alarms import AlarmManager
 from .bus import Bus
 from .clock import Clock, SimClock
 from .facility import DoorSupervisor
-from .geometry import bbox, dist, path_gap, point_in_polygon, seg_point_dist
+from .geometry import (BODY_CIRCLE_MARGIN_M, bbox, body_circles, circle_hits_forward_box, dist, path_gap,
+                       point_in_polygon, seg_point_dist, wrap_angle)
 from .layout import Layout, Zone
 from .perception import Detection, Tracker
 from .planner import STUB_KINDS, Planner
@@ -30,9 +31,15 @@ from .vda5050 import HeaderIds, RouteEdge, RouteNode, action, build_instant_acti
 STRATEGIES = ("none", "locks", "locks+resolve")
 SWING_RADIUS = 1.9           # half the length of a 3.6 m counterbalance truck plus margin: its turning circle
 CLEARANCE_TURN = 1.0         # beyond the circle: half a robot body plus margin, so no part of a robot is inside
-# The reserved turn circle must also cover the default vehicles' stopped protective field (including its
-# 0.15 m reset hysteresis).  The extra centimetre keeps the AGF-to-AMR boundary on the safe side of rounding.
-ROBOT_TURN_FIELD_MARGIN = 0.51
+ROBOT_TURN_SWEEP_MARGIN = 0.2
+# The FMS factsheet used here does not carry safety-field dimensions.  These match the simulator's default
+# AGF and tote-AMR stopped fields; a deployment that overrides them must also configure this reservation rule.
+ROBOT_STOPPED_FIELD_BASE = {"FORKLIFT": 0.5, "CARRIER": 0.35}
+ROBOT_STOPPED_FIELD_DEFAULT = 0.35
+ROBOT_PROTECTIVE_RESET_MARGIN = 0.15
+ROBOT_APPROACH_FIELD_SIDE = 0.25
+# Vehicle._within_deviation accepts a turn node this far before its geometric centre.
+ROBOT_TURN_ARRIVAL_TOLERANCE = 0.1
 # a truck backs off up to 6 m (radioed) to let a robot out of its turning circle; plus the tracking error
 BACKED_OFF_M = 7.0
 DRIVE_PACE = 1.1             # m/s: faster than a truck backs off (0.5) or drives back up (0.8), slower than it drives
@@ -1760,6 +1767,21 @@ class FleetManager:
             while (self.layout.must_pass(rec.route[chain[-1]]) and chain[-1] < len(rec.route) - 1
                    and (len(chain) < 4 or rec.route[chain[-1]] in self.layout.no_stop and len(chain) < 8)):
                 chain.append(chain[-1] + 1)
+            # Do not release a distant turn and its locks while the vehicle is still several nodes away.  When
+            # it reaches the preceding node, the turn and its forward stopped-field guard are acquired together.
+            turn_idx = ([j - 1] if first and rec.at_base_end() and self._turns_at(rec, j - 1) else []) + \
+                [k for k in chain if self._turns_at(rec, k)]
+            turn_zones: dict[int, set[str]] = {}
+            adds_forward_field = False
+            for k in turn_idx:
+                swept = set(self._turn_zone(rec, k))
+                field = set(self._turn_approach_zone(rec, k))
+                turn_zones[k] = swept | field
+                adds_forward_field = adds_forward_field or bool(field - swept)
+            # ``j == cur_idx + 1`` is already the next atomic no-stop chain; it has no earlier safe stopping
+            # point.  Only defer a later lookahead extension, and only when it would add forward-field locks.
+            if adds_forward_field and j > rec.cur_idx + 1:
+                break
             gate = self._stub_gate(rec, chain[-1])
             if gate is not None:
                 blocked = self._wait(rec, self._holder_kind(gate), node_res(rec.route[-1]), gate)
@@ -1777,10 +1799,8 @@ class FleetManager:
                 break
             # swept area of turns: the start node (turning on the spot) and every sharp corner in the chain
             zones: dict[int, list[str]] = {}
-            turn_idx = ([j - 1] if first and rec.at_base_end() and self._turns_at(rec, j - 1) else []) + \
-                [k for k in chain if self._turns_at(rec, k)]
             for k in turn_idx:
-                zones[k] = [r for r in self._turn_zone(rec, k) if r not in resources]
+                zones[k] = [r for r in sorted(turn_zones[k]) if r not in resources]
             extra = [r for rs in zones.values() for r in rs]
             ok, holder, res = self.locks.try_acquire(rec.serial, resources + extra)
             if not ok:
@@ -1816,9 +1836,20 @@ class FleetManager:
         return holder if math.hypot(stop.x - junction.x, stop.y - junction.y) < reach else None
 
     def _turn_reach(self, rec: RobotRecord) -> float:
-        """Radius around a turning point whose nodes must be clear before the vehicle approaches the turn."""
+        """Radius around a turning point swept by the vehicle bodies."""
         others = max((r.length for r in self.robots.values() if r.serial != rec.serial), default=rec.length)
-        return math.hypot(rec.length, rec.width) / 2 + others / 2 + ROBOT_TURN_FIELD_MARGIN
+        return math.hypot(rec.length, rec.width) / 2 + others / 2 + ROBOT_TURN_SWEEP_MARGIN
+
+    def _turn_field_reach(self, rec: RobotRecord) -> float:
+        """Broad query radius; exact body-circle/field-box intersection is checked afterwards."""
+        others = max((max(r.length / 2, r.width / 2 + BODY_CIRCLE_MARGIN_M)
+                      for r in self.robots.values() if r.serial != rec.serial),
+                     default=max(rec.length / 2, rec.width / 2 + BODY_CIRCLE_MARGIN_M))
+        field_length = ROBOT_STOPPED_FIELD_BASE.get(rec.vclass, ROBOT_STOPPED_FIELD_DEFAULT) + \
+            ROBOT_PROTECTIVE_RESET_MARGIN
+        forward = rec.length / 2 + field_length - ROBOT_TURN_ARRIVAL_TOLERANCE + others
+        lateral = rec.width / 2 + ROBOT_APPROACH_FIELD_SIDE + others
+        return math.hypot(forward, lateral)
 
     def _heading(self, a: str, b: str) -> float:
         na, nb = self.layout.nodes[a], self.layout.nodes[b]
@@ -1858,6 +1889,65 @@ class FleetManager:
                 if self._stub_body_gap(ident, (node.x, node.y), big.length, big.width) >= sweep:
                     continue
             out.append(node_res(ident))
+        return out
+
+    def _turn_approach_zone(self, rec: RobotRecord, idx: int) -> list[str]:
+        """Nodes inside the stopped forward field as a vehicle approaches ``route[idx]``.
+
+        The ordinary turn zone remains the physical swept circle.  This oriented extension only protects the
+        incoming direction and is acquired with an immediate turn, so a stopped vehicle cannot hold a distant
+        turn's approach while it is still several nodes away.
+        """
+        node = self.layout.nodes[rec.route[idx]]
+        current_turn = idx == rec.cur_idx and rec.at_base_end()
+        if current_turn or idx == 0:
+            ux, uy = math.cos(rec.theta), math.sin(rec.theta)
+            origin = (rec.x, rec.y) if current_turn else node.pos
+        else:
+            before = self.layout.nodes[rec.route[idx - 1]]
+            dx, dy = node.x - before.x, node.y - before.y
+            length = math.hypot(dx, dy) or 1.0
+            ux, uy = dx / length, dy / length
+            origin = (node.x - ux * ROBOT_TURN_ARRIVAL_TOLERANCE,
+                      node.y - uy * ROBOT_TURN_ARRIVAL_TOLERANCE)
+        heading = math.atan2(uy, ux)
+        reach = self._turn_field_reach(rec)
+        field_length = ROBOT_STOPPED_FIELD_BASE.get(rec.vclass, ROBOT_STOPPED_FIELD_DEFAULT) + \
+            ROBOT_PROTECTIVE_RESET_MARGIN
+        half_width = rec.width / 2 + ROBOT_APPROACH_FIELD_SIDE
+        other_specs = {(r.vclass, r.length, r.width) for r in self.robots.values() if r.serial != rec.serial}
+        if not other_specs:
+            other_specs = {(rec.vclass, rec.length, rec.width)}
+        out = []
+        for kind, ident in sorted(self._query(node.x, node.y, reach)):
+            if kind != "N" or ident == node.id:
+                continue
+            other_node = self.layout.nodes[ident]
+            hit = False
+            for vclass, length, width in other_specs:
+                headings = []
+                for edge in self.layout.in_edges[ident]:
+                    if self.layout.allowed(edge, vclass):
+                        a = self.layout.nodes[edge.start]
+                        headings.append(math.atan2(other_node.y - a.y, other_node.x - a.x))
+                for edge in self.layout.out_edges[ident]:
+                    if self.layout.allowed(edge, vclass):
+                        b = self.layout.nodes[edge.end]
+                        headings.append(math.atan2(b.y - other_node.y, b.x - other_node.x))
+                if other_node.kind in STUB_KINDS:
+                    headings += [angle + math.pi for angle in headings]
+                unique_headings = {round(wrap_angle(angle), 9) for angle in headings}
+                for other_heading in unique_headings:
+                    circles = body_circles(length, width, other_node.x, other_node.y, other_heading)
+                    if any(circle_hits_forward_box((cx, cy), radius, origin, heading, field_length,
+                                                   half_width, start=rec.length / 2)
+                           for cx, cy, radius in circles):
+                        hit = True
+                        break
+                if hit:
+                    break
+            if hit:
+                out.append(node_res(ident))
         return out
 
     def _stub_body_gap(self, stub: str, point: tuple[float, float], length: float, width: float) -> float:

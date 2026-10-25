@@ -10,6 +10,7 @@ from typing import Iterable, Sequence
 
 Point = tuple[float, float]
 Polygon = Sequence[Point]
+BODY_CIRCLE_MARGIN_M = 0.02
 
 
 def dist(a: Point, b: Point) -> float:
@@ -182,6 +183,23 @@ def circle_hits_forward_box(center: Point, radius: float, origin: Point, heading
     nx = min(max(lx, start), start + length)
     ny = min(max(ly, -half_width), half_width)
     return math.hypot(lx - nx, ly - ny) <= radius
+
+
+def body_circles(length: float, width: float, x: float, y: float, heading: float,
+                 margin: float = BODY_CIRCLE_MARGIN_M) -> list[tuple[float, float, float]]:
+    """Represent a rectangular chassis by equal circles spaced along its centre line.
+
+    >>> body_circles(0.8, 0.6, 0.0, 0.0, 0.0)
+    [(-0.08000000000000002, 0.0, 0.32), (0.08000000000000002, 0.0, 0.32)]
+    """
+    radius = width / 2 + margin
+    count = max(1, math.ceil(length / width))
+    offset = max(0.0, length / 2 - radius)
+    c, s = math.cos(heading), math.sin(heading)
+    positions = [0.0] if count == 1 else [
+        -offset + 2 * offset * i / (count - 1) for i in range(count)
+    ]
+    return [(x + c * d, y + s * d, radius) for d in positions]
 
 
 def centroid(points: Iterable[Point]) -> Point:

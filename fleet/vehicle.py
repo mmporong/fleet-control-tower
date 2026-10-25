@@ -15,7 +15,7 @@ import math
 import random
 from typing import Callable
 
-from .geometry import box_gap, circle_hits_forward_box, dist, in_polygon, segment_hits_polygon, wrap_angle
+from .geometry import body_circles, box_gap, circle_hits_forward_box, dist, in_polygon, segment_hits_polygon, wrap_angle
 from .layout import Layout
 from .clock import Clock, SimClock
 from .vda5050 import (INSTANT_ACTIONS, NODE_ACTIONS, HeaderIds, build_connection, header, topic,
@@ -103,12 +103,7 @@ class VehicleSpec:
         A single circle around a 0.8 m x 0.58 m AMR would make it 1 m wide and
         close a 2 m pick aisle to a picker standing at the shelf face.
         """
-        r = self.width / 2 + 0.02
-        n = max(1, math.ceil(self.length / self.width))
-        off = max(0.0, self.length / 2 - r)
-        c, s = math.cos(theta), math.sin(theta)
-        ds = [0.0] if n == 1 else [-off + 2 * off * i / (n - 1) for i in range(n)]
-        return [(x + c * d, y + s * d, r) for d in ds]
+        return body_circles(self.length, self.width, x, y, theta)
 
 
 # Nominal vehicle classes. Values and their sources are listed in docs/SITE.md.
