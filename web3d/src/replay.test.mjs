@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  adjacentMajorEvent, advanceReplayClock, frameAtOrAfterTime, frameAtTime, isReplayDocument, isReplayIndex,
+  adjacentMajorEvent, advanceReplayClock, frameAtOrAfterTime, frameAtTime, isMajorEvent, isReplayDocument, isReplayIndex,
   loadReplayDocument, loadReplayIndex, matchingComparison, recordingById, timelineEvents,
 } from './replay.ts';
 
@@ -53,12 +53,13 @@ test('끝 프레임을 한 번 표시한 뒤 초과 시간을 다음 틱에 이�
 test('기록 목록은 상대 경로와 고유 ID만 허용한다', () => {
   const index = {version:1,recordings:[
     {id:'before',title:'개선 전',description:'기준선',url:'replay-before.json',variant:'before'},
-    {id:'after',title:'개선 후',description:'개선안',url:'./replay-after.json',variant:'after'},
+    {id:'after',title:'개선 후',description:'개선안',changeSummary:'회전 구간의 예약 범위를 넓혔습니다.',url:'./replay-after.json',variant:'after'},
   ]};
   assert.equal(isReplayIndex(index), true);
   assert.equal(recordingById(index, 'after')?.title, '개선 후');
   assert.equal(isReplayIndex({...index,recordings:[{...index.recordings[0],url:'https://evil.example/replay.json'}]}), false);
   assert.equal(isReplayIndex({...index,recordings:[index.recordings[0],index.recordings[0]]}), false);
+  assert.equal(isReplayIndex({...index,recordings:[index.recordings[0],{...index.recordings[1],changeSummary:7}]}), false);
 });
 
 test('동일 비교 그룹과 같은 측정 범위일 때만 개선 전후를 묶는다', () => {
@@ -70,7 +71,10 @@ test('동일 비교 그룹과 같은 측정 범위일 때만 개선 전후를 �
   ];
   assert.equal(matchingComparison(records, records[0]), null);
   const matching = [...records, {id:'a-after',title:'A 후',description:'',url:'a-after.json',variant:'after',group:'a',summary}];
-  assert.equal(matchingComparison(matching, matching[0])?.after.id, 'a-after');
+  assert.equal(matchingComparison(matching, matching[0]), null);
+  assert.equal(matchingComparison(matching, {...matching[0],group:'a'}), null);
+  assert.equal(matchingComparison(matching, matching[1])?.after.id, 'a-after');
+  assert.equal(matchingComparison(matching, matching[3])?.before.id, 'a-before');
   const mismatchedDuration = matching.map(item => item.id === 'a-after' ? {...item,summary:{...summary,durationSeconds:7200}} : item);
   assert.equal(matchingComparison(mismatchedDuration, mismatchedDuration[1]), null);
 });
@@ -121,4 +125,13 @@ test('모든 프레임의 사건을 중복 제거하고 가까운 반복은 횟�
   const serverTimeline = timelineEvents([{...frame(120),events:[]},{...frame(130),events:[serverEvent]}]);
   assert.equal(serverTimeline[0].kind, 'deadlock');
   assert.equal(adjacentMajorEvent(serverTimeline, 120, 1)?.source, 'AGF-01');
+});
+
+test('운영 잡음은 심각도와 관계없이 주요 사건에서 제외한다', () => {
+  const event = kind => ({t:121,kind,source:'AGF-01',msg:'상태 변경',level:'error'});
+  for (const kind of ['track_lost', 'zone_speed', 'task_done']) assert.equal(isMajorEvent(event(kind)), false);
+  for (const kind of ['deadlock', 'reroute', 'fault_cleared', 'comms_lost', 'yield', 'evade', 'nudge']) {
+    assert.equal(isMajorEvent({...event(kind),level:'info'}), true);
+  }
+  assert.equal(isMajorEvent({...event('sensor_warning'),level:'warning'}), true);
 });

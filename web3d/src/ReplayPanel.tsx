@@ -1,4 +1,5 @@
-import { matchingComparison, type ReplayIndex, type ReplayRecording, type ReplaySummary, type TimelineEvent } from './replay';
+import { useState } from 'react';
+import { isMajorEvent, matchingComparison, type ReplayIndex, type ReplayRecording, type ReplaySummary, type TimelineEvent } from './replay';
 
 const RATE_OPTIONS = [0.5, 1, 2, 4, 8] as const;
 const VARIANT_LABEL = {reference: '표준', before: '개선 전', after: '개선 후'} as const;
@@ -41,7 +42,7 @@ function Comparison({recordings, current}: {recordings: ReplayRecording[]; curre
   const duration = before.summary.durationSeconds;
   const warmup = before.summary.warmupSeconds;
   return <section className="comparison" aria-labelledby="comparison-title">
-    <div><p className="eyebrow">SAME-CONDITION RESULT</p><h3 id="comparison-title">개선 전·후 전체 실험</h3><p>아래 수치는 짧은 재생 구간이 아니라 같은 조건으로 실행한 전체 실험 결과입니다.</p>{duration !== undefined ? <p className="measurement-scope">측정 {formatDuration(duration)}{warmup ? ` · 준비 구간 ${formatDuration(warmup)} 제외` : ''}</p> : null}</div>
+    <div><p className="eyebrow">SAME-CONDITION RESULT</p><h3 id="comparison-title">개선 전·후 전체 실험</h3><p>아래 수치는 짧은 재생 구간이 아니라 같은 조건으로 실행한 전체 실험 결과입니다.</p>{after.changeSummary ? <p className="change-summary"><strong>변경 내용</strong>{after.changeSummary}</p> : null}{duration !== undefined ? <p className="measurement-scope">측정 {formatDuration(duration)}{warmup ? ` · 준비 구간 ${formatDuration(warmup)} 제외` : ''}</p> : null}</div>
     <div className="comparison-table" role="table" aria-label="동일 조건 전체 실험 결과">
       <div className="comparison-row comparison-head" role="row"><span role="columnheader">지표</span><span role="columnheader">개선 전</span><span role="columnheader">개선 후</span></div>
       {rows.map(row => {
@@ -79,11 +80,14 @@ export function ReplayPanel({
   onEventSeek: (time: number) => void;
   placement: 'controls' | 'details';
 }) {
+  const [showAllEvents, setShowAllEvents] = useState(false);
   const current = index.recordings.find(recording => recording.id === selectedId) ?? null;
+  const hasMajorEvents = events.some(isMajorEvent);
+  const visibleEvents = showAllEvents ? events : events.filter(isMajorEvent);
   if (placement === 'details') return <section className="replay-panel replay-details" aria-labelledby="replay-analysis-title">
     <div className="replay-heading"><div><p className="eyebrow">CAUSE / RESULT</p><h2 id="replay-analysis-title">원인과 개선 결과</h2><p>사건을 선택하면 그 시점의 차량 위치와 대기 관계를 3D 화면에서 다시 확인할 수 있습니다.</p></div></div>
     <Comparison recordings={index.recordings} current={current} />
-    <div className="event-list"><div className="event-list-heading"><h3>사건 타임라인</h3><span>같은 사건의 반복은 횟수와 마지막 시각까지 표시합니다.</span></div>{events.length ? <ol>{events.map((event, indexPosition) => <li key={`${event.firstTime}-${event.kind}-${event.source}-${indexPosition}`}><button onClick={() => onEventSeek(event.firstTime)}><time>{formatTime(event.firstTime)}</time><span className={`event-level level-${event.level.toLowerCase()}`}>{EVENT_KIND_LABEL[event.kind] ?? '기록'}</span><strong>{event.source}</strong><span>{event.msg}</span>{event.count > 1 ? <small>{event.count}회 · 마지막 {formatTime(event.lastTime)}</small> : null}</button></li>)}</ol> : <p className="empty-events">이 기록에는 별도로 남은 주요 사건이 없습니다.</p>}</div>
+    <div className="event-list"><div className="event-list-heading"><div><h3>{showAllEvents ? '전체 운영 기록' : '주요 사건'}</h3><span>같은 사건의 반복은 횟수와 마지막 시각까지 표시합니다.</span></div><button className="event-filter" type="button" aria-pressed={showAllEvents} onClick={() => setShowAllEvents(value => !value)}>{showAllEvents ? '주요 사건만 보기' : '전체 운영 기록 보기'}</button></div>{visibleEvents.length ? <ol>{visibleEvents.map((event, indexPosition) => <li key={`${event.firstTime}-${event.kind}-${event.source}-${indexPosition}`}><button onClick={() => onEventSeek(event.firstTime)}><time>{formatTime(event.firstTime)}</time><span className={`event-level level-${event.level.toLowerCase()}`}>{EVENT_KIND_LABEL[event.kind] ?? '기록'}</span><strong>{event.source}</strong><span>{event.msg}</span>{event.count > 1 ? <small>{event.count}회 · 마지막 {formatTime(event.lastTime)}</small> : null}</button></li>)}</ol> : <p className="empty-events">{showAllEvents ? '이 기록에는 별도로 남은 운영 기록이 없습니다.' : '이 기록에는 별도로 남은 주요 사건이 없습니다.'}</p>}</div>
   </section>;
   return <section className="replay-panel" aria-labelledby="replay-title">
     <div className="replay-heading"><div><p className="eyebrow">INCIDENT REPLAY</p><h2 id="replay-title">정체 원인 재생</h2><p>{current?.description}</p></div><span className={`variant variant-${current?.variant ?? 'reference'}`}>{current ? VARIANT_LABEL[current.variant] : '기록'}</span></div>
@@ -92,7 +96,7 @@ export function ReplayPanel({
       <button className="button transport-play" onClick={onTogglePause}>{paused ? '재생' : '멈춤'}</button>
       <label className="timeline-slider"><span><b>{formatTime(time)}</b><small>{formatTime(startTime)}–{formatTime(endTime)}</small></span><input aria-label="재생 시각" type="range" min={startTime} max={endTime} step="0.1" value={Math.min(endTime, Math.max(startTime, time))} onChange={event => onSeek(Number(event.target.value))} /></label>
       <div className="rate-buttons" role="group" aria-label="재생 속도">{RATE_OPTIONS.map(option => <button key={option} aria-pressed={rate === option} onClick={() => onRate(option)}>{option}×</button>)}</div>
-      <div className="event-jump"><button onClick={onPreviousEvent} disabled={!events.length}>← 이전 주요 사건</button><button onClick={onNextEvent} disabled={!events.length}>다음 주요 사건 →</button></div>
+      <div className="event-jump"><button onClick={onPreviousEvent} disabled={!hasMajorEvents}>← 이전 주요 사건</button><button onClick={onNextEvent} disabled={!hasMajorEvents}>다음 주요 사건 →</button></div>
     </div>
   </section>;
 }

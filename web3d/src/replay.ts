@@ -9,7 +9,7 @@ export interface ReplaySummary {
 }
 export interface ReplayRecording {
   id: string; title: string; description: string; url: string; variant: ReplayVariant;
-  group?: string; summary?: ReplaySummary;
+  group?: string; summary?: ReplaySummary; changeSummary?: string;
 }
 export interface ReplayIndex { version: 1; recordings: ReplayRecording[] }
 
@@ -56,6 +56,7 @@ export function isReplayIndex(value: unknown): value is ReplayIndex {
       || typeof recording.description !== 'string' || typeof recording.url !== 'string'
       || !isSafeReplayUrl(recording.url) || !VARIANTS.has(recording.variant)
       || (recording.group !== undefined && typeof recording.group !== 'string')
+      || (recording.changeSummary !== undefined && typeof recording.changeSummary !== 'string')
       || (recording.summary !== undefined && !isReplaySummary(recording.summary))) return false;
     ids.add(recording.id);
     return true;
@@ -88,19 +89,14 @@ export function matchingComparison(
   recordings: ReplayRecording[],
   current: ReplayRecording | null,
 ): {before: ReplayRecording & {summary: ReplaySummary}; after: ReplayRecording & {summary: ReplaySummary}} | null {
-  const candidateGroups = current?.group
-    ? [current.group]
-    : [...new Set(recordings.filter(item => item.variant === 'before' && item.group).map(item => item.group as string))];
-  for (const group of candidateGroups) {
-    const before = recordings.find(item => item.variant === 'before' && item.group === group);
-    const after = recordings.find(item => item.variant === 'after' && item.group === group);
-    if (!before?.summary || !after?.summary) continue;
-    if (before.summary.durationSeconds === undefined || before.summary.warmupSeconds === undefined
-      || before.summary.durationSeconds !== after.summary.durationSeconds
-      || before.summary.warmupSeconds !== after.summary.warmupSeconds) continue;
-    return {before: before as ReplayRecording & {summary: ReplaySummary}, after: after as ReplayRecording & {summary: ReplaySummary}};
-  }
-  return null;
+  if (!current?.group || current.variant === 'reference') return null;
+  const before = recordings.find(item => item.variant === 'before' && item.group === current.group);
+  const after = recordings.find(item => item.variant === 'after' && item.group === current.group);
+  if (!before?.summary || !after?.summary) return null;
+  if (before.summary.durationSeconds === undefined || before.summary.warmupSeconds === undefined
+    || before.summary.durationSeconds !== after.summary.durationSeconds
+    || before.summary.warmupSeconds !== after.summary.warmupSeconds) return null;
+  return {before: before as ReplayRecording & {summary: ReplaySummary}, after: after as ReplayRecording & {summary: ReplaySummary}};
 }
 
 export async function loadReplayDocument(
@@ -213,8 +209,9 @@ export function timelineEvents(frames: Snapshot[]): TimelineEvent[] {
 }
 
 export function isMajorEvent(event: IncidentEvent): boolean {
+  if (['track_lost', 'zone_speed', 'task_done'].includes(event.kind.toLowerCase())) return false;
   return ['warn', 'warning', 'error', 'crit', 'critical', 'p1', 'p2'].includes(event.level.toLowerCase())
-    || /(block|deadlock|yield|reroute|resolve|fault|stop)/i.test(event.kind);
+    || /(block|deadlock|yield|reroute|resolve|fault|comms|evade|nudge|stop)/i.test(event.kind);
 }
 
 export function adjacentMajorEvent(events: TimelineEvent[], time: number, direction: -1 | 1): TimelineEvent | null {

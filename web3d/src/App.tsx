@@ -186,8 +186,7 @@ export function App() {
   const events = useMemo(() => replayDocument ? timelineEvents(replayDocument.frames) : [], [replayDocument]);
   const jumpEvent = (direction: -1 | 1) => {
     if (!replayDocument) return;
-    const event = adjacentMajorEvent(events, playbackTimeRef.current, direction)
-      ?? (direction < 0 ? [...events].reverse().find(item => item.firstTime < playbackTimeRef.current) : events.find(item => item.firstTime > playbackTimeRef.current));
+    const event = adjacentMajorEvent(events, playbackTimeRef.current, direction);
     if (event) seekEvent(event.firstTime);
   };
   const selectRecording = (id: string) => {
