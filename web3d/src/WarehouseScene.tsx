@@ -210,6 +210,37 @@ function RouteLines({ layout, snapshot, selected }: Pick<SceneProps, 'layout' | 
   );
 }
 
+function IncidentLink({ layout, snapshot, selected }: Pick<SceneProps, 'layout' | 'snapshot' | 'selected'>) {
+  const incidents = useMemo(() => {
+    const robot = snapshot.robots.find(item => item.id === selected && item.positioned);
+    if (!robot || !(robot.wait_s && robot.wait_s > 0)) return [];
+    const resourceId = robot.wait_resource;
+    const nodeOwner = resourceId?.startsWith('N:') ? snapshot.locks?.[resourceId.slice(2)] : null;
+    const laneOwner = resourceId?.startsWith('L:') ? snapshot.lanes?.[resourceId.slice(2)] : null;
+    const holderId = robot.wait_holder || nodeOwner || (typeof laneOwner === 'string' ? laneOwner : null);
+    const holder = snapshot.robots.find(item => item.id === holderId && item.positioned);
+    const nodeById = new Map(layout.nodes.map(node => [node.id, node]));
+    const resourceNode = resourceId?.startsWith('N:') ? nodeById.get(resourceId.slice(2)) : null;
+    const laneIds = resourceId?.startsWith('L:') ? resourceId.slice(2).split('|') : [];
+    const laneStart = laneIds.length === 2 ? nodeById.get(laneIds[0]) : null;
+    const laneEnd = laneIds.length === 2 ? nodeById.get(laneIds[1]) : null;
+    const start = new THREE.Vector3(...toWorld(layout, robot.x, robot.y, 0.7));
+    const targets: {id: string; color: string; point: THREE.Vector3}[] = [];
+    if (holder) targets.push({id: `holder-${holder.id}`, color: '#dc2626', point: new THREE.Vector3(...toWorld(layout, holder.x, holder.y, 0.7))});
+    if (resourceNode) targets.push({id: `resource-${resourceId}`, color: '#ea580c', point: new THREE.Vector3(...toWorld(layout, resourceNode.x, resourceNode.y, 0.18))});
+    if (laneStart && laneEnd) targets.push({id: `resource-${resourceId}`, color: '#ea580c', point: new THREE.Vector3(...toWorld(layout, (laneStart.x + laneEnd.x) / 2, (laneStart.y + laneEnd.y) / 2, 0.18))});
+    return targets.map(target => ({...target, geometry: new THREE.BufferGeometry().setFromPoints([start, target.point])}));
+  }, [layout, selected, snapshot]);
+  useEffect(() => () => incidents.forEach(incident => incident.geometry.dispose()), [incidents]);
+  return <>{incidents.map(incident => <group key={incident.id}>
+    <LineObject geometry={incident.geometry} color={incident.color} opacity={1} />
+    <mesh position={incident.point} rotation={[-Math.PI / 2, 0, 0]}>
+      <ringGeometry args={[0.52, 0.76, 32]} />
+      <meshBasicMaterial color={incident.color} transparent opacity={0.88} side={THREE.DoubleSide} depthTest={false} />
+    </mesh>
+  </group>)}</>;
+}
+
 function LineObject({ geometry, color, opacity }: { geometry: THREE.BufferGeometry; color: string; opacity: number }) {
   const line = useMemo(() => {
     const material = new THREE.LineBasicMaterial({ color, transparent: opacity < 1, opacity });
@@ -286,6 +317,7 @@ function SceneContent(props: SceneProps) {
       <RackAndInventory layout={props.layout} snapshot={props.snapshot} visible={props.showRacks} />
       <StagedLoads layout={props.layout} snapshot={props.snapshot} />
       {props.showRoutes && <RouteLines layout={props.layout} snapshot={props.snapshot} selected={props.selected} />}
+      <IncidentLink layout={props.layout} snapshot={props.snapshot} selected={props.selected} />
       <RobotModels layout={props.layout} snapshot={props.snapshot} selected={props.selected} onSelect={props.onSelect} />
       <SceneCamera
         layout={props.layout}

@@ -1,7 +1,11 @@
-import { Component, Suspense, lazy, useEffect, useRef, useState, type ReactNode } from 'react';
+import { Component, Suspense, lazy, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Layout, SceneProps, Snapshot } from './types';
 import { inventoryTotal, isLayout, isSnapshot, robotStatusClass, selectedEntity } from './model';
-import { advanceReplayTime, frameAtTime, isReplayDocument } from './replay';
+import {
+  adjacentMajorEvent, advanceReplayClock, frameAtOrAfterTime, frameAtTime, loadReplayDocument, loadReplayIndex,
+  recordingById, timelineEvents, type ReplayDocument, type ReplayIndex,
+} from './replay';
+import { ReplayLoadingPanel, ReplayPanel } from './ReplayPanel';
 const WarehouseScene = lazy(() => import('./WarehouseScene'));
 const REPLAY_MODE = import.meta.env.VITE_FLEET_REPLAY === 'true';
 const PORTFOLIO_URL = new URL('../#more-projects', location.href).href;
@@ -22,6 +26,21 @@ async function getJson(path: string, signal: AbortSignal) {
   if (!response.ok) throw Error('관제 데이터를 받지 못했습니다. 연결을 확인한 뒤 다시 시도해 주세요.');
   return response.json();
 }
+function resourceLabel(resource: string) {
+  if (resource.startsWith('N:')) return `노드 ${resource.slice(2)}`;
+  if (resource.startsWith('L:')) return `통로 ${resource.slice(2).replace('|', '–')}`;
+  return resource;
+}
+function hasResourcePosition(layout: Layout | null, resource: string | null | undefined) {
+  if (!layout || !resource) return false;
+  const nodeIds = new Set(layout.nodes.map(node => node.id));
+  if (resource.startsWith('N:')) return nodeIds.has(resource.slice(2));
+  if (resource.startsWith('L:')) {
+    const lane = resource.slice(2).split('|');
+    return lane.length === 2 && lane.every(node => nodeIds.has(node));
+  }
+  return false;
+}
 export function App() {
   const reducedMotion = useReducedMotion();
   const [layout, setLayout] = useState<Layout | null>(null);
@@ -31,6 +50,13 @@ export function App() {
   const [stale, setStale] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [replayRate, setReplayRate] = useState(8);
+  const replayRateRef = useRef(replayRate);
+  const [replayIndex, setReplayIndex] = useState<ReplayIndex | null>(null);
+  const [replayDocument, setReplayDocument] = useState<ReplayDocument | null>(null);
+  const [selectedRecording, setSelectedRecording] = useState('');
+  const [playbackTime, setPlaybackTime] = useState(0);
+  const playbackTimeRef = useRef(0);
+  const replayClockRef = useRef({time: 0, carry: 0});
   const [paused, setPaused] = useState(reducedMotion);
   const pausedRef = useRef(paused);
   const latest = useRef<Snapshot | null>(null);
@@ -40,30 +66,55 @@ export function App() {
   const [cameraRevision, setCameraRevision] = useState(0);
   const [showRoutes, setShowRoutes] = useState(true);
   const [showRacks, setShowRacks] = useState(true);
+  useEffect(() => { replayRateRef.current = replayRate; }, [replayRate]);
+  useEffect(() => {
+    if (!REPLAY_MODE) return;
+    const abort = new AbortController();
+    setReplayIndex(null); setReplayDocument(null); setError(''); setConnected(false);
+    void loadReplayIndex(new URL(import.meta.env.BASE_URL, location.href).href, abort.signal)
+      .then(index => {
+        if (abort.signal.aborted) return;
+        setReplayIndex(index);
+        setSelectedRecording(current => recordingById(index, current)?.id
+          ?? index.recordings.find(recording => recording.variant === 'reference')?.id
+          ?? index.recordings[0].id);
+      })
+      .catch(e => { if (!abort.signal.aborted) setError(e instanceof Error ? e.message : '기록 목록을 읽지 못했습니다.'); });
+    return () => abort.abort();
+  }, [attempt]);
   useEffect(() => {
     const abort = new AbortController();
     setError(''); setConnected(false); setSnapshot(null); setLayout(null); latest.current = null;
     if (REPLAY_MODE) {
+      if (!replayIndex || !selectedRecording) return () => abort.abort();
+      setReplayDocument(null);
       let timer: ReturnType<typeof setInterval> | undefined;
       const startReplay = async () => {
         try {
-          const response = await fetch(`${import.meta.env.BASE_URL}replay.json`, {signal: abort.signal, credentials: 'same-origin'});
-          if (!response.ok) throw Error('저장된 시뮬레이션 기록을 불러오지 못했습니다.');
-          const replay: unknown = await response.json();
-          if (!isReplayDocument(replay)) throw Error('저장된 시뮬레이션 기록의 형식을 확인해 주세요.');
+          const recording = recordingById(replayIndex, selectedRecording);
+          if (!recording) throw Error('선택한 기록을 목록에서 찾을 수 없습니다.');
+          const replay = await loadReplayDocument(new URL(import.meta.env.BASE_URL, location.href).href, recording, abort.signal);
           if (abort.signal.aborted) return;
           let playbackTime = replay.source.startTime;
+          playbackTimeRef.current = playbackTime;
+          replayClockRef.current = {time: playbackTime, carry: 0};
           let previousWallTime = performance.now();
           const initialFrame = frameAtTime(replay.frames, playbackTime);
           latest.current = initialFrame;
-          setReplayRate(replay.playbackRate); setLayout(replay.layout); setSnapshot(initialFrame); setConnected(true);
+          const initialRate = [0.5, 1, 2, 4, 8].includes(replay.playbackRate) ? replay.playbackRate : 1;
+          replayRateRef.current = initialRate;
+          setReplayDocument(replay); setPlaybackTime(playbackTime); setReplayRate(initialRate);
+          setLayout(replay.layout); setSnapshot(initialFrame); setConnected(true); setSelected(null);
+          setCameraView('overview'); setCameraRevision(value => value + 1);
           timer = setInterval(() => {
             const wallTime = performance.now();
             const elapsedSeconds = (wallTime - previousWallTime) / 1000;
             previousWallTime = wallTime;
-            playbackTime = advanceReplayTime(playbackTime, elapsedSeconds, replay.playbackRate,
+            const clock = advanceReplayClock(replayClockRef.current, elapsedSeconds, replayRateRef.current,
               replay.source.startTime, replay.source.endTime, pausedRef.current);
+            replayClockRef.current = clock; playbackTime = clock.time;
             if (pausedRef.current) return;
+            playbackTimeRef.current = playbackTime; setPlaybackTime(playbackTime);
             const frame = frameAtTime(replay.frames, playbackTime);
             latest.current = frame; setSnapshot(frame);
           }, 50);
@@ -118,11 +169,36 @@ export function App() {
     void start();
     const timer = setInterval(() => setStale(receivedAt.current > 0 && Date.now() - receivedAt.current > 5000), 1000);
     return () => { abort.abort(); source?.close(); clearInterval(timer); };
-  }, [attempt]);
+  }, [attempt, replayIndex, selectedRecording]);
   useEffect(() => { if (reducedMotion) {pausedRef.current = true; setPaused(true);} }, [reducedMotion]);
   const togglePause = () => { const next = !pausedRef.current; pausedRef.current = next; setPaused(next); if (!next && latest.current) setSnapshot(latest.current); };
+  const seekReplay = (time: number) => {
+    if (!replayDocument) return;
+    const next = Math.max(replayDocument.source.startTime, Math.min(replayDocument.source.endTime, time));
+    playbackTimeRef.current = next; replayClockRef.current = {time: next, carry: 0}; setPlaybackTime(next);
+    const frame = frameAtTime(replayDocument.frames, next); latest.current = frame; setSnapshot(frame);
+  };
+  const seekEvent = (time: number) => {
+    if (!replayDocument) return;
+    const frame = frameAtOrAfterTime(replayDocument.frames, time);
+    playbackTimeRef.current = frame.t; replayClockRef.current = {time: frame.t, carry: 0}; setPlaybackTime(frame.t); latest.current = frame; setSnapshot(frame);
+  };
+  const events = useMemo(() => replayDocument ? timelineEvents(replayDocument.frames) : [], [replayDocument]);
+  const jumpEvent = (direction: -1 | 1) => {
+    if (!replayDocument) return;
+    const event = adjacentMajorEvent(events, playbackTimeRef.current, direction)
+      ?? (direction < 0 ? [...events].reverse().find(item => item.firstTime < playbackTimeRef.current) : events.find(item => item.firstTime > playbackTimeRef.current));
+    if (event) seekEvent(event.firstTime);
+  };
+  const selectRecording = (id: string) => {
+    setReplayDocument(null); setSnapshot(null); setLayout(null); setSelectedRecording(id);
+  };
   const camera = (view: SceneProps['cameraView']) => { setCameraView(view); setCameraRevision(v => v + 1); };
   const entity = snapshot ? selectedEntity(snapshot, selected) : null;
+  const selectedWait = snapshot?.robots.find(robot => robot.id === selected && robot.wait_s !== undefined && robot.wait_s > 0);
+  const waitTargetIsVehicle = !!selectedWait?.wait_holder
+    && !!snapshot?.robots.some(robot => robot.id === selectedWait.wait_holder && robot.positioned);
+  const waitResourceHasPosition = hasResourcePosition(layout, selectedWait?.wait_resource);
   const dataReady = !!layout && !!snapshot;
   const fallbackHref = REPLAY_MODE ? PORTFOLIO_URL : '/';
   return <main className="app-shell">
@@ -132,6 +208,7 @@ export function App() {
     </header>
     <section className="heading"><div><p className="eyebrow">WAREHOUSE / SPATIAL VIEW</p><h1>물류 흐름이 보이는 3D 창고</h1><p>차량·화물·랙을 입체로 보고, 필요한 구역 가까이에서 살펴보세요.</p></div><div className={`connection ${connected && (REPLAY_MODE || !stale) ? 'is-live' : ''}`} role="status"><span aria-hidden="true" />{REPLAY_MODE ? (error ? '기록 확인 필요' : !dataReady ? '기록 불러오는 중' : paused ? '기록 재생 멈춤' : '기록 재생 중') : (error ? '연결 확인 필요' : !dataReady ? '데이터 연결 중' : paused ? '화면 멈춤' : connected && !stale ? '시뮬레이션 수신 중' : '수신 지연 · 마지막 상태')}<small>{snapshot ? `${Math.floor(snapshot.t / 60)}분 ${Math.floor(snapshot.t % 60)}초 · 시뮬레이션 시간` : REPLAY_MODE ? '저장된 시뮬레이션 기록' : '기존 관제 데이터에 연결합니다'}</small></div></section>
     {error ? <div className="error-banner" role="alert">{error}<button onClick={() => setAttempt(v => v + 1)}>{REPLAY_MODE ? '다시 읽기' : '다시 연결'}</button></div> : null}
+    {REPLAY_MODE && replayIndex ? (replayDocument ? <ReplayPanel placement="controls" index={replayIndex} selectedId={selectedRecording} onSelect={selectRecording} time={playbackTime} startTime={replayDocument.source.startTime} endTime={replayDocument.source.endTime} rate={replayRate} onRate={setReplayRate} onSeek={seekReplay} onEventSeek={seekEvent} paused={paused} onTogglePause={togglePause} events={events} onPreviousEvent={() => jumpEvent(-1)} onNextEvent={() => jumpEvent(1)} /> : <ReplayLoadingPanel index={replayIndex} selectedId={selectedRecording} onSelect={selectRecording} />) : null}
     <section className="metrics" aria-label="현재 창고 상태">
       <div><span>관제 차량</span><strong>{snapshot?.robots.length ?? '—'}<small>대</small></strong></div>
       <div><span>작업 중</span><strong>{snapshot?.kpi.working ?? '—'}<small>대</small></strong></div>
@@ -148,17 +225,18 @@ export function App() {
         <div className="scene-stage" aria-label="마우스나 터치로 이동·확대할 수 있는 살짝 기울여 위에서 본 3D 창고. 차량 선택은 옆 목록에서도 가능합니다.">
           {dataReady ? <SceneBoundary fallbackHref={fallbackHref}><Suspense fallback={<div className="scene-message">3D 창고를 불러오는 중입니다.</div>}><WarehouseScene layout={layout} snapshot={snapshot} selected={selected} onSelect={setSelected} cameraView={cameraView} cameraRevision={cameraRevision} showRoutes={showRoutes} showRacks={showRacks} paused={paused} reducedMotion={reducedMotion} /></Suspense></SceneBoundary> : <div className="scene-message"><strong>{error ? (REPLAY_MODE ? '저장된 기록을 확인해 주세요.' : '관제 연결을 확인해 주세요.') : '창고를 준비하고 있습니다.'}</strong><p>{REPLAY_MODE ? '랙과 차량을 저장된 시뮬레이션 기록에서 불러옵니다.' : '랙과 차량을 기존 관제 데이터에서 불러옵니다.'}</p><a href={fallbackHref}>{REPLAY_MODE ? '포트폴리오로 돌아가기' : '2D 관제 열기'}</a></div>}
         </div>
-        <footer className="scene-footer"><p>드래그로 이동 · 휠·핀치로 확대 · 차량 클릭으로 선택</p><div className="layer-controls"><label><input type="checkbox" checked={showRoutes} onChange={e => setShowRoutes(e.target.checked)} />차량 경로</label><label><input type="checkbox" checked={showRacks} onChange={e => setShowRacks(e.target.checked)} />랙·보관 화물</label></div></footer>
+        <footer className="scene-footer"><div><p>드래그로 이동 · 휠·핀치로 확대 · 차량 클릭으로 선택</p>{waitTargetIsVehicle || waitResourceHasPosition ? <p className="wait-link-legend">{waitTargetIsVehicle ? <><span className="wait-line-holder" />대기 대상 차량</> : null}{waitResourceHasPosition ? <><span className="wait-line-resource" />대기 자원 위치</> : null} · 관측된 좌표만 연결</p> : null}</div><div className="layer-controls"><label><input type="checkbox" checked={showRoutes} onChange={e => setShowRoutes(e.target.checked)} />차량 경로</label><label><input type="checkbox" checked={showRacks} onChange={e => setShowRacks(e.target.checked)} />랙·보관 화물</label></div></footer>
       </section>
       <aside className="details-panel" aria-label="선택 항목과 화면 설명">
         <div className="details-heading"><p className="eyebrow">OBJECT INSPECTOR</p><h2>차량 살펴보기</h2></div>
         <label className="select-label" htmlFor="vehicle-choice">관제 차량 선택</label>
         <select id="vehicle-choice" value={selected ?? ''} onChange={e => setSelected(e.target.value || null)} disabled={!snapshot}><option value="">차량을 선택하세요</option>{snapshot?.robots.map(r => <option key={r.id} value={r.id}>{r.id} · {r.cls === 'FORKLIFT' ? '자율 지게차' : '토트 AMR'}</option>)}{snapshot?.truth?.forklifts.map(f => <option key={f[0]} value={f[0]}>{f[0]} · 수동 지게차</option>)}{snapshot?.truth?.humans.map(h => <option key={h[0]} value={h[0]}>{h[0]} · 작업자</option>)}</select>
-        {entity ? <div className="entity-info"><div className="entity-name"><span>{entity.kind}</span><h3>{entity.id}</h3><p>{entity.label}</p></div><dl><div><dt>위치</dt><dd>{entity.x.toFixed(1)}, {entity.y.toFixed(1)} m</dd></div><div><dt>속도</dt><dd>{entity.speed.toFixed(2)} m/s</dd></div>{entity.robot ? <><div><dt>배터리</dt><dd>{entity.robot.bat.toFixed(0)}%</dd></div><div><dt>적재</dt><dd>{entity.robot.load ? '화물 운반 중' : '빈 차량'}</dd></div></> : null}</dl>{entity.robot?.purpose ? <p className="purpose">{({pickup: '화물 픽업', drop: '화물 하역', charge: '충전', park: '주차', picking: '피킹 작업'} as Record<string,string>)[entity.robot.purpose] ?? '배정된 작업 수행 중'}</p> : null}<button className="button primary" onClick={() => camera('selected')}>선택 차량 따라보기</button><button className="text-button" onClick={() => setSelected(null)}>선택 해제</button></div> : <p className="empty-selection">장면의 차량이나 위 목록을 선택하면 위치·속도·적재 상태가 여기에 표시됩니다.</p>}
+        {entity ? <div className="entity-info"><div className="entity-name"><span>{entity.kind}</span><h3>{entity.id}</h3><p>{entity.label}</p></div><dl><div><dt>위치</dt><dd>{entity.x.toFixed(1)}, {entity.y.toFixed(1)} m</dd></div><div><dt>속도</dt><dd>{entity.speed.toFixed(2)} m/s</dd></div>{entity.robot ? <><div><dt>배터리</dt><dd>{entity.robot.bat.toFixed(0)}%</dd></div><div><dt>적재</dt><dd>{entity.robot.load ? '화물 운반 중' : '빈 차량'}</dd></div>{entity.robot.wait_s !== undefined && entity.robot.wait_s > 0 ? <div><dt>대기 시간</dt><dd>{entity.robot.wait_s.toFixed(1)}초</dd></div> : null}{entity.robot.wait_holder ? <div><dt>대기 원인 대상</dt><dd>{entity.robot.wait_holder}</dd></div> : null}{entity.robot.wait_resource ? <div><dt>대기 자원</dt><dd>{resourceLabel(entity.robot.wait_resource)}</dd></div> : null}{entity.robot.task ? <div><dt>작업</dt><dd>{entity.robot.task}</dd></div> : null}</> : null}</dl>{entity.robot && (entity.robot.why || entity.robot.stop || entity.robot.wait_kind) ? <div className="wait-reason"><strong>{entity.robot.wait_s && entity.robot.wait_s > 0 ? '왜 기다리고 있나요?' : '현재 상태 원인'}</strong><p>{entity.robot.why || entity.robot.stop || entity.robot.wait_kind}</p></div> : null}{entity.robot?.purpose ? <p className="purpose">{({pickup: '화물 픽업', drop: '화물 하역', charge: '충전', park: '주차', picking: '피킹 작업'} as Record<string,string>)[entity.robot.purpose] ?? '배정된 작업 수행 중'}</p> : null}<button className="button primary" onClick={() => camera('selected')}>선택 차량 따라보기</button><button className="text-button" onClick={() => setSelected(null)}>선택 해제</button></div> : <p className="empty-selection">장면의 차량이나 위 목록을 선택하면 위치·속도·적재 상태가 여기에 표시됩니다.</p>}
         <div className="legend"><h3>형태와 색으로 구분합니다</h3><ul><li><span className="swatch blue" />자율 지게차 · 포크로 팔레트 운반</li><li><span className="swatch teal" />토트 AMR · 피킹 상자 운반</li><li><span className="swatch amber" />수동 지게차 · 시뮬레이터 위치</li><li><span className="swatch cargo" />팔레트·박스 · 적재 수량 표시</li></ul></div>
         {snapshot ? <div className="fleet-status"><h3>차량 상태</h3>{(['moving','idle','attention','offline'] as const).map((key,i) => <div key={key}><span>{['이동 중','정차·대기','주의 상태','통신 끊김'][i]}</span><b>{snapshot.robots.filter(r => robotStatusClass(r) === key).length}대</b></div>)}</div> : null}
       </aside>
     </div>
+    {REPLAY_MODE && replayIndex && replayDocument ? <ReplayPanel placement="details" index={replayIndex} selectedId={selectedRecording} onSelect={selectRecording} time={playbackTime} startTime={replayDocument.source.startTime} endTime={replayDocument.source.endTime} rate={replayRate} onRate={setReplayRate} onSeek={seekReplay} onEventSeek={seekEvent} paused={paused} onTogglePause={togglePause} events={events} onPreviousEvent={() => jumpEvent(-1)} onNextEvent={() => jumpEvent(1)} /> : null}
     <section className="evidence-note" aria-label="3D 표시 기준"><strong>{REPLAY_MODE ? '저장된 시뮬레이션 기록, 입체적인 표현' : '같은 관제 데이터, 입체적인 표현'}</strong><p>차량 위치·방향·적재 상태와 랙의 팔레트 수량을 시뮬레이션에서 가져옵니다. 랙 높이·차량 외형·박스 크기·보관 위치의 세부 배치는 이해를 돕는 표현입니다. 수동 지게차와 작업자는 시뮬레이터 좌표를 사용하며, 2D 관제의 센서 추정값과 구분합니다.</p><p>{REPLAY_MODE ? '이 화면은 저장된 기록만 재생하며 관제 서버나 차량에 연결하거나 제어 명령을 보내지 않습니다.' : '화면 멈춤은 이 화면의 표시만 멈춥니다. 실제 차량이나 시뮬레이션에 제어 명령을 보내지 않습니다.'}</p></section>
   </main>;
 }
