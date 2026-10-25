@@ -1,0 +1,18 @@
+{
+  "scenario": "standard",
+  "strategy": "locks+resolve",
+  "seed": 1,
+  "warmup": 1800,
+  "duration": 3600,
+  "operator": true,
+  "scenario_overrides": {
+    "trucks_h": 3,
+    "out_pallets_h": 39,
+    "tote_orders_h": 103,
+    "agf": 11,
+    "amr": 16,
+    "pickers": 7
+  },
+  "manager": {},
+  "vehicle": {}
+}
