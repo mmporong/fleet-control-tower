@@ -48,8 +48,10 @@ function Comparison({recordings, current}: {recordings: ReplayRecording[]; curre
       {rows.map(row => {
         const beforeValue = before.summary?.[row.key] as number;
         const afterValue = after.summary?.[row.key] as number;
-        const improved = row.lower ? afterValue < beforeValue : afterValue > beforeValue;
-        return <div className="comparison-row" role="row" key={row.key}><span role="cell">{row.label}</span><span role="cell">{beforeValue.toLocaleString('ko-KR')} {row.unit}</span><strong role="cell" className={improved ? 'is-better' : ''}>{afterValue.toLocaleString('ko-KR')} {row.unit}</strong></div>;
+        const change = afterValue - beforeValue;
+        const trend = change === 0 ? 'unchanged' : (row.lower ? change < 0 : change > 0) ? 'improved' : 'worsened';
+        const changeLabel = change === 0 ? '동일' : `${change > 0 ? '+' : '−'}${Math.abs(change).toLocaleString('ko-KR')} ${change > 0 ? '증가' : '감소'}`;
+        return <div className="comparison-row" role="row" key={row.key}><span role="cell">{row.label}</span><span role="cell">{beforeValue.toLocaleString('ko-KR')} {row.unit}</span><strong role="cell" className={`comparison-result is-${trend}`}><span>{afterValue.toLocaleString('ko-KR')} {row.unit}</span><small>{changeLabel}</small></strong></div>;
       })}
     </div>
   </section>;
