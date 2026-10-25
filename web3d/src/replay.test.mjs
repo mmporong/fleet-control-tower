@@ -117,4 +117,8 @@ test('모든 프레임의 사건을 중복 제거하고 가까운 반복은 횟�
   assert.equal(events[0].lastTime, 126);
   assert.equal(adjacentMajorEvent(events, 120, 1)?.kind, 'blocked');
   assert.equal(adjacentMajorEvent(events, 130, -1)?.kind, 'blocked');
+  const serverEvent = {t:121,type:'deadlock',source:'AGF-01',msg:'순환 대기',level:'warning'};
+  const serverTimeline = timelineEvents([{...frame(120),events:[]},{...frame(130),events:[serverEvent]}]);
+  assert.equal(serverTimeline[0].kind, 'deadlock');
+  assert.equal(adjacentMajorEvent(serverTimeline, 120, 1)?.source, 'AGF-01');
 });

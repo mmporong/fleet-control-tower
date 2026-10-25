@@ -18,6 +18,9 @@ export interface Robot {
 export interface IncidentEvent {
   t: number; kind: string; source: string; msg: string; level: string;
 }
+export interface ServerEvent extends Omit<IncidentEvent, 'kind'> {
+  type: string;
+}
 export interface Snapshot {
   t: number; scenario: string; scenario_title: string; layout_key: string; mode: string;
   robots: Robot[];
@@ -26,7 +29,7 @@ export interface Snapshot {
   alarm_counts: {p1: number;p2: number;p3: number};
   kpi: {working: number; queued: number; done: number; site?: {rack_fill: number; staged_in: number; staged_out: number}};
   run?: {read_only: boolean; paused: boolean; speed: number};
-  events?: IncidentEvent[];
+  events?: (IncidentEvent | ServerEvent)[];
   locks?: Record<string, string>;
   lanes?: Record<string, unknown>;
   blocks?: Record<string, unknown>;

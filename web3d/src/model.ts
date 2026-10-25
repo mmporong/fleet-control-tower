@@ -21,8 +21,9 @@ export function isSnapshot(value: unknown): value is Snapshot {
       && [r.why, r.wait_kind, r.wait_holder, r.wait_resource, r.task, r.stop].every(optionalString)
       && (r.wait_s === undefined || Number.isFinite(r.wait_s))) && !!s.kpi && !!s.alarm_counts
     && (s.locks === undefined || stringRecord(s.locks))
-    && (s.events === undefined || (Array.isArray(s.events) && s.events.every(event => Number.isFinite(event.t)
-      && ['kind', 'source', 'msg', 'level'].every(key => typeof event[key as keyof typeof event] === 'string'))));
+    && (s.events === undefined || (Array.isArray(s.events) && s.events.every(event => event && typeof event === 'object'
+      && Number.isFinite(event.t) && [event.source, event.msg, event.level].every(item => typeof item === 'string')
+      && ('kind' in event ? typeof event.kind === 'string' : 'type' in event && typeof event.type === 'string'))));
 }
 export function isLayout(value: unknown): value is Layout {
   if (!value || typeof value !== 'object') return false;

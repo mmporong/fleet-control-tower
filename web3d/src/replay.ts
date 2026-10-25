@@ -193,7 +193,8 @@ export function timelineEvents(frames: Snapshot[]): TimelineEvent[] {
   const startTime = frames[0]?.t ?? 0;
   const endTime = frames.at(-1)?.t ?? startTime;
   const unique = new Map<string, IncidentEvent>();
-  frames.forEach(frame => (frame.events ?? []).forEach(event => {
+  frames.forEach(frame => (frame.events ?? []).forEach(raw => {
+    const event: IncidentEvent = {...raw, kind: 'kind' in raw ? raw.kind : raw.type};
     if (!Number.isFinite(event.t) || event.t < startTime || event.t > endTime
       || !event.kind || !event.source || !event.msg || !event.level) return;
     unique.set(`${event.t}\u0000${event.kind}\u0000${event.source}\u0000${event.msg}\u0000${event.level}`, event);

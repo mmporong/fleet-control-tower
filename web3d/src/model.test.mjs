@@ -8,3 +8,11 @@ test('동일 선택 함수가 관제 차량과 시뮬레이터 지게차·작업
 test('잘못된 수신 데이터와 유한하지 않은 위치를 장면에 전달하지 않는다',()=>{assert.equal(isSnapshot(snapshot),true);assert.equal(isSnapshot({error:'unauthorized'}),false);assert.equal(isSnapshot({...snapshot,robots:[{...robot,x:NaN}]}),false);assert.equal(isLayout({width:88,height:53.5,nodes:[],edges:[],racks:[],zones:[]}),true);assert.equal(isLayout({width:0,height:53.5,nodes:[],edges:[],racks:[],zones:[]}),false);});
 test('선택 패널과 대기 관계가 사용하는 선택 필드 형식을 검증한다',()=>{assert.equal(isSnapshot({...snapshot,robots:[{...robot,wait_holder:{bad:true}}]}),false);assert.equal(isSnapshot({...snapshot,robots:[{...robot,why:null,wait_kind:null,wait_holder:null,wait_resource:null,task:null,stop:null}]}),true);assert.equal(isSnapshot({...snapshot,robots:[{...robot,bat:Infinity}]}),false);assert.equal(isSnapshot({...snapshot,robots:[{...robot,positioned:'yes'}]}),false);assert.equal(isSnapshot({...snapshot,locks:{N1:'AGF-01'}}),true);assert.equal(isSnapshot({...snapshot,locks:{N1:{bad:true}}}),false);});
 test('통신 두절과 주의 상태를 이동 속도보다 먼저 표시한다',()=>{assert.equal(robotStatusClass({...robot,conn:'OFFLINE',v:1}),'offline');assert.equal(robotStatusClass({...robot,st:'PROTECTIVE_STOP',v:1}),'attention');assert.equal(robotStatusClass({...robot,v:1}),'moving');assert.equal(robotStatusClass(robot),'idle');});
+test('실시간 서버의 type 사건과 저장 기록의 kind 사건을 모두 받는다', () => {
+  const common = {t:10,source:'AGF-01',msg:'작업 배정',level:'info'};
+  assert.equal(isSnapshot({...snapshot,events:[{...common,type:'dispatch'}]}), true);
+  assert.equal(isSnapshot({...snapshot,events:[{...common,kind:'dispatch'}]}), true);
+  for (const event of [null, {...common}, {...common,type:7}, {...common,kind:'dispatch',t:NaN}]) {
+    assert.equal(isSnapshot({...snapshot,events:[event]}), false);
+  }
+});
