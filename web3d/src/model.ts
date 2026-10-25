@@ -47,6 +47,6 @@ export function selectedEntity(s: Snapshot, id: string | null) {
 }
 export function robotStatusClass(r: Robot) {
   if (r.conn !== 'ONLINE') return 'offline';
-  if (['FAULT', 'ESTOP', 'PROTECTIVE_STOP', 'BLOCKED'].includes(r.st)) return 'attention';
+  if (['FAULT', 'ESTOP', 'PROTECTIVE', 'PROTECTIVE_STOP', 'BLOCKED'].includes(r.st)) return 'attention';
   return r.v > 0 ? 'moving' : 'idle';
 }
