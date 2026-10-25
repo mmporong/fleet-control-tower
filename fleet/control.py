@@ -30,6 +30,9 @@ from .vda5050 import HeaderIds, RouteEdge, RouteNode, action, build_instant_acti
 STRATEGIES = ("none", "locks", "locks+resolve")
 SWING_RADIUS = 1.9           # half the length of a 3.6 m counterbalance truck plus margin: its turning circle
 CLEARANCE_TURN = 1.0         # beyond the circle: half a robot body plus margin, so no part of a robot is inside
+# The reserved turn circle must also cover the default vehicles' stopped protective field (including its
+# 0.15 m reset hysteresis).  The extra centimetre keeps the AGF-to-AMR boundary on the safe side of rounding.
+ROBOT_TURN_FIELD_MARGIN = 0.51
 # a truck backs off up to 6 m (radioed) to let a robot out of its turning circle; plus the tracking error
 BACKED_OFF_M = 7.0
 DRIVE_PACE = 1.1             # m/s: faster than a truck backs off (0.5) or drives back up (0.8), slower than it drives
@@ -1813,9 +1816,9 @@ class FleetManager:
         return holder if math.hypot(stop.x - junction.x, stop.y - junction.y) < reach else None
 
     def _turn_reach(self, rec: RobotRecord) -> float:
-        """Radius around a turning point inside which another vehicle's node counts as swept."""
+        """Radius around a turning point whose nodes must be clear before the vehicle approaches the turn."""
         others = max((r.length for r in self.robots.values() if r.serial != rec.serial), default=rec.length)
-        return math.hypot(rec.length, rec.width) / 2 + others / 2 + 0.2
+        return math.hypot(rec.length, rec.width) / 2 + others / 2 + ROBOT_TURN_FIELD_MARGIN
 
     def _heading(self, a: str, b: str) -> float:
         na, nb = self.layout.nodes[a], self.layout.nodes[b]
